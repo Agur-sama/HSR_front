@@ -1,17 +1,25 @@
-# React + Vite плюс/минус пук вайб
+# 🚄 HSR Project Simulator (Microservice Architecture)
 
+![React](https://img.shields.io/badge/Frontend-React-blue?logo=react)
+![Canvas API](https://img.shields.io/badge/Rendering-Canvas_API-ff69b4)
+![Node.js](https://img.shields.io/badge/API_Gateway-Node.js-339933?logo=nodedotjs)
+![FastAPI](https://img.shields.io/badge/Sim_Engine-FastAPI-009688?logo=fastapi)
+![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791?logo=postgresql)
+![Docker](https://img.shields.io/badge/Infra-Docker%20%7C%20K8s-2496ED?logo=docker)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**HSR Project Simulator** — это распределенное веб-приложение для имитационного моделирования процессов управления строительством Высокоскоростных магистралей (ВСМ). 
 
-Currently, two official plugins are available:
+Проект представляет собой «Serious Game» (обучающий тренажер), где пользователь управляет графиком Ганта, бюджетом и реагирует на динамически генерируемые риски (стохастические события).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 🏗 Архитектура системы
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Проект построен на базе **микросервисной архитектуры**, что позволяет разделить бизнес-логику, тяжелые вычисления и клиентский рендеринг.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```mermaid
+graph TD
+    Client[React.js + Canvas API] <-->|REST / JSON| Gateway(Node.js API Gateway)
+    Gateway <-->|Read / Write| DB[(PostgreSQL)]
+    Gateway <-->|Simulation Request| Engine(FastAPI Engine)
+    Engine <-->|Prompt| AI[LLM / GenAI]
