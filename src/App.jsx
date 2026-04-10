@@ -1,12 +1,14 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useGameLogic } from './hooks/useGameLogic';
 import GanttChart from './components/GanttChart';
 import ResourcePanel from './components/ResourcePanel';
 import EventPopup from './components/EventPopup';
 import VictoryPopup from './components/VictoryPopup';
+import StudentsForm from './pages/StudentsForm';
 import './App.css';
 
-function App() {
+function GamePage() {
   const {
     gameState,
     showEvent,
@@ -22,15 +24,16 @@ function App() {
   } = useGameLogic();
 
   const currentPhase = gameState.phases[gameState.currentPhase];
-  const canStartPhase = currentPhase && 
-                       !currentPhase.allocatedResources && 
-                       !currentPhase.completed;
+  const canStartPhase =
+    currentPhase &&
+    !currentPhase.allocatedResources &&
+    !currentPhase.completed;
 
   return (
     <div style={styles.app}>
       <header style={styles.header}>
         <h1 style={styles.title}>🚄 Высокоскоростная магистраль</h1>
-        
+
         <div style={styles.stats}>
           <div style={styles.stat}>
             <span style={styles.statLabel}>Этап:</span>
@@ -47,9 +50,13 @@ function App() {
           <div style={styles.stat}>
             <span style={styles.statLabel}>Статус:</span>
             <span style={styles.statValue}>
-              {gameState.status === 'running' ? '🏗️ Строительство' :
-               gameState.status === 'paused' ? '⏸️ Пауза' :
-               gameState.status === 'finished' ? '✅ Завершено' : '⏳ Ожидание'}
+              {gameState.status === 'running'
+                ? '🏗️ Строительство'
+                : gameState.status === 'paused'
+                ? '⏸️ Пауза'
+                : gameState.status === 'finished'
+                ? '✅ Завершено'
+                : '⏳ Ожидание'}
             </span>
           </div>
         </div>
@@ -78,23 +85,32 @@ function App() {
 
         <div style={styles.controls}>
           {gameState.status === 'idle' && (
-            <button onClick={startGame} style={styles.button}>▶️ Начать проект</button>
+            <button onClick={startGame} style={styles.button}>
+              ▶️ Начать проект
+            </button>
           )}
           {gameState.status === 'running' && (
-            <button onClick={pauseGame} style={styles.button}>⏸️ Пауза</button>
+            <button onClick={pauseGame} style={styles.button}>
+              ⏸️ Пауза
+            </button>
           )}
           {gameState.status === 'paused' && (
-            <button onClick={startGame} style={styles.button}>▶️ Продолжить</button>
+            <button onClick={startGame} style={styles.button}>
+              ▶️ Продолжить
+            </button>
           )}
-          <button onClick={resetGame} style={{...styles.button, ...styles.resetButton}}>
+          <button
+            onClick={resetGame}
+            style={{ ...styles.button, ...styles.resetButton }}
+          >
             🔄 Сбросить
           </button>
         </div>
       </header>
 
       <main style={styles.main}>
-        <GanttChart 
-          phases={gameState.phases} 
+        <GanttChart
+          phases={gameState.phases}
           currentMonth={gameState.currentMonth}
           currentPhase={gameState.currentPhase}
         />
@@ -112,7 +128,9 @@ function App() {
           <h3 style={styles.logsTitle}>📋 Лог событий</h3>
           <div style={styles.logList}>
             {gameState.logs.slice(-8).map((log, i) => (
-              <div key={i} style={styles.logEntry}>{log}</div>
+              <div key={i} style={styles.logEntry}>
+                {log}
+              </div>
             ))}
           </div>
         </div>
@@ -127,12 +145,25 @@ function App() {
       )}
 
       {showVictory && (
-        <VictoryPopup onClose={() => {
-          setShowVictory(false);
-          resetGame();
-        }} />
+        <VictoryPopup
+          onClose={() => {
+            setShowVictory(false);
+            resetGame();
+          }}
+        />
       )}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<GamePage />} />
+        <Route path="/form" element={<StudentsForm />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

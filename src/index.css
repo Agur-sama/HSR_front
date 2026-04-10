@@ -1,5 +1,16 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 :root {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+}
+
+body {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f0f4ff 0%, #e6ecf8 100%);
 }
