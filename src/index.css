@@ -1,32 +1,33 @@
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Prata&display=swap');
 
 :root {
-  --bg: #f6f7f9;
+  --bg: #f8f9fb;
   --surface: #ffffff;
-  --surface-muted: #f1f3f6;
-  --line: #dfe3ea;
-  --line-strong: #b8c0cc;
-  --ink-main: #1f2733;
-  --ink-soft: #647184;
+  --surface-muted: #f2f4f7;
+  --line: #e3e6ea;
+  --line-strong: #c0c7d1;
+  --ink-main: #222222;
+  --ink-soft: #7487a2;
 
-  --brand: #a01f35;
-  --grade-excellent: #1f7a47;
-  --grade-good: #28609e;
-  --grade-warning: #b8771f;
-  --grade-critical: #a32f2f;
+  --brand: #f5b625;
+  --on-brand: #222222;
+  --grade-excellent: #4b8f63;
+  --grade-good: #7487a2;
+  --grade-warning: #d8a028;
+  --grade-critical: #b45b4e;
 
-  --status-warning-bg: #fef5e7;
-  --status-warning-line: #efd8b1;
-  --status-warning-text: #8a5a12;
+  --status-warning-bg: #fff5db;
+  --status-warning-line: #f1daa0;
+  --status-warning-text: #7f5b12;
 
-  --status-positive-bg: #e9f6ef;
-  --status-positive-text: #1f7a47;
-  --status-danger-bg: #fbecec;
-  --status-danger-text: #9b2a2a;
+  --status-positive-bg: #edf7f1;
+  --status-positive-text: #3f7e57;
+  --status-danger-bg: #faeeeb;
+  --status-danger-text: #a05347;
 
   --font-ui: 'Manrope', 'Segoe UI', Arial, sans-serif;
   --font-title: 'Prata', Georgia, serif;
-  --elevation: 0 12px 24px -18px rgba(33, 45, 62, 0.45);
+  --elevation: 0 12px 24px -18px rgba(34, 34, 34, 0.24);
 }
 
 * {
@@ -44,8 +45,8 @@ body {
   font-family: var(--font-ui);
   color: var(--ink-main);
   background:
-    radial-gradient(circle at 0 0, rgba(160, 31, 53, 0.08), transparent 24%),
-    radial-gradient(circle at 100% 0, rgba(40, 96, 158, 0.06), transparent 20%),
+    radial-gradient(circle at 0 0, rgba(245, 182, 37, 0.16), transparent 24%),
+    radial-gradient(circle at 100% 0, rgba(116, 135, 162, 0.12), transparent 20%),
     var(--bg);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

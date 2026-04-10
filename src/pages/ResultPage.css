@@ -169,7 +169,7 @@
 
 .btn-primary {
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
 }
 
 .btn-secondary {
@@ -309,7 +309,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--brand), var(--grade-good));
+  background: linear-gradient(90deg, var(--grade-good), var(--brand));
 }
 
 .timeline {
