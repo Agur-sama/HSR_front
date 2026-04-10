@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './StudentsForm.css';
 
-const StudentForm = () => {
+const StudentsForm = () => {
   const [formData, setFormData] = useState({
     type: 'ВСМ-1: Москва – Санкт-Петербург',
     boss: 'ПИШ (работа на паре)',
@@ -192,4 +192,4 @@ const StudentForm = () => {
   );
 };
 
-export default StudentForm;
+export default StudentsForm;
