@@ -81,6 +81,10 @@ function GamePage() {
     currentPhase &&
     !currentPhase.allocatedResources &&
     !currentPhase.completed;
+  const canStartPhase =
+    currentPhase &&
+    !currentPhase.allocatedResources &&
+    !currentPhase.completed;
 
   const statusText =
     gameState.status === 'running'
