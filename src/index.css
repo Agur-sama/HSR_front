@@ -9,16 +9,16 @@
   --ink-main: #222222;
   --ink-soft: #7487a2;
 
-  --brand: #f5b625;
-  --on-brand: #222222;
+  --brand: #5f789a;
+  --on-brand: #ffffff;
   --grade-excellent: #4b8f63;
-  --grade-good: #7487a2;
-  --grade-warning: #d8a028;
+  --grade-good: #4d6f98;
+  --grade-warning: #c1973d;
   --grade-critical: #b45b4e;
 
-  --status-warning-bg: #fff5db;
-  --status-warning-line: #f1daa0;
-  --status-warning-text: #7f5b12;
+  --status-warning-bg: #f6f1e4;
+  --status-warning-line: #e6d9ba;
+  --status-warning-text: #7b6841;
 
   --status-positive-bg: #edf7f1;
   --status-positive-text: #3f7e57;
@@ -45,8 +45,8 @@ body {
   font-family: var(--font-ui);
   color: var(--ink-main);
   background:
-    radial-gradient(circle at 0 0, rgba(245, 182, 37, 0.16), transparent 24%),
-    radial-gradient(circle at 100% 0, rgba(116, 135, 162, 0.12), transparent 20%),
+    radial-gradient(circle at 0 0, rgba(95, 120, 154, 0.18), transparent 24%),
+    radial-gradient(circle at 100% 0, rgba(116, 135, 162, 0.14), transparent 20%),
     var(--bg);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
