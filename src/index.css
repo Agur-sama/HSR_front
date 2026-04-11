@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -5,6 +7,33 @@
 }
 
 :root {
+  --bg: #eff4fb;
+  --surface: #f7faff;
+  --surface-muted: #ecf2fa;
+  --line: #d7e1ef;
+  --line-strong: #b4c5da;
+  --ink-main: #1a2a3f;
+  --ink-soft: #617899;
+
+  --brand: #3b6fae;
+  --on-brand: #ffffff;
+  --grade-excellent: #4b8f63;
+  --grade-good: #4d6f98;
+  --grade-warning: #6a84aa;
+  --grade-critical: #b45b4e;
+
+  --status-warning-bg: #eaf1fb;
+  --status-warning-line: #c8d7ed;
+  --status-warning-text: #4f6789;
+  --status-positive-bg: #edf7f1;
+  --status-positive-text: #3f7e57;
+  --status-danger-bg: #faeeeb;
+  --status-danger-text: #a05347;
+
+  --font-ui: 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
+  --font-title: 'IBM Plex Mono', 'Segoe UI', monospace;
+  --elevation: 0 12px 24px -18px rgba(23, 42, 70, 0.2);
+
   font-family: 'Inter', 'Segoe UI', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -25,6 +54,8 @@ body {
     linear-gradient(180deg, #061227 0%, #07152d 45%, #061227 100%);
   color: #ffffff;
   overflow-x: hidden;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {

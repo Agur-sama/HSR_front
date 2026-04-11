@@ -8,6 +8,7 @@ import VictoryPopup from './components/VictoryPopup';
 import { useProject } from './context/ProjectContext';
 import { calculateProjectProfile } from './utils/projectCalculator';
 import { Main } from './pages/main/Main';
+import ResultPage from './pages/ResultPage';
 
 function Layout({ children }) {
   return (
@@ -48,6 +49,15 @@ function Layout({ children }) {
             >
               Симулятор
             </NavLink>
+
+            <NavLink
+              to="/results"
+              className={({ isActive }) =>
+                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
+              }
+            >
+              Результаты
+            </NavLink>
           </nav>
         </div>
       </header>
@@ -56,7 +66,6 @@ function Layout({ children }) {
     </div>
   );
 }
-
 
 function GamePage() {
   const { projectData } = useProject();
@@ -77,10 +86,6 @@ function GamePage() {
   } = useGameLogic();
 
   const currentPhase = gameState.phases[gameState.currentPhase];
-  const canStartPhase =
-    currentPhase &&
-    !currentPhase.allocatedResources &&
-    !currentPhase.completed;
   const canStartPhase =
     currentPhase &&
     !currentPhase.allocatedResources &&
@@ -312,6 +317,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Main />} />
         <Route path="/game" element={<GamePage />} />
+        <Route path="/results" element={<ResultPage />} />
       </Routes>
     </Layout>
   );
