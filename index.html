@@ -11,6 +11,24 @@
 
 <body>
   <div id="root"></div>
+  <script>
+    // Показываем runtime-ошибки прямо в DOM, чтобы отладить пустую страницу
+    function __showRuntimeError(msg) {
+      try {
+        const root = document.getElementById('root');
+        if (!root) return;
+        root.innerHTML = '<div style="font-family: monospace; white-space: pre-wrap; color: #fff; background: #b00020; padding: 16px; border-radius: 8px;">' + String(msg) + '</div>';
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    window.addEventListener('error', (e) => {
+      __showRuntimeError('Error: ' + (e.error && e.error.stack ? e.error.stack : e.message));
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      __showRuntimeError('Unhandled Rejection: ' + (e.reason && e.reason.stack ? e.reason.stack : String(e.reason)));
+    });
+  </script>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 

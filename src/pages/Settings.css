@@ -1,0 +1,120 @@
+.settings-root {
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.settings-card {
+  width: 720px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(245,246,250,0.95));
+  box-shadow: 0 12px 40px rgba(16,24,40,0.08);
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text-h);
+}
+
+.settings-intro {
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.settings-body {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 18px;
+}
+
+.settings-body > label {
+  background: rgba(255,255,255,0.6);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.settings-body label {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  color: var(--text-h);
+}
+
+.settings-body select,
+.settings-body input[type="number"] {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  background: transparent;
+}
+
+.settings-body input:focus,
+.settings-body select:focus {
+  outline: none;
+  box-shadow: 0 4px 18px rgba(34,33,81,0.06);
+  border-color: var(--accent-border);
+}
+
+.checkbox-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.saved {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.settings-preview {
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  background: linear-gradient(180deg, rgba(250,250,250,0.6), rgba(244,244,246,0.6));
+}
+
+.settings-preview h3 {
+  margin: 0 0 8px 0;
+}
+
+.settings-preview ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.settings-preview li {
+  margin-bottom: 6px;
+}
+
+.settings-card .counter {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid transparent;
+  padding: 8px 12px;
+}
+
+.settings-card .counter:hover {
+  border-color: var(--accent-border);
+}

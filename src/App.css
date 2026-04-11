@@ -17,6 +17,30 @@
   }
 }
 
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-h);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, transform 0.08s;
+}
+
+.nav-link:hover {
+  background: rgba(0,0,0,0.03);
+  transform: translateY(-1px);
+}
+
+.nav-link.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
 .hero {
   position: relative;
 

@@ -1,15 +1,15 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  --text: #243a5a;
+  --text-h: #071432;
+  --bg: #ffffff;
+  --border: #e6f0ff;
+  --code-bg: #f0f7ff;
+  --accent: #0066ff;
+  --accent-bg: rgba(0, 102, 255, 0.08);
+  --accent-border: rgba(0, 102, 255, 0.2);
+  --social-bg: rgba(230, 244, 255, 0.6);
   --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+    rgba(6, 40, 80, 0.08) 0 10px 15px -3px, rgba(6, 40, 80, 0.03) 0 4px 6px -2px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -32,17 +32,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
+    --text: #b8cfe8;
+    --text-h: #ffffff;
+    --bg: #071428;
+    --border: #12263b;
+    --code-bg: #0f2233;
+    --accent: #6fb3ff;
+    --accent-bg: rgba(111, 179, 255, 0.06);
+    --accent-border: rgba(111, 179, 255, 0.18);
+    --social-bg: rgba(12, 24, 40, 0.4);
     --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+      rgba(2, 8, 23, 0.6) 0 10px 15px -3px, rgba(2, 8, 23, 0.35) 0 4px 6px -2px;
   }
 
   #social .button-icon {
@@ -59,12 +59,38 @@ body {
   max-width: 100%;
   margin: 0 auto;
   text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
 }
+
+/* page background and topbar */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse at top left, rgba(12,36,70,0.65), rgba(7,20,40,0.9) 40%), linear-gradient(180deg, rgba(7,20,40,1) 0%, rgba(6,18,34,1) 60%);
+}
+
+.topbar {
+  display:flex; align-items:center; justify-content:space-between; padding:22px 28px; max-width:1126px; margin: 18px auto 0; box-sizing:border-box;
+}
+.brand { display:flex; gap:16px; align-items:center }
+.brand-logo { width:72px; height:56px; background: linear-gradient(90deg, #ffffff, #dbeeff); color:var(--accent); font-weight:700; display:flex; align-items:center; justify-content:center; border-radius:12px; box-shadow: var(--shadow); font-size:28px }
+.brand-title { color: #ffffff; font-weight:700; font-size:20px }
+.brand-sub { color: rgba(255,255,255,0.85); font-size:13px }
+
+.topnav { display:flex; gap:12px }
+.btn-primary { background: linear-gradient(180deg,var(--accent), #005ce6); color: #fff; border: none; padding:8px 16px; border-radius:12px; box-shadow: 0 8px 20px rgba(3,54,120,0.25); cursor:pointer }
+.btn-ghost { background: rgba(255,255,255,0.06); color: #e6f3ff; border: 1px solid rgba(255,255,255,0.06); padding:8px 14px; border-radius:12px; cursor:pointer }
+
+.page-hero { max-width:1126px; margin: 18px auto 0; padding: 28px; box-sizing:border-box; color: #fff; text-align:center }
+.page-hero h1 { font-size:44px; margin:6px 0 8px; color:#e6f3ff }
+.page-hero .lead { color: rgba(230,245,255,0.85); margin:0 0 6px }
+
+.page-content { max-width:1126px; margin: 18px auto 80px; padding: 0 20px; box-sizing:border-box }
 
 h1,
 h2 {
