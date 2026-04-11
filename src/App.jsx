@@ -8,7 +8,8 @@ import VictoryPopup from './components/VictoryPopup';
 import { useProject } from './context/ProjectContext';
 import { calculateProjectProfile } from './utils/projectCalculator';
 import { Main } from './pages/main/Main';
-import ResultPage from './Pages/ResultPage';
+import ResultPage from './pages/ResultPage';
+import NewsFeed from './pages/NewsFeed';
 
 function Layout({ children }) {
   return (
@@ -48,6 +49,15 @@ function Layout({ children }) {
               }
             >
               Симулятор
+            </NavLink>
+
+            <NavLink
+              to="/results"
+              className={({ isActive }) =>
+                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
+              }
+            >
+              Результаты
             </NavLink>
 
             <NavLink
@@ -318,7 +328,7 @@ function App() {
         <Route path="/" element={<Main />} />
         <Route path="/game" element={<GamePage />} />
         <Route path="/results" element={<ResultPage />} />
-        <Route path="*" element={<Navigate to="/results" replace />} />
+        <Route path="/news" element={<NewsFeed />} />
       </Routes>
     </Layout>
   );
