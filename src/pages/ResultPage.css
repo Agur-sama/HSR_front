@@ -232,6 +232,38 @@
   font-size: 13px;
 }
 
+.metric-plan-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.metric-plan-fact strong {
+  color: var(--ink-main);
+  font-weight: 600;
+}
+
+.metric-delta {
+  width: fit-content;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 99px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+}
+
+.metric-delta.positive {
+  color: var(--status-positive-text);
+  background: var(--status-positive-bg);
+}
+
+.metric-delta.negative {
+  color: var(--status-danger-text);
+  background: var(--status-danger-bg);
+}
+
 .metric-trend {
   width: fit-content;
   font-size: 12px;
@@ -361,13 +393,57 @@
 
 .recommendations {
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
   display: grid;
   gap: 10px;
 }
 
 .recommendations li {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-muted);
+  padding: 12px;
   line-height: 1.45;
+}
+
+.recommendation-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 22px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--brand);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.recommendation-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.recommendation-action {
+  margin: 8px 0 6px;
+  color: var(--ink-main);
+  font-size: 14px;
+}
+
+.recommendation-effect {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
 }
 
 @media (max-width: 1080px) {

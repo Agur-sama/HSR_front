@@ -1,33 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Prata&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
 :root {
-  --bg: #f8f9fb;
-  --surface: #ffffff;
-  --surface-muted: #f2f4f7;
-  --line: #e3e6ea;
-  --line-strong: #c0c7d1;
-  --ink-main: #222222;
-  --ink-soft: #7487a2;
+  --bg: #eff4fb;
+  --surface: #f7faff;
+  --surface-muted: #ecf2fa;
+  --line: #d7e1ef;
+  --line-strong: #b4c5da;
+  --ink-main: #1a2a3f;
+  --ink-soft: #617899;
 
-  --brand: #5f789a;
+  --brand: #3b6fae;
   --on-brand: #ffffff;
   --grade-excellent: #4b8f63;
   --grade-good: #4d6f98;
-  --grade-warning: #c1973d;
+  --grade-warning: #6a84aa;
   --grade-critical: #b45b4e;
 
-  --status-warning-bg: #f6f1e4;
-  --status-warning-line: #e6d9ba;
-  --status-warning-text: #7b6841;
+  --status-warning-bg: #eaf1fb;
+  --status-warning-line: #c8d7ed;
+  --status-warning-text: #4f6789;
 
   --status-positive-bg: #edf7f1;
   --status-positive-text: #3f7e57;
   --status-danger-bg: #faeeeb;
   --status-danger-text: #a05347;
 
-  --font-ui: 'Manrope', 'Segoe UI', Arial, sans-serif;
-  --font-title: 'Prata', Georgia, serif;
-  --elevation: 0 12px 24px -18px rgba(34, 34, 34, 0.24);
+  --font-ui: 'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
+  --font-title: 'IBM Plex Mono', 'Segoe UI', monospace;
+  --elevation: 0 12px 24px -18px rgba(23, 42, 70, 0.2);
 }
 
 * {
@@ -45,8 +45,8 @@ body {
   font-family: var(--font-ui);
   color: var(--ink-main);
   background:
-    radial-gradient(circle at 0 0, rgba(95, 120, 154, 0.18), transparent 24%),
-    radial-gradient(circle at 100% 0, rgba(116, 135, 162, 0.14), transparent 20%),
+    radial-gradient(circle at 0 0, rgba(59, 111, 174, 0.18), transparent 24%),
+    radial-gradient(circle at 100% 0, rgba(97, 120, 153, 0.14), transparent 20%),
     var(--bg);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

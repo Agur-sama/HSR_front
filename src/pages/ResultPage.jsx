@@ -41,6 +41,9 @@ function scoreColor(score) {
 export default function ResultPage() {
   const ringPercent = Math.max(0, Math.min(100, resultMock.score))
   const gradeTone = scoreColor(resultMock.score)
+  const negativeMetricsCount = resultMock.metrics.filter((metric) => metric.tone === 'negative').length
+  const needCoachReplay = resultMock.score < 85 || negativeMetricsCount >= 2
+  const primaryActionLabel = needCoachReplay ? 'Повторить с подсказками' : 'Запустить новый сценарий'
 
   return (
     <main className="result-page">
@@ -75,7 +78,7 @@ export default function ResultPage() {
           </button>
           <button type="button" className="btn btn-secondary">
             <Icon name="replay" />
-            Запустить новый сценарий
+            {primaryActionLabel}
           </button>
         </div>
       </section>
@@ -91,6 +94,15 @@ export default function ResultPage() {
             </div>
             <p className="metric-value">{metric.value}</p>
             <p className="metric-hint">{metric.hint}</p>
+            <div className="metric-plan-fact" aria-label="Сравнение факта с планом">
+              <span>
+                Факт: <strong>{metric.fact}</strong>
+              </span>
+              <span>
+                План: <strong>{metric.plan}</strong>
+              </span>
+            </div>
+            <span className={`metric-delta ${metric.tone}`}>{metric.delta}</span>
             <span className={`metric-trend ${metric.tone}`}>{metric.trend}</span>
           </article>
         ))}
@@ -147,7 +159,14 @@ export default function ResultPage() {
           </div>
           <ul className="recommendations">
             {resultMock.recommendations.map((recommendation) => (
-              <li key={recommendation}>{recommendation}</li>
+              <li key={recommendation.priority}>
+                <div className="recommendation-row">
+                  <span className="priority-badge">{recommendation.priority}</span>
+                  <p className="recommendation-title">{recommendation.title}</p>
+                </div>
+                <p className="recommendation-action">{recommendation.action}</p>
+                <p className="recommendation-effect">Эффект: {recommendation.expectedEffect}</p>
+              </li>
             ))}
           </ul>
         </article>
