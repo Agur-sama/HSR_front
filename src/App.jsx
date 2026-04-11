@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { Routes, Route, NavLink } from 'react-router-dom';
 import { useGameLogic } from './hooks/useGameLogic';
 import GanttChart from './components/GanttChart';
 import ResourcePanel from './components/ResourcePanel';
@@ -10,6 +10,7 @@ import { calculateProjectProfile } from './utils/projectCalculator';
 import { Main } from './pages/main/Main';
 import ResultPage from './pages/ResultPage';
 import NewsFeed from './pages/NewsFeed';
+import AuthPage from './pages/AuthPage';
 
 function Layout({ children }) {
   return (
@@ -61,12 +62,21 @@ function Layout({ children }) {
             </NavLink>
 
             <NavLink
-              to="/results"
+              to="/news"
               className={({ isActive }) =>
                 isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
               }
             >
-              Результаты
+              Новости
+            </NavLink>
+
+            <NavLink
+              to="/auth"
+              className={({ isActive }) =>
+                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
+              }
+            >
+              Вход
             </NavLink>
           </nav>
         </div>
@@ -116,7 +126,7 @@ function GamePage() {
 
       <div className="page-head">
         <div>
-          <span className="page-tag">Симулятор auth</span>
+          <span className="page-tag">Симулятор</span>
           <h2 className="page-title">Управление этапами строительства</h2>
           <p className="page-subtitle">
             Данные ниже автоматически берутся из формы на первой странице и пересчитывают стартовые ресурсы.
@@ -329,6 +339,7 @@ function App() {
         <Route path="/game" element={<GamePage />} />
         <Route path="/results" element={<ResultPage />} />
         <Route path="/news" element={<NewsFeed />} />
+        <Route path="/auth" element={<AuthPage />} />
       </Routes>
     </Layout>
   );
