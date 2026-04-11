@@ -59,6 +59,15 @@ function Layout({ children }) {
             >
               Результаты
             </NavLink>
+
+            <NavLink
+              to="/results"
+              className={({ isActive }) =>
+                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
+              }
+            >
+              Результаты
+            </NavLink>
           </nav>
         </div>
       </header>
