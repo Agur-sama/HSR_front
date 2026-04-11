@@ -1,14 +1,67 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { Routes, Route, NavLink } from 'react-router-dom';
 import { useGameLogic } from './hooks/useGameLogic';
 import GanttChart from './components/GanttChart';
 import ResourcePanel from './components/ResourcePanel';
 import EventPopup from './components/EventPopup';
 import VictoryPopup from './components/VictoryPopup';
-import StudentsForm from './pages/StudentsForm';
-import './App.css';
+import { useProject } from './context/ProjectContext';
+import { calculateProjectProfile } from './utils/projectCalculator';
+import { Main } from './pages/main/Main';
+
+function Layout({ children }) {
+  return (
+    <div className="site-shell">
+      <div className="site-shell__glow site-shell__glow--left" />
+      <div className="site-shell__glow site-shell__glow--right" />
+
+      <header className="top-frame">
+        <div className="topbar">
+          <div className="topbar__brand">
+            <div className="topbar__logo">
+              <div className="topbar__logo-main">ВСМ</div>
+              <div className="topbar__logo-sub">высокоскоростная магистраль</div>
+            </div>
+
+            <div className="topbar__brand-text">
+              <h1>Проект высокоскоростной магистрали</h1>
+              <p>Форма параметров и симулятор работают с общими данными</p>
+            </div>
+          </div>
+
+          <nav className="topbar__nav">
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
+              }
+            >
+              Главная
+            </NavLink>
+
+            <NavLink
+              to="/game"
+              className={({ isActive }) =>
+                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
+              }
+            >
+              Симулятор
+            </NavLink>
+          </nav>
+        </div>
+      </header>
+
+      <main className="page-wrap">{children}</main>
+    </div>
+  );
+}
+
 
 function GamePage() {
+  const { projectData } = useProject();
+  const profile = useMemo(() => calculateProjectProfile(projectData), [projectData]);
+
   const {
     gameState,
     showEvent,
@@ -29,112 +82,177 @@ function GamePage() {
     !currentPhase.allocatedResources &&
     !currentPhase.completed;
 
+  const statusText =
+    gameState.status === 'running'
+      ? 'Строительство'
+      : gameState.status === 'paused'
+      ? 'Пауза'
+      : gameState.status === 'finished'
+      ? 'Завершено'
+      : 'Ожидание';
+
   return (
-    <div style={styles.app}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>🚄 Высокоскоростная магистраль</h1>
+    <section className="game-page">
+      <div className="section-line" />
 
-        <div style={styles.stats}>
-          <div style={styles.stat}>
-            <span style={styles.statLabel}>Этап:</span>
-            <span style={styles.statValue}>
-              {gameState.currentPhase + 1} / {gameState.phases.length}
-            </span>
-          </div>
-          <div style={styles.stat}>
-            <span style={styles.statLabel}>Месяц:</span>
-            <span style={styles.statValue}>
-              {gameState.currentMonth} / {gameState.totalMonths}
-            </span>
-          </div>
-          <div style={styles.stat}>
-            <span style={styles.statLabel}>Статус:</span>
-            <span style={styles.statValue}>
-              {gameState.status === 'running'
-                ? '🏗️ Строительство'
-                : gameState.status === 'paused'
-                ? '⏸️ Пауза'
-                : gameState.status === 'finished'
-                ? '✅ Завершено'
-                : '⏳ Ожидание'}
-            </span>
-          </div>
+      <div className="page-head">
+        <div>
+          <span className="page-tag">Симулятор auth</span>
+          <h2 className="page-title">Управление этапами строительства</h2>
+          <p className="page-subtitle">
+            Данные ниже автоматически берутся из формы на первой странице и пересчитывают стартовые ресурсы.
+          </p>
         </div>
 
-        <div style={styles.resources}>
-          <h3 style={styles.resourcesTitle}>📦 Ресурсы:</h3>
-          <div style={styles.resourceGrid}>
-            <div style={styles.resourceItem}>
-              <span>💰 Деньги:</span>
-              <strong>{gameState.resources.money}</strong>
-            </div>
-            <div style={styles.resourceItem}>
-              <span>👷 Рабочая сила:</span>
-              <strong>{gameState.resources.labor}</strong>
-            </div>
-            <div style={styles.resourceItem}>
-              <span>🏗️ Материалы:</span>
-              <strong>{gameState.resources.materials}</strong>
-            </div>
-            <div style={styles.resourceItem}>
-              <span>⚡ Электроэнергия:</span>
-              <strong>{gameState.resources.electricity}</strong>
-            </div>
-          </div>
+        <div className="page-head__side">
+          <div className="year-badge">{profile.durationMonths} мес.</div>
+        </div>
+      </div>
+
+      <div style={projectStyles.grid}>
+        <div style={projectStyles.card}>
+          <span style={projectStyles.label}>Маршрут</span>
+          <strong style={projectStyles.value}>{profile.routeType}</strong>
         </div>
 
-        <div style={styles.controls}>
-          {gameState.status === 'idle' && (
-            <button onClick={startGame} style={styles.button}>
-              ▶️ Начать проект
-            </button>
-          )}
-          {gameState.status === 'running' && (
-            <button onClick={pauseGame} style={styles.button}>
-              ⏸️ Пауза
-            </button>
-          )}
-          {gameState.status === 'paused' && (
-            <button onClick={startGame} style={styles.button}>
-              ▶️ Продолжить
-            </button>
-          )}
-          <button
-            onClick={resetGame}
-            style={{ ...styles.button, ...styles.resetButton }}
-          >
-            🔄 Сбросить
+        <div style={projectStyles.card}>
+          <span style={projectStyles.label}>Заказчик</span>
+          <strong style={projectStyles.value}>{profile.customer}</strong>
+        </div>
+
+        <div style={projectStyles.card}>
+          <span style={projectStyles.label}>Протяжённость</span>
+          <strong style={projectStyles.value}>{profile.distanceKm} км</strong>
+        </div>
+
+        <div style={projectStyles.card}>
+          <span style={projectStyles.label}>Рабочие</span>
+          <strong style={projectStyles.value}>{profile.workers}</strong>
+        </div>
+
+        <div style={projectStyles.card}>
+          <span style={projectStyles.label}>Мосты</span>
+          <strong style={projectStyles.value}>{profile.bridges}</strong>
+        </div>
+
+        <div style={projectStyles.card}>
+          <span style={projectStyles.label}>Тип местности</span>
+          <strong style={projectStyles.value}>{profile.terrain}</strong>
+        </div>
+
+        <div style={projectStyles.card}>
+          <span style={projectStyles.label}>Бюджет</span>
+          <strong style={projectStyles.value}>{profile.budget} млн ₽</strong>
+        </div>
+
+        <div style={projectStyles.card}>
+          <span style={projectStyles.label}>ЗП рабочих</span>
+          <strong style={projectStyles.value}>{profile.workerSalary} тыс. ₽</strong>
+        </div>
+      </div>
+
+      <div className="stats-strip">
+        <div className="stats-card">
+          <span className="stats-card__label">Этап</span>
+          <strong className="stats-card__value">
+            {gameState.currentPhase + 1} / {gameState.phases.length}
+          </strong>
+        </div>
+
+        <div className="stats-card">
+          <span className="stats-card__label">Текущий месяц</span>
+          <strong className="stats-card__value">{gameState.currentMonth}</strong>
+        </div>
+
+        <div className="stats-card">
+          <span className="stats-card__label">Статус</span>
+          <strong className="stats-card__value">{statusText}</strong>
+        </div>
+      </div>
+
+      <div className="resource-strip">
+        <div className="resource-card">
+          <span>💰 Деньги</span>
+          <strong>{profile.resources.money}</strong>
+        </div>
+        <div className="resource-card">
+          <span>👷 Рабочая сила</span>
+          <strong>{profile.resources.labor}</strong>
+        </div>
+        <div className="resource-card">
+          <span>🏗 Материалы</span>
+          <strong>{profile.resources.materials}</strong>
+        </div>
+        <div className="resource-card">
+          <span>⚡ Электроэнергия</span>
+          <strong>{profile.resources.electricity}</strong>
+        </div>
+      </div>
+
+      <div className="action-row">
+        {gameState.status === 'idle' && (
+          <button onClick={startGame} className="btn btn--primary">
+            Начать проект
           </button>
-        </div>
-      </header>
-
-      <main style={styles.main}>
-        <GanttChart
-          phases={gameState.phases}
-          currentMonth={gameState.currentMonth}
-          currentPhase={gameState.currentPhase}
-        />
-
-        {currentPhase && !currentPhase.completed && (
-          <ResourcePanel
-            phase={currentPhase}
-            availableResources={gameState.resources}
-            onAllocate={allocateResources}
-            disabled={!canStartPhase || gameState.status !== 'running'}
-          />
         )}
 
-        <div style={styles.logs}>
-          <h3 style={styles.logsTitle}>📋 Лог событий</h3>
-          <div style={styles.logList}>
-            {gameState.logs.slice(-8).map((log, i) => (
-              <div key={i} style={styles.logEntry}>
-                {log}
+        {gameState.status === 'running' && (
+          <button onClick={pauseGame} className="btn btn--primary">
+            Пауза
+          </button>
+        )}
+
+        {gameState.status === 'paused' && (
+          <button onClick={startGame} className="btn btn--primary">
+            Продолжить
+          </button>
+        )}
+
+        <button onClick={resetGame} className="btn btn--ghost">
+          Сбросить
+        </button>
+      </div>
+
+      <div className="game-grid">
+        <div className="content-panel content-panel--dark content-panel--wide">
+          <div className="panel-title">Диаграмма проекта</div>
+          <GanttChart
+            phases={gameState.phases}
+            currentMonth={gameState.currentMonth}
+            currentPhase={gameState.currentPhase}
+          />
+        </div>
+
+        {currentPhase && !currentPhase.completed && (
+          <div className="content-panel content-panel--dark">
+            <div className="panel-title">Распределение ресурсов</div>
+            <ResourcePanel
+              phase={currentPhase}
+              availableResources={profile.resources}
+              onAllocate={allocateResources}
+              disabled={!canStartPhase || gameState.status !== 'running'}
+            />
+          </div>
+        )}
+
+        <div className="content-panel content-panel--dark content-panel--wide">
+          <div className="panel-title">Лента событий</div>
+
+          <div className="log-box">
+            {gameState.logs.length === 0 ? (
+              <div className="log-empty">
+                Пока событий нет. Сохрани параметры на первой странице и запусти проект.
               </div>
-            ))}
+            ) : (
+              gameState.logs.slice(-8).map((log, i) => (
+                <div key={i} className="log-entry">
+                  {log}
+                </div>
+              ))
+            )}
           </div>
         </div>
-      </main>
+      </div>
 
       {showEvent && (
         <EventPopup
@@ -152,124 +270,47 @@ function GamePage() {
           }}
         />
       )}
-    </div>
+    </section>
   );
 }
+
+const projectStyles = {
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+    gap: '16px',
+    marginBottom: '18px'
+  },
+  card: {
+    borderRadius: '20px',
+    padding: '18px 20px',
+    background: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(191, 219, 254, 0.14)',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 18px 34px rgba(2, 8, 23, 0.18)',
+    backdropFilter: 'blur(8px)'
+  },
+  label: {
+    display: 'block',
+    color: '#9fb9e6',
+    fontSize: '14px',
+    marginBottom: '8px'
+  },
+  value: {
+    color: '#ffffff',
+    fontSize: '22px',
+    lineHeight: 1.25
+  }
+};
 
 function App() {
   return (
-    <BrowserRouter>
+    <Layout>
       <Routes>
-        <Route path="/" element={<GamePage />} />
-        <Route path="/form" element={<StudentsForm />} />
+        <Route path="/" element={<Main />} />
+        <Route path="/game" element={<GamePage />} />
       </Routes>
-    </BrowserRouter>
+    </Layout>
   );
 }
-
-const styles = {
-  app: {
-    minHeight: '100vh',
-    backgroundColor: '#f0f2f5',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-  },
-  header: {
-    backgroundColor: 'white',
-    padding: '20px 30px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-  },
-  title: {
-    margin: '0 0 20px 0',
-    color: '#2c3e50',
-    fontSize: '28px'
-  },
-  stats: {
-    display: 'flex',
-    gap: '30px',
-    marginBottom: '20px',
-    padding: '15px',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '8px'
-  },
-  stat: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px'
-  },
-  statLabel: {
-    color: '#7f8c8d',
-    fontSize: '14px'
-  },
-  statValue: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#2c3e50'
-  },
-  resources: {
-    marginBottom: '20px'
-  },
-  resourcesTitle: {
-    margin: '0 0 10px 0',
-    color: '#34495e',
-    fontSize: '16px'
-  },
-  resourceGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '10px'
-  },
-  resourceItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    padding: '10px 15px',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '6px',
-    fontSize: '14px'
-  },
-  controls: {
-    display: 'flex',
-    gap: '10px'
-  },
-  button: {
-    padding: '10px 20px',
-    fontSize: '14px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    backgroundColor: '#3498db',
-    color: 'white',
-    transition: 'background-color 0.2s'
-  },
-  resetButton: {
-    backgroundColor: '#e74c3c'
-  },
-  main: {
-    maxWidth: '1200px',
-    margin: '20px auto',
-    padding: '0 20px'
-  },
-  logs: {
-    marginTop: '30px',
-    marginBottom: '30px'
-  },
-  logsTitle: {
-    margin: '0 0 10px 0',
-    color: '#34495e'
-  },
-  logList: {
-    maxHeight: '150px',
-    overflowY: 'auto',
-    backgroundColor: 'white',
-    padding: '15px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-  },
-  logEntry: {
-    padding: '5px',
-    borderBottom: '1px solid #eee',
-    fontSize: '13px',
-    color: '#555'
-  }
-};
 
 export default App;
