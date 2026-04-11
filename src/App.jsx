@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
+import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { useGameLogic } from './hooks/useGameLogic';
 import GanttChart from './components/GanttChart';
 import ResourcePanel from './components/ResourcePanel';
