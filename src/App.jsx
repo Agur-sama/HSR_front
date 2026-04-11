@@ -9,6 +9,7 @@ import { useProject } from './context/ProjectContext';
 import { calculateProjectProfile } from './utils/projectCalculator';
 import { Main } from './pages/main/Main';
 import ResultPage from './pages/ResultPage';
+import NewsFeed from './pages/NewsFeed';
 
 function Layout({ children }) {
   return (
@@ -318,6 +319,7 @@ function App() {
         <Route path="/" element={<Main />} />
         <Route path="/game" element={<GamePage />} />
         <Route path="/results" element={<ResultPage />} />
+        <Route path="/news" element={<NewsFeed />} />
       </Routes>
     </Layout>
   );
