@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
+import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { useGameLogic } from './hooks/useGameLogic';
 import GanttChart from './components/GanttChart';
 import ResourcePanel from './components/ResourcePanel';
@@ -8,7 +8,7 @@ import VictoryPopup from './components/VictoryPopup';
 import { useProject } from './context/ProjectContext';
 import { calculateProjectProfile } from './utils/projectCalculator';
 import { Main } from './pages/main/Main';
-import ResultPage from './pages/ResultPage';
+import ResultPage from './Pages/ResultPage';
 
 function Layout({ children }) {
   return (
@@ -318,6 +318,7 @@ function App() {
         <Route path="/" element={<Main />} />
         <Route path="/game" element={<GamePage />} />
         <Route path="/results" element={<ResultPage />} />
+        <Route path="*" element={<Navigate to="/results" replace />} />
       </Routes>
     </Layout>
   );
