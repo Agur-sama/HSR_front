@@ -1,5 +1,13 @@
 import React, { useMemo } from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
+import { Routes, Route, useLocation, NavLink as RouterNavLink } from 'react-router-dom';
+import {
+  AppBar,
+  Toolbar,
+  Box,
+  Container,
+  Button,
+  Stack,
+} from '@mui/material';
 import { useGameLogic } from './hooks/useGameLogic';
 import GanttChart from './components/GanttChart';
 import ResourcePanel from './components/ResourcePanel';
@@ -12,80 +20,114 @@ import ResultPage from './pages/ResultPage';
 import NewsFeed from './pages/NewsFeed';
 import AuthPage from './pages/AuthPage';
 
-function Layout({ children }) {
+function NavLink({ to, end, children }) {
+  const location = useLocation();
+  const isActive = end ? location.pathname === to : location.pathname.startsWith(to);
   return (
-    <div className="site-shell">
-      <div className="site-shell__glow site-shell__glow--left" />
-      <div className="site-shell__glow site-shell__glow--right" />
-
-      <header className="top-frame">
-        <div className="topbar">
-          <div className="topbar__brand">
-            <div className="topbar__logo">
-              <div className="topbar__logo-main">ВСМ</div>
-              <div className="topbar__logo-sub">высокоскоростная магистраль</div>
-            </div>
-
-            <div className="topbar__brand-text">
-              <h1>Проект высокоскоростной магистрали</h1>
-              <p>Форма параметров и симулятор работают с общими данными</p>
-            </div>
-          </div>
-
-          <nav className="topbar__nav">
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) =>
-                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
-              }
-            >
-              Главная
-            </NavLink>
-
-            <NavLink
-              to="/game"
-              className={({ isActive }) =>
-                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
-              }
-            >
-              Симулятор
-            </NavLink>
-
-            <NavLink
-              to="/results"
-              className={({ isActive }) =>
-                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
-              }
-            >
-              Результаты
-            </NavLink>
-
-            <NavLink
-              to="/news"
-              className={({ isActive }) =>
-                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
-              }
-            >
-              Новости
-            </NavLink>
-
-            <NavLink
-              to="/auth"
-              className={({ isActive }) =>
-                isActive ? 'topbar__link topbar__link--active' : 'topbar__link'
-              }
-            >
-              Вход
-            </NavLink>
-          </nav>
-        </div>
-      </header>
-
-      <main className="page-wrap">{children}</main>
-    </div>
+    <Button
+      component={RouterNavLink}
+      to={to}
+      sx={{
+        textTransform: 'none',
+        fontWeight: 600,
+        fontSize: '15px',
+        px: 2.5,
+        py: 1,
+        borderRadius: '12px',
+        color: isActive ? '#FFFFFF' : '#10203A',
+        backgroundColor: isActive ? '#0B3A8D' : 'transparent',
+        '&:hover': {
+          backgroundColor: isActive ? '#062357' : '#F3F7FF',
+        },
+        transition: 'all 0.2s ease',
+      }}
+    >
+      {children}
+    </Button>
   );
 }
+
+function Layout({ children }) {
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <AppBar
+        position="static"
+        sx={{
+          background: 'linear-gradient(135deg, #FFFFFF 0%, #F3F7FF 100%)',
+          boxShadow: '0 10px 30px rgba(31, 45, 61, 0.08)',
+          borderBottom: '1px solid #DBE3EE',
+        }}
+      >
+        <Toolbar
+          sx={{
+            maxWidth: '1480px',
+            margin: '0 auto',
+            width: '100%',
+            px: 3,
+            py: 1.5,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1 }}>
+            <Box>
+              <Box sx={{ fontSize: '32px', fontWeight: 900, color: '#0B3A8D', lineHeight: 1 }}>
+                ВСМ
+              </Box>
+              <Box sx={{ fontSize: '11px', fontWeight: 700, color: '#0B3A8D', textTransform: 'uppercase', opacity: 0.8 }}>
+                высокоскоростная магистраль
+              </Box>
+            </Box>
+
+            <Box>
+              <Box sx={{ fontSize: '18px', fontWeight: 700, color: '#10203A' }}>
+                Проект высокоскоростной магистрали
+              </Box>
+              <Box sx={{ fontSize: '13px', color: '#617899' }}>
+                Форма параметров и симулятор работают с общими данными
+              </Box>
+            </Box>
+          </Stack>
+
+          <Stack direction="row" gap={0.5}>
+            <NavLink to="/" end>
+              Главная
+            </NavLink>
+            <NavLink to="/game">
+              Симулятор
+            </NavLink>
+            <NavLink to="/results">
+              Результаты
+            </NavLink>
+            <NavLink to="/news">
+              Новости
+            </NavLink>
+            <NavLink to="/auth">
+              Вход
+            </NavLink>
+          </Stack>
+        </Toolbar>
+      </AppBar>
+
+      <Container
+        maxWidth={false}
+        component="main"
+        sx={{
+          flex: 1,
+          maxWidth: '1480px',
+          mx: 'auto',
+          width: '100%',
+          px: 3,
+          py: 2,
+        }}
+      >
+        {children}
+      </Container>
+    </Box>
+  );
+}
+
 
 function GamePage() {
   const { projectData } = useProject();
@@ -121,185 +163,171 @@ function GamePage() {
       : 'Ожидание';
 
   return (
-    <section className="game-page">
-      <div className="section-line" />
+    <Box sx={{ py: 4 }}>
+      <section>
+        <div style={projectStyles.grid}>
+          <div style={projectStyles.card}>
+            <span style={projectStyles.label}>Маршрут</span>
+            <strong style={projectStyles.value}>{profile.routeType}</strong>
+          </div>
 
-      <div className="page-head">
-        <div>
-          <span className="page-tag">Симулятор</span>
-          <h2 className="page-title">Управление этапами строительства</h2>
-          <p className="page-subtitle">
-            Данные ниже автоматически берутся из формы на первой странице и пересчитывают стартовые ресурсы.
-          </p>
-        </div>
+          <div style={projectStyles.card}>
+            <span style={projectStyles.label}>Заказчик</span>
+            <strong style={projectStyles.value}>{profile.customer}</strong>
+          </div>
 
-        <div className="page-head__side">
-          <div className="year-badge">{profile.durationMonths} мес.</div>
-        </div>
-      </div>
+          <div style={projectStyles.card}>
+            <span style={projectStyles.label}>Протяжённость</span>
+            <strong style={projectStyles.value}>{profile.distanceKm} км</strong>
+          </div>
 
-      <div style={projectStyles.grid}>
-        <div style={projectStyles.card}>
-          <span style={projectStyles.label}>Маршрут</span>
-          <strong style={projectStyles.value}>{profile.routeType}</strong>
-        </div>
+          <div style={projectStyles.card}>
+            <span style={projectStyles.label}>Рабочие</span>
+            <strong style={projectStyles.value}>{profile.workers}</strong>
+          </div>
 
-        <div style={projectStyles.card}>
-          <span style={projectStyles.label}>Заказчик</span>
-          <strong style={projectStyles.value}>{profile.customer}</strong>
-        </div>
+          <div style={projectStyles.card}>
+            <span style={projectStyles.label}>Мосты</span>
+            <strong style={projectStyles.value}>{profile.bridges}</strong>
+          </div>
 
-        <div style={projectStyles.card}>
-          <span style={projectStyles.label}>Протяжённость</span>
-          <strong style={projectStyles.value}>{profile.distanceKm} км</strong>
-        </div>
+          <div style={projectStyles.card}>
+            <span style={projectStyles.label}>Тип местности</span>
+            <strong style={projectStyles.value}>{profile.terrain}</strong>
+          </div>
 
-        <div style={projectStyles.card}>
-          <span style={projectStyles.label}>Рабочие</span>
-          <strong style={projectStyles.value}>{profile.workers}</strong>
-        </div>
+          <div style={projectStyles.card}>
+            <span style={projectStyles.label}>Бюджет</span>
+            <strong style={projectStyles.value}>{profile.budget} млн ₽</strong>
+          </div>
 
-        <div style={projectStyles.card}>
-          <span style={projectStyles.label}>Мосты</span>
-          <strong style={projectStyles.value}>{profile.bridges}</strong>
-        </div>
-
-        <div style={projectStyles.card}>
-          <span style={projectStyles.label}>Тип местности</span>
-          <strong style={projectStyles.value}>{profile.terrain}</strong>
+          <div style={projectStyles.card}>
+            <span style={projectStyles.label}>ЗП рабочих</span>
+            <strong style={projectStyles.value}>{profile.workerSalary} тыс. ₽</strong>
+          </div>
         </div>
 
-        <div style={projectStyles.card}>
-          <span style={projectStyles.label}>Бюджет</span>
-          <strong style={projectStyles.value}>{profile.budget} млн ₽</strong>
+        <div className="stats-strip">
+          <div className="stats-card">
+            <span className="stats-card__label">Этап</span>
+            <strong className="stats-card__value">
+              {gameState.currentPhase + 1} / {gameState.phases.length}
+            </strong>
+          </div>
+
+          <div className="stats-card">
+            <span className="stats-card__label">Текущий месяц</span>
+            <strong className="stats-card__value">{gameState.currentMonth}</strong>
+          </div>
+
+          <div className="stats-card">
+            <span className="stats-card__label">Статус</span>
+            <strong className="stats-card__value">{statusText}</strong>
+          </div>
         </div>
 
-        <div style={projectStyles.card}>
-          <span style={projectStyles.label}>ЗП рабочих</span>
-          <strong style={projectStyles.value}>{profile.workerSalary} тыс. ₽</strong>
+        <div className="resource-strip">
+          <div className="resource-card">
+            <span>💰 Деньги</span>
+            <strong>{profile.resources.money}</strong>
+          </div>
+          <div className="resource-card">
+            <span>👷 Рабочая сила</span>
+            <strong>{profile.resources.labor}</strong>
+          </div>
+          <div className="resource-card">
+            <span>🏗 Материалы</span>
+            <strong>{profile.resources.materials}</strong>
+          </div>
+          <div className="resource-card">
+            <span>⚡ Электроэнергия</span>
+            <strong>{profile.resources.electricity}</strong>
+          </div>
         </div>
-      </div>
 
-      <div className="stats-strip">
-        <div className="stats-card">
-          <span className="stats-card__label">Этап</span>
-          <strong className="stats-card__value">
-            {gameState.currentPhase + 1} / {gameState.phases.length}
-          </strong>
-        </div>
+        <div className="action-row">
+          {gameState.status === 'idle' && (
+            <button onClick={startGame} className="btn btn--primary">
+              Начать проект
+            </button>
+          )}
 
-        <div className="stats-card">
-          <span className="stats-card__label">Текущий месяц</span>
-          <strong className="stats-card__value">{gameState.currentMonth}</strong>
-        </div>
+          {gameState.status === 'running' && (
+            <button onClick={pauseGame} className="btn btn--primary">
+              Пауза
+            </button>
+          )}
 
-        <div className="stats-card">
-          <span className="stats-card__label">Статус</span>
-          <strong className="stats-card__value">{statusText}</strong>
-        </div>
-      </div>
+          {gameState.status === 'paused' && (
+            <button onClick={startGame} className="btn btn--primary">
+              Продолжить
+            </button>
+          )}
 
-      <div className="resource-strip">
-        <div className="resource-card">
-          <span>💰 Деньги</span>
-          <strong>{profile.resources.money}</strong>
-        </div>
-        <div className="resource-card">
-          <span>👷 Рабочая сила</span>
-          <strong>{profile.resources.labor}</strong>
-        </div>
-        <div className="resource-card">
-          <span>🏗 Материалы</span>
-          <strong>{profile.resources.materials}</strong>
-        </div>
-        <div className="resource-card">
-          <span>⚡ Электроэнергия</span>
-          <strong>{profile.resources.electricity}</strong>
-        </div>
-      </div>
-
-      <div className="action-row">
-        {gameState.status === 'idle' && (
-          <button onClick={startGame} className="btn btn--primary">
-            Начать проект
+          <button onClick={resetGame} className="btn btn--ghost">
+            Сбросить
           </button>
-        )}
-
-        {gameState.status === 'running' && (
-          <button onClick={pauseGame} className="btn btn--primary">
-            Пауза
-          </button>
-        )}
-
-        {gameState.status === 'paused' && (
-          <button onClick={startGame} className="btn btn--primary">
-            Продолжить
-          </button>
-        )}
-
-        <button onClick={resetGame} className="btn btn--ghost">
-          Сбросить
-        </button>
-      </div>
-
-      <div className="game-grid">
-        <div className="content-panel content-panel--dark content-panel--wide">
-          <div className="panel-title">Диаграмма проекта</div>
-          <GanttChart
-            phases={gameState.phases}
-            currentMonth={gameState.currentMonth}
-            currentPhase={gameState.currentPhase}
-          />
         </div>
 
-        {currentPhase && !currentPhase.completed && (
-          <div className="content-panel content-panel--dark">
-            <div className="panel-title">Распределение ресурсов</div>
-            <ResourcePanel
-              phase={currentPhase}
-              availableResources={profile.resources}
-              onAllocate={allocateResources}
-              disabled={!canStartPhase || gameState.status !== 'running'}
+        <div className="game-grid">
+          <div className="content-panel content-panel--dark content-panel--wide">
+            <div className="panel-title">Диаграмма проекта</div>
+            <GanttChart
+              phases={gameState.phases}
+              currentMonth={gameState.currentMonth}
+              currentPhase={gameState.currentPhase}
             />
           </div>
-        )}
 
-        <div className="content-panel content-panel--dark content-panel--wide">
-          <div className="panel-title">Лента событий</div>
+          {currentPhase && !currentPhase.completed && (
+            <div className="content-panel content-panel--dark">
+              <div className="panel-title">Распределение ресурсов</div>
+              <ResourcePanel
+                phase={currentPhase}
+                availableResources={profile.resources}
+                onAllocate={allocateResources}
+                disabled={!canStartPhase || gameState.status !== 'running'}
+              />
+            </div>
+          )}
 
-          <div className="log-box">
-            {gameState.logs.length === 0 ? (
-              <div className="log-empty">
-                Пока событий нет. Сохрани параметры на первой странице и запусти проект.
-              </div>
-            ) : (
-              gameState.logs.slice(-8).map((log, i) => (
-                <div key={i} className="log-entry">
-                  {log}
+          <div className="content-panel content-panel--dark content-panel--wide">
+            <div className="panel-title">Лента событий</div>
+
+            <div className="log-box">
+              {gameState.logs.length === 0 ? (
+                <div className="log-empty">
+                  Пока событий нет. Сохрани параметры на первой странице и запусти проект.
                 </div>
-              ))
-            )}
+              ) : (
+                gameState.logs.slice(-8).map((log, i) => (
+                  <div key={i} className="log-entry">
+                    {log}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {showEvent && (
-        <EventPopup
-          event={currentEvent}
-          onAccept={() => applyEvent(currentEvent)}
-          onClose={closeEvent}
-        />
-      )}
+        {showEvent && (
+          <EventPopup
+            event={currentEvent}
+            onAccept={() => applyEvent(currentEvent)}
+            onClose={closeEvent}
+          />
+        )}
 
-      {showVictory && (
-        <VictoryPopup
-          onClose={() => {
-            setShowVictory(false);
-            resetGame();
-          }}
-        />
-      )}
-    </section>
+        {showVictory && (
+          <VictoryPopup
+            onClose={() => {
+              setShowVictory(false);
+              resetGame();
+            }}
+          />
+        )}
+      </section>
+    </Box>
   );
 }
 
