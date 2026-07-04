@@ -552,8 +552,12 @@ function SimulatorTab(props: SimulatorTabProps) {
               ) : null}
             </aside>
           </main>
-          <MetricsCards metrics={props.metrics} />
-          <MetricsExplanation />
+          {/*
+            Временно скрыто во вкладке "Симулятор".
+            Блоки могут понадобиться позже, поэтому оставляем JSX рядом.
+            <MetricsCards metrics={props.metrics} />
+            <MetricsExplanation />
+          */}
           <div className="resource-comparison">
             <ResourceChart
               title="Занятость сотрудников без учета резерва"
