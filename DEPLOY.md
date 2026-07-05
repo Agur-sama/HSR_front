@@ -24,7 +24,7 @@ nano .env
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Replace `example.com`, passwords, and `DJANGO_SECRET_KEY` in `.env` before starting.
+Replace `example.com`, passwords, and `DJANGO_SECRET_KEY` in `.env` before starting. `APP_DOMAIN` is the domain Caddy publishes, for example `vsm-simulator.ru`.
 
 Generate a secret key on the server:
 
