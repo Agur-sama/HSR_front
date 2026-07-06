@@ -22,17 +22,22 @@ export function clearTokens() {
   localStorage.removeItem('vsm-refresh-token');
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const headers = new Headers(options.headers);
+type ApiRequestOptions = RequestInit & {
+  skipAuth?: boolean;
+};
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const { skipAuth, ...requestOptions } = options;
+  const headers = new Headers(requestOptions.headers);
   headers.set('Content-Type', 'application/json');
   const token = getAccessToken();
-  if (token) {
+  if (token && !skipAuth) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, { ...options, headers });
+    response = await fetch(`${API_URL}${path}`, { ...requestOptions, headers });
   } catch {
     throw new Error(`Backend недоступен. Запустите сервер API на ${API_URL} или выполните docker compose up --build.`);
   }

@@ -7,8 +7,10 @@ export type LoginResponse = {
 };
 
 export async function login(email: string, password: string) {
+  clearTokens();
   const response = await apiRequest<LoginResponse>('/auth/login', {
     method: 'POST',
+    skipAuth: true,
     body: JSON.stringify({ email, password }),
   });
   setTokens(response.access, response.refresh);

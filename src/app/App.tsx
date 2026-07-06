@@ -8,6 +8,7 @@ import type { AppUser, UserRole } from '../domain/network/types';
 import { getCurrentUser, setCurrentUser } from '../utils/storage';
 import { login as apiLogin, logout as apiLogout, me } from '../api/authApi';
 import type { ApiUser } from '../api/client';
+import { clearTokens } from '../api/client';
 
 export function App() {
   const [path, setPath] = useState(window.location.pathname);
@@ -21,7 +22,11 @@ export function App() {
         setUser(nextUser);
         setCurrentUser(nextUser.id);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        clearTokens();
+        setCurrentUser(null);
+        setUser(null);
+      });
   }, []);
 
   useEffect(() => {
