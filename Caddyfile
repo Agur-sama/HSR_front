@@ -1,9 +1,6 @@
 {$APP_DOMAIN} {
   encode gzip zstd
 
-  @root path /
-  redir @root /?pz=1 302
-
   handle_path /static/* {
     root * /srv/static
     file_server
