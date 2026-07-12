@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MouseEvent, PointerEvent } from 'react';
+import type { MouseEvent, PointerEvent, WheelEvent } from 'react';
 import type { Pz1StationDraft } from './types';
 
 const TILE_SIZE = 256;
 const DEFAULT_CENTER: LatLng = { lat: 58.1, lng: 34.8 };
 const DEFAULT_ZOOM = 6;
 const MIN_ZOOM = 4;
-const MAX_ZOOM = 12;
+const MAX_ZOOM = 18;
 const MAX_MERCATOR_LAT = 85.05112878;
 
 interface LatLng {
@@ -161,8 +161,44 @@ export function OsmStationMap({
     placeActiveStation(worldToLatLng(clickPoint, zoom));
   }
 
+  function zoomAtPoint(nextZoom: number, anchorPoint: Point) {
+    const clampedZoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
+
+    if (clampedZoom === zoom) {
+      return;
+    }
+
+    const anchorWorld = {
+      x: centerWorld.x + anchorPoint.x - size.width / 2,
+      y: centerWorld.y + anchorPoint.y - size.height / 2,
+    };
+    const anchorLatLng = worldToLatLng(anchorWorld, zoom);
+    const anchorWorldAtNextZoom = latLngToWorld(anchorLatLng, clampedZoom);
+    const nextCenterWorld = {
+      x: anchorWorldAtNextZoom.x - anchorPoint.x + size.width / 2,
+      y: anchorWorldAtNextZoom.y - anchorPoint.y + size.height / 2,
+    };
+
+    setCenter(worldToLatLng(nextCenterWorld, clampedZoom));
+    setZoom(clampedZoom);
+  }
+
   function changeZoom(nextZoom: number) {
-    setZoom(clamp(nextZoom, MIN_ZOOM, MAX_ZOOM));
+    zoomAtPoint(nextZoom, {
+      x: size.width / 2,
+      y: size.height / 2,
+    });
+  }
+
+  function handleWheel(event: WheelEvent<HTMLDivElement>) {
+    event.preventDefault();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const direction = event.deltaY < 0 ? 1 : -1;
+    zoomAtPoint(zoom + direction, {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
   }
 
   function focusStations() {
@@ -190,11 +226,11 @@ export function OsmStationMap({
           <button className="button button--ghost" onClick={focusStations} type="button">
             Центр
           </button>
-          <button className="button button--ghost" onClick={() => changeZoom(zoom - 1)} type="button">
+          <button className="button button--ghost" disabled={zoom <= MIN_ZOOM} onClick={() => changeZoom(zoom - 1)} type="button">
             −
           </button>
           <span>{zoom}</span>
-          <button className="button button--ghost" onClick={() => changeZoom(zoom + 1)} type="button">
+          <button className="button button--ghost" disabled={zoom >= MAX_ZOOM} onClick={() => changeZoom(zoom + 1)} type="button">
             +
           </button>
         </div>
@@ -223,10 +259,41 @@ export function OsmStationMap({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onWheel={handleWheel}
         ref={mapRef}
         role="application"
         tabIndex={0}
       >
+        <div
+          className="osm-map-zoom"
+          aria-label="Масштаб карты"
+          onClick={(event) => event.stopPropagation()}
+          onPointerCancel={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerMove={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+          onWheel={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <button
+            aria-label="Приблизить карту"
+            disabled={zoom >= MAX_ZOOM}
+            onClick={() => changeZoom(zoom + 1)}
+            type="button"
+          >
+            +
+          </button>
+          <button
+            aria-label="Отдалить карту"
+            disabled={zoom <= MIN_ZOOM}
+            onClick={() => changeZoom(zoom - 1)}
+            type="button"
+          >
+            −
+          </button>
+        </div>
         <div className="osm-map-tiles" aria-hidden="true">
           {tiles.map((tile) => (
             <img
@@ -260,8 +327,8 @@ export function OsmStationMap({
       </div>
 
       <p className="osm-map-hint">
-        Активна станция {activeStation?.label}. Перетащите карту для сдвига, используйте +/− для масштаба и кликните по
-        карте, чтобы записать координаты.
+        Активна станция {activeStation?.label}. Перетащите карту для сдвига, используйте +/− или колесо мыши для
+        масштаба и кликните по карте, чтобы записать координаты.
       </p>
     </section>
   );

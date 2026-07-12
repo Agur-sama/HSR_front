@@ -602,6 +602,50 @@ button:focus-visible {
   cursor: grabbing;
 }
 
+.osm-map-zoom {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(20, 29, 60, 0.12);
+  cursor: default;
+  pointer-events: auto;
+}
+
+.osm-map-zoom button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 34px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  color: var(--indigo);
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  touch-action: manipulation;
+}
+
+.osm-map-zoom button:last-child {
+  border-bottom: 0;
+}
+
+.osm-map-zoom button:disabled {
+  color: var(--future);
+  cursor: not-allowed;
+}
+
+.osm-map-zoom button:not(:disabled):hover {
+  background: var(--panel-alt);
+}
+
 .osm-map-tiles {
   position: absolute;
   inset: 0;
