@@ -10,11 +10,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/pt-serif": "^5.2.8",
+    "@fontsource/raleway": "^5.2.8",
+    "@react-pdf/renderer": "^4.5.1",
     "@vitejs/plugin-react": "^5.0.0",
-    "vite": "^7.0.0",
-    "typescript": "^5.8.3",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.8",

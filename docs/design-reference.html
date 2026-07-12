@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<!--
+  ЭТАЛОН ДИЗАЙНА для vsm-simulator — вектор «Магистраль/табло».
+  Codex: копируй стили, размеры, цвета и структуру ОТСЮДА, не придумывай заново.
+  Открой файл в браузере, чтобы увидеть как должно выглядеть.
+  Токены: indigo #3a288b, teal #08a696, teal-подложка #e1f5ee, teal-текст #0f6e56/#04342c,
+  рамки #ece9f5/#d8d5e8, приглушённый #8b87a0, «будущее»/disabled #b3affc, шрифт Raleway.
+
+  ========================= СТАТУС ПОКРЫТИЯ =========================
+  1) ВСЕ 13 типов шага + оболочка / интро / итог / locked-состояние.
+
+  2) СИСТЕМНЫЕ ПАТТЕРНЫ (нужны в каждом ПЗ, не привязаны к типу шага):
+     состояния полей (ошибка / успех / disabled), «лимит достигнут»,
+     пустое состояние, загрузка (spinner + skeleton), полный набор кнопок,
+     нижняя навигация шага (Назад/Далее), overlay теории, скролл-контейнер
+     (без двойного скролла — критично под iSpring), тосты, тултипы,
+     адаптив под тесный iSpring-контейнер (что сжимается первым).
+
+  Утверждённая механика (эталон И стиля, И поведения):
+    оболочка+прогресс-трасса, интро/паспорт, экран «Итог», locked-шаг,
+    data-entry-hint, interactive-table-variant, interactive-table-matrix,
+    calculator, table-calculator-hybrid, interactive-table-optimizer,
+    control-questions, survey-constructor, scheme-reader, drag-drop-map,
+    + все системные паттерны из п.2.
+
+  ЧЕРНОВИК (эталон ТОЛЬКО стиля, механика НЕ утверждена — см. open-questions):
+    drag-drop-scheme (ПЗ5, схема станции) — реальные схемы сложнее, подложка рисуется вручную
+    schedule-graph (ПЗ7, увязка поездов) — механика увязки не финализирована
+  Эти два блока помечены жёлтой плашкой .draft-note прямо в разметке.
+  Копировать из них СТИЛЬ можно, считать их готовым ТЗ по механике — нельзя.
+  ==================================================================
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>VSM design reference</title>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@500;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --indigo: #3a288b;
+    --teal: #08a696;
+    --teal-bg: #e1f5ee;
+    --teal-text: #0f6e56;
+    --teal-text-dark: #04342c;
+    --border: #ece9f5;
+    --border-strong: #d8d5e8;
+    --muted: #8b87a0;
+    --future: #b3affc;
+    --panel-alt: #f4f2fa;
+    /* Семантические цвета состояний */
+    --error: #c0392b;
+    --error-bg: #fdf3f2;
+    --error-border: #f0c6c0;
+    --error-text: #7d2a1f;
+    --warn-bg: #faeeda;
+    --warn-text: #412402;
+  }
+  body { font-family: -apple-system, sans-serif; background: #fff; margin: 0; padding: 24px; color: #222; }
+  .ref-block { max-width: 680px; margin: 0 auto 40px; }
+  .ref-label { font-family: 'Raleway'; font-weight: 800; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .card { border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; background: #fff; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .card-head .tag { display: flex; align-items: center; gap: 8px; }
+  .card-head .dot { width: 8px; height: 8px; border-radius: 2px; background: var(--indigo); }
+  .card-head .title { font-family: 'Raleway'; font-weight: 600; font-size: 13px; color: var(--indigo); }
+  .card-head .meta { font-size: 12px; color: var(--muted); font-family: 'Raleway'; font-weight: 500; }
+  .card-body { padding: 18px 20px; }
+
+  /* Прогресс-трасса */
+  .route { position: relative; height: 46px; margin-bottom: 6px; }
+  .route .rail-bg { position: absolute; top: 16px; left: 14px; right: 14px; height: 2px; background: repeating-linear-gradient(90deg, var(--border-strong) 0 6px, transparent 6px 12px); }
+  .route .rail-done { position: absolute; top: 15px; left: 14px; height: 2px; background: var(--teal); }
+  .route .stop { position: absolute; top: 0; display: flex; flex-direction: column; align-items: center; width: 40px; }
+  .route .stop .node { width: 16px; height: 16px; border-radius: 50%; }
+  .route .stop .node.done { background: var(--indigo); border: 2px solid var(--indigo); }
+  .route .stop .node.current { width: 24px; height: 24px; background: var(--teal); box-shadow: 0 0 0 4px var(--teal-bg); }
+  .route .stop .node.future { background: #fff; border: 2px solid var(--border-strong); }
+  .route .stop .lbl { font-family: 'Raleway'; font-size: 11px; margin-top: 6px; white-space: nowrap; }
+  .route .stop .lbl.done { font-weight: 600; color: var(--indigo); }
+  .route .stop .lbl.current { font-weight: 800; color: var(--teal); }
+  .route .stop .lbl.future { font-weight: 500; color: var(--future); }
+
+  /* Крупный номер шага */
+  .stepnum { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 14px; }
+  .stepnum .big { font-family: 'Raleway'; font-weight: 800; font-size: 22px; color: var(--indigo); letter-spacing: -0.3px; font-variant-numeric: tabular-nums; }
+  .stepnum .of { font-family: 'Raleway'; font-weight: 500; font-size: 13px; color: var(--muted); }
+
+  /* Teal callout «Цель» */
+  .callout { background: var(--teal-bg); border-radius: 10px; padding: 14px 16px; display: flex; gap: 12px; }
+  .callout .badge { min-width: 26px; height: 26px; border-radius: 50%; background: var(--teal-text-dark); color: #fff; display: flex; align-items: center; justify-content: center; font-family: 'Raleway'; font-weight: 800; font-size: 13px; }
+  .callout .c-title { font-family: 'Raleway'; font-weight: 600; font-size: 14px; color: var(--teal-text-dark); margin: 0 0 3px; }
+  .callout .c-text { font-size: 13px; color: var(--teal-text); margin: 0; line-height: 1.5; }
+
+  /* Список шагов со статус-пилюлями */
+  .steplist { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-top: 16px; }
+  .steplist .row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .steplist .row:last-child { border-bottom: none; }
+  .steplist .code { font-family: 'Raleway'; font-weight: 600; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .steplist .code.active { color: var(--indigo); }
+  .steplist .code.future { color: var(--future); }
+  .pill { font-family: 'Raleway'; font-weight: 600; font-size: 11px; padding: 3px 9px; border-radius: 5px; }
+  .pill.done { color: var(--teal-text); background: var(--teal-bg); }
+  .pill.active { color: var(--teal-text-dark); background: #9fe1cb; font-weight: 800; }
+  .pill.wait { color: var(--muted); background: #f1efe8; }
+
+  /* Поля ввода */
+  label.field-label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  input.field, select.field, textarea.field { width: 100%; box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; font-size: 12px; font-family: inherit; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* Поле со справочной подсказкой (data-entry-hint) */
+  .hint-field .hint { display: flex; align-items: flex-start; gap: 6px; background: var(--panel-alt); border-radius: 7px; padding: 7px 10px; margin-top: 6px; }
+  .hint-field .hint p { font-size: 10.5px; color: #5f5e5a; margin: 0; line-height: 1.5; }
+  .hint-field .strong-label { font-size: 12px; font-weight: 700; font-family: 'Raleway'; color: var(--indigo); margin-bottom: 6px; display: block; }
+
+  /* Таблицы */
+  table.vtable { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.vtable td { padding: 7px 8px; }
+  table.vtable thead td { color: var(--muted); font-family: 'Raleway'; font-weight: 600; }
+  table.vtable tbody tr { border-top: 1px solid var(--border); }
+  .cell-assigned { background: var(--teal-bg); font-family: 'Raleway'; font-weight: 800; color: var(--teal-text-dark); text-align: center; }
+  .col-assigned-head { background: var(--indigo); color: #fff; font-family: 'Raleway'; font-weight: 800; border-radius: 6px 6px 0 0; text-align: center; }
+  .cell-muted { color: var(--future); text-align: center; }
+
+  /* Кнопки */
+  .btn-primary { font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: #fff; background: var(--indigo); border: none; border-radius: 7px; padding: 7px 14px; cursor: pointer; }
+  .footer-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: var(--teal-bg); border-top: 1px solid #cdeee1; }
+  .footer-bar span { font-size: 12px; color: var(--teal-text); font-family: 'Raleway'; font-weight: 500; }
+
+  /* Заблокированный будущий шаг — НЕ кликабелен, визуально приглушён */
+  .steplist .row.locked { opacity: 0.55; cursor: not-allowed; }
+  .steplist .row.locked .code { color: var(--future); }
+
+  /* Интро/паспорт */
+  .intro-field { margin-bottom: 14px; }
+  .intro-field label { display: block; font-family: 'Raleway'; font-weight: 700; font-size: 12px; color: var(--indigo); margin-bottom: 6px; }
+
+  /* Экран «Итог» — ПРАВИЛЬНЫЙ паттерн: сводка + кнопки, НИКОГДА не сырой JSON на экране */
+  .summary-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-row .k { color: var(--muted); }
+  .summary-row .v { font-family: 'Raleway'; font-weight: 700; color: var(--indigo); }
+  .btn-row { display: flex; gap: 10px; margin-top: 16px; }
+  .btn-secondary { font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: var(--indigo); background: #fff; border: 1px solid var(--border-strong); border-radius: 7px; padding: 7px 14px; cursor: pointer; }
+
+  /* Шахматка (interactive-table-matrix) */
+  table.matrix { border-collapse: collapse; font-size: 11px; width: 100%; }
+  table.matrix td { text-align: center; padding: 6px; border: 1px solid var(--border); }
+  table.matrix td.hdr { font-family: 'Raleway'; font-weight: 700; color: var(--indigo); border: none; }
+  table.matrix td.diag { background: #f1efe8; border: 1px solid var(--border); }
+  table.matrix input { width: 46px; border: none; background: transparent; text-align: center; font-size: 11px; font-family: inherit; }
+  .total-chip { margin-top: 10px; background: var(--teal-bg); border-radius: 8px; padding: 7px 12px; display: inline-block; font-family: 'Raleway'; font-weight: 700; font-size: 11px; color: var(--teal-text-dark); }
+
+  /* Calculator — формула + поля + результат */
+  .formula-box { border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+  .formula-box .katex-slot { margin-bottom: 14px; font-size: 15px; color: var(--indigo); font-family: 'Times New Roman', serif; font-style: italic; }
+  .result-box { background: var(--teal-bg); border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+  .result-box .r-label { font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: var(--teal-text); }
+  .result-box .r-value { font-family: 'Raleway'; font-weight: 800; font-size: 16px; color: var(--teal-text-dark); font-variant-numeric: tabular-nums; }
+
+  /* table-calculator-hybrid (ПЗ6) */
+  table.hybrid { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.hybrid td { padding: 7px 8px; }
+  table.hybrid thead td { color: var(--muted); font-family: 'Raleway'; font-weight: 600; border-bottom: 1px solid var(--border); }
+  table.hybrid tbody tr { border-bottom: 1px solid #f4f2fa; }
+  table.hybrid input { width: 56px; border: 1px solid var(--border-strong); border-radius: 5px; padding: 3px 5px; font-size: 11px; text-align: right; }
+  td.computed { text-align: right; font-family: 'Raleway'; font-weight: 700; color: var(--teal-text-dark); background: var(--teal-bg); }
+  tfoot tr.total-row { border-top: 1.5px solid var(--indigo); }
+  tfoot td { padding: 8px; font-family: 'Raleway'; font-weight: 800; color: var(--indigo); }
+
+  /* interactive-table-optimizer (ПЗ7) — цветовая обратная связь */
+  .metric-box { flex: 1; border-radius: 8px; padding: 10px 14px; }
+  .metric-box .m-label { font-size: 10px; margin: 0 0 4px; color: var(--muted); }
+  .metric-box .m-value { font-family: 'Raleway'; font-weight: 800; font-size: 16px; margin: 0; font-variant-numeric: tabular-nums; }
+  .metric-good { background: var(--teal-bg); } .metric-good .m-value { color: var(--teal-text-dark); }
+  .metric-warn { background: #faeeda; } .metric-warn .m-value { color: #412402; }
+  .metric-bad  { background: #fcebeb; } .metric-bad  .m-value { color: #501313; }
+  .metric-neutral { background: var(--panel-alt); } .metric-neutral .m-value { color: var(--muted); }
+
+  /* control-questions */
+  .cq { background: var(--teal-bg); border-radius: 10px; padding: 14px 16px; }
+  .cq .q { display: block; font-size: 11px; color: var(--teal-text); margin-bottom: 3px; }
+  .cq textarea { width: 100%; box-sizing: border-box; border: 1px solid #9fe1cb; border-radius: 6px; padding: 6px 8px; font-size: 12px; font-family: inherit; resize: none; }
+
+  /* survey-constructor (ПЗ8) */
+  .q-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+  .q-card .q-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .q-card .q-num { font-family: 'Raleway'; font-weight: 700; font-size: 12px; color: var(--indigo); }
+  .q-type { font-family: 'Raleway'; font-weight: 600; font-size: 10px; color: var(--teal-text); background: var(--teal-bg); padding: 3px 8px; border-radius: 5px; }
+  .opt-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; color: var(--muted); }
+  .opt-dot { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--indigo); }
+  .opt-dot.add { border: 1.5px dashed var(--border-strong); }
+  .btn-dashed { width: 100%; font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: var(--indigo); background: #fff; border: 1px dashed var(--border-strong); border-radius: 8px; padding: 9px; cursor: pointer; }
+
+  /* Палитра инструментов (drag-drop-scheme / карта) */
+  .palette-item { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; cursor: grab; font-size: 10px; }
+  .palette-item.active { border-color: var(--indigo); background: var(--panel-alt); }
+  .side-panel { width: 160px; border-left: 1px solid var(--border); padding: 12px; }
+  .side-panel h4 { font-family: 'Raleway'; font-weight: 600; font-size: 11px; color: var(--indigo); margin: 0 0 8px; }
+
+  .draft-note { background: #fff8e6; border: 1px solid #f0dfae; border-radius: 8px; padding: 8px 12px; font-size: 11px; color: #6b5320; margin-bottom: 10px; }
+
+  /* ===== СОСТОЯНИЯ ПОЛЕЙ ===== */
+  input.field.is-error, select.field.is-error { border-color: var(--error); background: #fdf3f2; }
+  .field-error { font-size: 10.5px; color: var(--error); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+  input.field:disabled, select.field:disabled { background: #f7f6fa; color: var(--future); cursor: not-allowed; }
+  input.field.is-ok { border-color: var(--teal); }
+  .field-ok { font-size: 10.5px; color: var(--teal-text); margin-top: 4px; }
+
+  /* ===== СОСТОЯНИЕ «ЛИМИТ ДОСТИГНУТ» ===== */
+  .limit-warn { background: #fdf3f2; border: 1px solid #f0c6c0; border-radius: 8px; padding: 9px 12px; font-size: 11px; color: #7d2a1f; display: flex; gap: 8px; align-items: flex-start; }
+  .limit-warn strong { font-family: 'Raleway'; font-weight: 700; }
+
+  /* ===== ПУСТОЕ СОСТОЯНИЕ ===== */
+  .empty-state { text-align: center; padding: 28px 20px; color: var(--muted); }
+  .empty-state .es-title { font-family: 'Raleway'; font-weight: 600; font-size: 13px; color: var(--indigo); margin: 0 0 4px; }
+  .empty-state .es-text { font-size: 11px; margin: 0; }
+
+  /* ===== ЗАГРУЗКА ===== */
+  .skeleton { background: linear-gradient(90deg, #f1eff7 25%, #e8e5f0 50%, #f1eff7 75%); background-size: 200% 100%; animation: sk 1.4s infinite; border-radius: 8px; }
+  @keyframes sk { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--border-strong); border-top-color: var(--indigo); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== КНОПКИ: полный набор состояний ===== */
+  .btn-primary:hover { background: #2e2070; }
+  .btn-primary:disabled { background: var(--border-strong); color: #fff; cursor: not-allowed; }
+  .btn-secondary:hover { background: var(--panel-alt); }
+  .btn-ghost { font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: var(--muted); background: transparent; border: none; padding: 7px 10px; cursor: pointer; }
+  .btn-ghost:hover { color: var(--indigo); }
+
+  /* ===== НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ ШАГА (общий паттерн) ===== */
+  .step-nav { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--border); }
+  .step-nav .hint-text { font-size: 11px; color: var(--muted); }
+
+  /* ===== МОДАЛКА / OVERLAY ТЕОРИИ ===== */
+  .overlay-demo { position: relative; background: var(--panel-alt); border-radius: 12px; padding: 20px; }
+  .overlay-scrim { position: absolute; inset: 0; background: rgba(58,40,139,0.35); border-radius: 12px; }
+  .theory-panel { position: relative; background: #fff; border-radius: 12px; border: 1px solid var(--border-strong); max-width: 440px; margin: 0 auto; overflow: hidden; }
+  .theory-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .theory-head .t-title { font-family: 'Raleway'; font-weight: 700; font-size: 13px; color: var(--indigo); }
+  .theory-body { padding: 16px; max-height: 160px; overflow-y: auto; font-size: 12px; line-height: 1.6; color: #444; }
+  .btn-close { background: transparent; border: none; font-size: 18px; color: var(--muted); cursor: pointer; line-height: 1; }
+
+  /* ===== СКРОЛЛ-КОНТЕЙНЕР (критично под iSpring) ===== */
+  .scroll-demo { border: 1px dashed var(--border-strong); border-radius: 8px; padding: 10px; }
+  .scroll-inner { max-height: 120px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+  .scroll-inner::-webkit-scrollbar { width: 6px; }
+  .scroll-inner::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+  /* ===== ТОСТ ===== */
+  .toast { display: inline-flex; align-items: center; gap: 8px; background: var(--teal-text-dark); color: #fff; border-radius: 8px; padding: 9px 14px; font-family: 'Raleway'; font-weight: 600; font-size: 12px; }
+  .toast.error { background: #7d2a1f; }
+
+  /* ===== ТУЛТИП ===== */
+  .tip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; background: var(--border-strong); color: #fff; font-size: 10px; font-weight: 700; cursor: help; font-family: 'Raleway'; }
+  .tip-body { background: var(--indigo); color: #fff; font-size: 11px; border-radius: 6px; padding: 6px 9px; margin-left: 8px; display: inline-block; }
+
+  /* ===== АДАПТИВ ПОД ТЕСНЫЙ iSPRING-КОНТЕЙНЕР ===== */
+  @media (max-width: 720px) {
+    .route .stop .lbl { font-size: 9px; }           /* подписи станций мельче, не переносятся */
+    .grid2 { grid-template-columns: 1fr; }           /* поля в одну колонку */
+    .side-panel { width: 130px; padding: 8px; }      /* сайдбар сжимается ПЕРВЫМ, карта — последней */
+  }
+  @media (max-width: 560px) {
+    .side-panel { display: none; }                   /* при крайней тесноте сайдбар прячется, карта остаётся */
+  }
+
+</style>
+</head>
+<body>
+
+<div class="ref-block">
+  <div class="ref-label">Оболочка модуля — прогресс-трасса + номер шага + callout + список шагов</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="tag"><div class="dot"></div><span class="title">ПЗ1 · Карта трассы ВСМ</span></div>
+      <span class="meta">Команда «Юнит-3» · Вариант 04</span>
+    </div>
+    <div class="card-body">
+      <div class="route">
+        <div class="rail-bg"></div>
+        <div class="rail-done" style="width:62%;"></div>
+        <div class="stop" style="left:0;"><div class="node done"></div><span class="lbl done">Интро</span></div>
+        <div class="stop" style="left:28%;transform:translateX(-50%);"><div class="node done"></div><span class="lbl done">Теория</span></div>
+        <div class="stop" style="left:62%;top:-4px;transform:translateX(-50%);width:60px;"><div class="node current"></div><span class="lbl current">Задание</span></div>
+        <div class="stop" style="right:0;"><div class="node future"></div><span class="lbl future">Итог</span></div>
+      </div>
+      <div class="stepnum"><span class="big">03</span><span class="of">из 04 — размещение станций</span></div>
+      <div class="callout">
+        <div class="badge">1</div>
+        <div>
+          <p class="c-title">Цель практического задания</p>
+          <p class="c-text">Назначить станции А, Г и не более двух промежуточных Б, В, проложить линию ВСМ.</p>
+        </div>
+      </div>
+      <div class="steplist">
+        <div class="row"><span class="code active">01 · станция А</span><span class="pill done">Готово</span></div>
+        <div class="row"><span class="code active">02 · станция Б, В</span><span class="pill active">В работе</span></div>
+        <div class="row"><span class="code future">03 · станция Г</span><span class="pill wait">Ожидание</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">data-entry-hint — поле со справочной подсказкой (постоянной, не placeholder)</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ1 · итоговые показатели</span></div></div>
+    <div class="card-body">
+      <div class="hint-field" style="margin-bottom:16px;">
+        <label class="strong-label">9. Затраты на строительство ВСМ, млрд руб.</label>
+        <input class="field" style="width:160px;" type="number" placeholder="напр. 340">
+        <div class="hint"><p>Справочно: 1,5–2,5 млрд руб/км (простые условия) · 2,5–3,5 (средние) · 3,5–6,0 (сложные)</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">interactive-table-variant — назначенный вариант подсвечен</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ5 · исходные данные</span></div></div>
+    <div class="card-body">
+      <table class="vtable">
+        <thead><tr>
+          <td>Параметр</td>
+          <td style="text-align:center;color:var(--muted);">1</td>
+          <td style="text-align:center;color:var(--muted);">2</td>
+          <td style="text-align:center;color:var(--muted);">3</td>
+          <td class="col-assigned-head">4</td>
+          <td style="text-align:center;color:var(--muted);">5</td>
+        </tr></thead>
+        <tbody>
+          <tr><td style="color:var(--indigo);">Время техн. перерыва, ч</td><td class="cell-muted">4</td><td class="cell-muted">5</td><td class="cell-muted">5</td><td class="cell-assigned">4</td><td class="cell-muted">5</td></tr>
+          <tr><td style="color:var(--indigo);">Интервал при ПАБ, мин</td><td class="cell-muted">23</td><td class="cell-muted">26</td><td class="cell-muted">28</td><td class="cell-assigned">18</td><td class="cell-muted">20</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:12px;background:var(--teal-bg);border-radius:8px;padding:8px 12px;font-family:'Raleway';font-weight:600;font-size:11px;color:var(--teal-text-dark);">Вариант, который вам назначили: 4 — подставлен из паспорта проекта</div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Экран карты — сайдбар списка станций + нижняя панель действия</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ1 · размещение станций</span></div></div>
+    <div style="display:flex;">
+      <div style="flex:1;aspect-ratio:16/10;background:#f3efe4;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;">[ здесь MapLibre-карта: топоподложка 2D, name:ru ]</div>
+      <div style="width:176px;border-left:1px solid var(--border);padding:12px;">
+        <p style="font-family:'Raleway';font-weight:600;font-size:11px;color:var(--indigo);margin:0 0 8px;">Станции линии</p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-family:'Raleway';font-weight:700;font-size:11px;color:var(--indigo);">А · Новгород</div>
+          <div style="border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-family:'Raleway';font-weight:700;font-size:11px;color:var(--teal-text);">Б · —</div>
+          <div style="border:1px dashed var(--border-strong);border-radius:6px;padding:6px 8px;font-family:'Raleway';font-weight:600;font-size:11px;color:var(--future);">Г · выбрать</div>
+        </div>
+        <p style="font-size:10px;color:var(--muted);margin:10px 0 0;line-height:1.4;">Не более двух промежуточных станций.</p>
+      </div>
+    </div>
+    <div class="footer-bar">
+      <span>Кликните по карте, чтобы поставить станцию, или перетащите поставленную.</span>
+      <button class="btn-primary">Далее</button>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Список шагов со статусами — включая заблокированный будущий (locked, не кликабелен)</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">Пример: статусы шага</span></div></div>
+    <div class="card-body">
+      <div class="steplist">
+        <div class="row"><span class="code active">01 · станция А</span><span class="pill done">Готово</span></div>
+        <div class="row"><span class="code active">02 · станция Б, В</span><span class="pill active">В работе</span></div>
+        <div class="row locked"><span class="code">03 · станция Г</span><span class="pill wait">Заблокировано</span></div>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:10px;">Заблокированный шаг НЕ кликабелен — нельзя прыгнуть вперёд через непройденный. Пройденные шаги (Готово) кликабельны для возврата назад.</p>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Экран интро — паспорт + вариант, единственная точка входа в модуль</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ1 · интро</span></div></div>
+    <div class="card-body">
+      <div class="intro-field">
+        <label>Название команды (для группировки преподавателем)</label>
+        <input class="field" placeholder="напр. Юнит-3">
+      </div>
+      <div class="intro-field">
+        <label>Название линии</label>
+        <input class="field" placeholder="напр. ВСМ Владивосток–Хабаровск">
+      </div>
+      <div class="intro-field">
+        <label>Вариант, который вам назначили</label>
+        <select class="field">
+          <option>1 · Владивосток–Хабаровск</option>
+          <option>2 · Екатеринбург–Челябинск</option>
+        </select>
+      </div>
+      <button class="btn-primary">Начать</button>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Экран «Итог» — сводка + кнопки. НЕ показывать сырой JSON студенту никогда</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ1 · итог</span></div></div>
+    <div class="card-body">
+      <div class="summary-row"><span class="k">Вариант</span><span class="v">1 · Владивосток–Хабаровск</span></div>
+      <div class="summary-row"><span class="k">Станций заполнено</span><span class="v">2</span></div>
+      <div class="summary-row"><span class="k">Точек трассы</span><span class="v">2</span></div>
+      <div class="btn-row">
+        <button class="btn-primary">Скачать PDF</button>
+        <button class="btn-secondary">Скачать JSON (для следующего ПЗ)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">interactive-table-matrix — шахматка (ПЗ7). Диагональ заблокирована, симметрична, размер динамический 2..4 станции</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ7 · шахматная таблица пассажиропотоков</span></div></div>
+    <div class="card-body">
+      <table class="matrix">
+        <tr><td class="hdr" style="width:34px;"></td><td class="hdr">А</td><td class="hdr">Б</td><td class="hdr">В</td><td class="hdr">Г</td></tr>
+        <tr><td class="hdr">А</td><td class="diag"></td><td><input value="1087"></td><td><input value="2391"></td><td><input value="2956"></td></tr>
+        <tr><td class="hdr">Б</td><td><input value="1087"></td><td class="diag"></td><td><input value="2120"></td><td><input value="2130"></td></tr>
+        <tr><td class="hdr">В</td><td><input value="2391"></td><td><input value="2120"></td><td class="diag"></td><td><input value="696"></td></tr>
+        <tr><td class="hdr">Г</td><td><input value="2956"></td><td><input value="2130"></td><td><input value="696"></td><td class="diag"></td></tr>
+      </table>
+      <p style="font-size:10px;color:var(--muted);margin-top:8px;">Читается: из Б до Г — 2130 пасс./сутки. Ввод в одну ячейку зеркалит симметричную.</p>
+      <div class="total-chip">Общий пассажиропоток линии: 39 866 пасс./сутки</div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">calculator — формула + входы + результат (ПЗ4, ПЗ5, ПЗ6). Формулы рендерятся KaTeX</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ4 · сопротивление системы электроснабжения</span></div></div>
+    <div class="card-body">
+      <div class="stepnum"><span class="big">01</span><span class="of">из 03</span></div>
+      <div class="formula-box">
+        <div class="katex-slot">[ KaTeX: x_C = U_H² / S_КЗ ]</div>
+        <div class="grid2">
+          <div><label class="field-label">U_н — номинальное напряжение, кВ</label><input class="field" type="number" value="27.5"></div>
+          <div><label class="field-label">S_кз — мощность к.з., МВ·А</label><input class="field" type="number" placeholder="напр. 1000"></div>
+        </div>
+      </div>
+      <div class="result-box"><span class="r-label">Результат x_C, Ом</span><span class="r-value">0,756</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">table-calculator-hybrid — каждая строка своя формула + строка «Итого» (ПЗ6)</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ6 · расчёт числа стойл</span></div></div>
+    <div class="card-body">
+      <table class="hybrid">
+        <thead><tr><td>Вид обслуживания</td><td style="text-align:right;">P, шт/год</td><td style="text-align:right;">t, ч</td><td style="text-align:right;color:var(--indigo);font-weight:700;">A, стойл</td></tr></thead>
+        <tbody>
+          <tr><td style="color:var(--indigo);">R5</td><td style="text-align:right;"><input value="0.68"></td><td style="text-align:right;"><input value="4"></td><td class="computed">0,11</td></tr>
+          <tr><td style="color:var(--indigo);">R4</td><td style="text-align:right;"><input value="0.34"></td><td style="text-align:right;"><input value="3"></td><td class="computed">0,03</td></tr>
+          <tr><td style="color:var(--indigo);">R3</td><td style="text-align:right;"><input value="0.34"></td><td style="text-align:right;"><input value="5"></td><td class="computed">0,03</td></tr>
+        </tbody>
+        <tfoot><tr class="total-row"><td>Итого для ревизий</td><td colspan="2"></td><td style="text-align:right;font-size:13px;">1</td></tr></tfoot>
+      </table>
+      <p style="font-size:10px;color:var(--muted);margin-top:8px;">Изменение P или t пересчитывает только свою строку → затем строку «Итого». Не глобальный пересчёт формы.</p>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">interactive-table-optimizer — живой пересчёт + цветовая обратная связь (ПЗ7)</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ7 · минимизация затрат пассажиро-часов</span></div></div>
+    <div class="card-body">
+      <table class="hybrid">
+        <thead><tr><td>Маршрут</td><td style="text-align:right;">Время в пути</td><td style="text-align:right;">Поездов</td></tr></thead>
+        <tbody>
+          <tr><td style="color:var(--indigo);">Без остановок</td><td style="text-align:right;color:var(--muted);">2ч10м</td><td style="text-align:right;"><input value="2"></td></tr>
+          <tr><td style="color:var(--indigo);">1 остановка в Б</td><td style="text-align:right;color:var(--muted);">2ч16м</td><td style="text-align:right;"><input value="4"></td></tr>
+          <tr><td style="color:var(--indigo);">Все остановки</td><td style="text-align:right;color:var(--muted);">2ч28м</td><td style="text-align:right;"><input value="1"></td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;gap:12px;margin-top:14px;">
+        <div class="metric-box metric-neutral"><p class="m-label">Размеры движения</p><p class="m-value">7 пар/сут</p></div>
+        <div class="metric-box metric-good"><p class="m-label">Среднее время в пути</p><p class="m-value">2ч 15м</p></div>
+      </div>
+      <p style="font-size:10px;color:var(--muted);margin-top:8px;">Цвет метрики: teal-фон = близко к оптимуму, жёлтый (.metric-warn) = средне, красный (.metric-bad) = далеко. Пересчёт на каждый ввод.</p>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">control-questions — короткие текстовые ответы (ПЗ3, ПЗ5, ПЗ7)</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">Контрольные вопросы</span></div></div>
+    <div class="card-body">
+      <div class="cq">
+        <p style="font-family:'Raleway';font-weight:600;font-size:12px;color:var(--teal-text-dark);margin:0 0 8px;">Контрольные вопросы</p>
+        <label class="q">Почему на участке 2 выбран другой тип ВСП?</label>
+        <textarea rows="2" placeholder="Ваш ответ"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">survey-constructor — конструктор анкеты (ПЗ8)</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ8 · конструктор анкеты</span></div></div>
+    <div class="card-body">
+      <div class="q-card">
+        <div class="q-head"><span class="q-num">Вопрос 1</span><span class="q-type">Одиночный выбор</span></div>
+        <input class="field" value="Как часто вы пользуетесь поездами дальнего следования?" style="margin-bottom:8px;">
+        <div class="opt-row"><span class="opt-dot"></span><span>Раз в неделю и чаще</span></div>
+        <div class="opt-row"><span class="opt-dot"></span><span>Раз в месяц</span></div>
+        <div class="opt-row"><span class="opt-dot add"></span><span style="color:var(--future);">+ добавить вариант</span></div>
+      </div>
+      <button class="btn-dashed">+ Добавить вопрос</button>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">scheme-reader — готовая схема для чтения + вывод (ПЗ2). Ничего не двигают, только анализируют</div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ2 · анализ продольного профиля</span></div></div>
+    <div class="card-body">
+      <svg viewBox="0 0 440 110" style="width:100%;display:block;background:#fafaf8;border-radius:8px;margin-bottom:12px;">
+        <line x1="20" y1="90" x2="420" y2="90" stroke="#ece9f5" stroke-width="1"/>
+        <polyline points="20,80 110,80 190,35 280,35 340,65 420,65" fill="none" stroke="#3a288b" stroke-width="2.5"/>
+        <circle cx="110" cy="80" r="3" fill="#3a288b"/><circle cx="190" cy="35" r="3" fill="#3a288b"/>
+        <circle cx="280" cy="35" r="3" fill="#3a288b"/><circle cx="340" cy="65" r="3" fill="#3a288b"/>
+        <text x="150" y="52" font-family="Raleway" font-weight="700" font-size="10" fill="#0f6e56" text-anchor="middle">12‰</text>
+        <text x="310" y="55" font-family="Raleway" font-weight="700" font-size="10" fill="#0f6e56" text-anchor="middle">−8‰</text>
+      </svg>
+      <div class="grid2">
+        <div><label class="field-label">Ограничивающий фактор</label><select class="field"><option>Уклон профиля</option><option>Радиус кривой в плане</option></select></div>
+        <div><label class="field-label">Vmax на участке, км/ч</label><input class="field" type="number" placeholder="напр. 300"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">drag-drop-scheme — схема станции ПЗ5 <span style="color:#b45309;">(ЧЕРНОВИК СТИЛЯ, механика не финализирована — см. open-questions)</span></div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ5 · расстановка светофоров</span></div></div>
+    <div class="card-body" style="padding-bottom:0;"><div class="draft-note">Механика не утверждена. Реальные схемы станций сложнее (4-5 путей, лестница стрелочных переводов) — подложка рисуется вручную в SVG, точки посадки сигналов размечаются заранее. Это эталон СТИЛЯ, не эталон механики.</div></div>
+    <div style="display:flex;">
+      <div style="flex:1;">
+        <svg viewBox="0 0 440 150" style="width:100%;display:block;background:#fafaf8;">
+          <line x1="30" y1="60" x2="410" y2="60" stroke="#3a288b" stroke-width="2"/>
+          <line x1="60" y1="100" x2="380" y2="100" stroke="#3a288b" stroke-width="2"/>
+          <line x1="60" y1="100" x2="90" y2="60" stroke="#3a288b" stroke-width="2"/>
+          <line x1="350" y1="60" x2="380" y2="100" stroke="#3a288b" stroke-width="2"/>
+          <polygon points="60,54 60,66 72,60" fill="#3a288b"/><text x="52" y="48" font-family="Raleway" font-weight="800" font-size="9" fill="#3a288b" text-anchor="middle">Н1</text>
+          <polygon points="90,94 90,106 102,100" fill="#08a696"/><text x="82" y="122" font-family="Raleway" font-weight="800" font-size="9" fill="#0f6e56" text-anchor="middle">Н2</text>
+          <polygon points="340,94 340,106 328,100" fill="none" stroke="#c8c4dc" stroke-width="1.5" stroke-dasharray="2 2"/>
+          <text x="345" y="122" font-family="Raleway" font-weight="600" font-size="9" fill="#c8c4dc" text-anchor="middle">Ч2?</text>
+        </svg>
+      </div>
+      <div class="side-panel">
+        <h4>Палитра сигналов</h4>
+        <div class="palette-item active"><div style="width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--indigo);"></div><span style="color:var(--indigo);">Входной</span></div>
+        <div class="palette-item"><div style="width:0;height:0;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--teal);"></div><span style="color:var(--teal-text);">Выходной</span></div>
+        <div class="palette-item"><div style="width:14px;height:14px;border-radius:50%;background:#f1efe8;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:800;color:var(--muted);">М</div><span style="color:var(--muted);">Маневровый</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">schedule-graph — график движения ПЗ7 <span style="color:#b45309;">(ЧЕРНОВИК СТИЛЯ, механика «увязки» не финализирована)</span></div>
+  <div class="card">
+    <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ7 · определение потребного парка</span></div></div>
+    <div class="card-body">
+      <div class="draft-note">Механика «увязки поездов по станциям оборота» НЕ утверждена (см. open-questions №9). Здесь только визуальный стиль ниток и курсора-счётчика.</div>
+      <svg viewBox="0 0 440 200" style="width:100%;display:block;background:#fafaf8;border-radius:8px;">
+        <line x1="30" y1="20" x2="420" y2="20" stroke="#ece9f5"/><line x1="30" y1="70" x2="420" y2="70" stroke="#ece9f5"/>
+        <line x1="30" y1="120" x2="420" y2="120" stroke="#ece9f5"/><line x1="30" y1="170" x2="420" y2="170" stroke="#ece9f5"/>
+        <text x="18" y="24" font-family="Raleway" font-weight="700" font-size="9" fill="#3a288b">А</text>
+        <text x="18" y="74" font-family="Raleway" font-weight="700" font-size="9" fill="#3a288b">Б</text>
+        <text x="18" y="124" font-family="Raleway" font-weight="700" font-size="9" fill="#3a288b">В</text>
+        <text x="18" y="174" font-family="Raleway" font-weight="700" font-size="9" fill="#3a288b">Г</text>
+        <line x1="40" y1="20" x2="130" y2="170" stroke="#3a288b" stroke-width="1.5"/>
+        <line x1="120" y1="20" x2="210" y2="170" stroke="#3a288b" stroke-width="1.5"/>
+        <line x1="80" y1="170" x2="170" y2="20" stroke="#08a696" stroke-width="1.5"/>
+        <line x1="230" y1="170" x2="320" y2="20" stroke="#08a696" stroke-width="1.5"/>
+        <line x1="260" y1="20" x2="350" y2="170" stroke="#3a288b" stroke-width="1.5"/>
+        <line x1="200" y1="12" x2="200" y2="185" stroke="#e24b4a" stroke-width="2"/>
+      </svg>
+      <p style="font-size:11px;color:var(--muted);margin-top:8px;">Индиго — чётное направление, teal — нечётное. Красный курсор — момент времени, считает пересечения (= поездов в движении).</p>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Состояния полей — ошибка, успех, disabled</div>
+  <div class="card"><div class="card-body">
+    <div style="margin-bottom:14px;">
+      <label class="field-label">Протяжённость участка, км</label>
+      <input class="field is-error" style="width:200px;" value="45">
+      <div class="field-error">⚠ Протяжённость должна быть от 10 до 30 км</div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label class="field-label">Vmax, км/ч</label>
+      <input class="field is-ok" style="width:200px;" value="300">
+      <div class="field-ok">✓ Соответствует радиусу кривой на участке</div>
+    </div>
+    <div>
+      <label class="field-label">Число поездов (из варианта, не редактируется)</label>
+      <input class="field" style="width:200px;" value="20" disabled>
+    </div>
+  </div></div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Лимит достигнут — 3-я промежуточная станция (частый кейс в ПЗ1)</div>
+  <div class="card"><div class="card-body">
+    <div class="limit-warn">
+      <span>⚠</span>
+      <div><strong>Достигнут лимит промежуточных станций.</strong><br>Можно назначить не более двух (Б и В). Удалите одну, чтобы поставить другую.</div>
+    </div>
+  </div></div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Пустое состояние + загрузка (карта/тайлы грузятся)</div>
+  <div class="card">
+    <div class="card-body" style="border-bottom:1px solid var(--border);">
+      <div class="empty-state">
+        <p class="es-title">Станции пока не назначены</p>
+        <p class="es-text">Кликните по карте, чтобы поставить первую станцию (А)</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div class="spinner"></div>
+        <span style="font-size:12px;color:var(--muted);">Загружаем карту…</span>
+      </div>
+      <div class="skeleton" style="height:14px;width:70%;margin-bottom:8px;"></div>
+      <div class="skeleton" style="height:14px;width:45%;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Кнопки — все состояния + нижняя навигация шага (общий паттерн для всех ПЗ)</div>
+  <div class="card">
+    <div class="card-body">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn-primary">Далее</button>
+        <button class="btn-primary" disabled>Далее (заблокировано)</button>
+        <button class="btn-secondary">Скачать JSON</button>
+        <button class="btn-ghost">Пропустить</button>
+      </div>
+    </div>
+    <div class="step-nav">
+      <button class="btn-ghost">← Назад</button>
+      <span class="hint-text">Шаг 3 из 5 · заполните все поля, чтобы продолжить</span>
+      <button class="btn-primary">Далее →</button>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Overlay теории — открывается ПОВЕРХ текущего шага, не отдельная фаза маршрута</div>
+  <div class="overlay-demo">
+    <p style="font-size:11px;color:var(--muted);margin:0 0 12px;">[ под затемнением — экран задания, он остаётся на месте ]</p>
+    <div class="overlay-scrim"></div>
+    <div class="theory-panel">
+      <div class="theory-head">
+        <span class="t-title">Теория · Радиусы кривых на ВСМ</span>
+        <button class="btn-close">×</button>
+      </div>
+      <div class="theory-body">
+        <p style="margin:0 0 10px;">Минимальные радиусы круговых кривых на ВСМ увеличиваются с ростом скорости и могут достигать 10 000 м при 360 км/ч.</p>
+        <p style="margin:0 0 10px;">Для 400 км/ч → R ≥ 10 000 м; для 350 км/ч → R ≥ 7 500 м; для 300 км/ч → R ≥ 5 500 м.</p>
+        <p style="margin:0;">Возвышение наружного рельса (до 150 мм) компенсирует центробежную силу в кривой.</p>
+      </div>
+      <div class="step-nav" style="border-top:1px solid var(--border);">
+        <span class="hint-text">Методичка целиком — PDF</span>
+        <button class="btn-secondary">Вернуться к заданию</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Скролл — КРИТИЧНО под iSpring: скроллится ВНУТРЕННИЙ блок, не страница (никакого двойного скролла)</div>
+  <div class="card"><div class="card-body">
+    <div class="scroll-demo">
+      <p style="font-size:11px;color:var(--muted);margin:0 0 8px;">Корень модуля: <code>height:100%; overflow:hidden;</code> — страница НЕ скроллится.</p>
+      <div class="scroll-inner">
+        <p style="font-size:11px;margin:0 0 8px;">Внутренний список: <code>overflow-y:auto</code> — скроллится только он.</p>
+        <p style="font-size:11px;margin:0 0 8px;">Строка 2 · длинные списки станций, таблиц, вопросов живут здесь.</p>
+        <p style="font-size:11px;margin:0 0 8px;">Строка 3 · прокрутите этот блок, чтобы увидеть поведение.</p>
+        <p style="font-size:11px;margin:0 0 8px;">Строка 4 · страница под ним остаётся неподвижной.</p>
+        <p style="font-size:11px;margin:0;">Строка 5 · это и есть требование «без двойного скролла».</p>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Тосты и тултипы</div>
+  <div class="card"><div class="card-body">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+      <div class="toast">✓ Результат сохранён в файл</div>
+      <div class="toast error">✕ Не удалось прочитать JSON</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:0;">
+      <span class="tip">?</span>
+      <span class="tip-body">Коэффициент надёжности принимается 0,96 по методичке</span>
+    </div>
+  </div></div>
+</div>
+
+<div class="ref-block">
+  <div class="ref-label">Адаптив под iSpring — что сжимается первым</div>
+  <div class="card"><div class="card-body">
+    <p style="font-size:12px;line-height:1.7;margin:0;color:#444;">
+      Размер Web Object задаёт преподаватель в редакторе iSpring — мы им не управляем. Правила деградации (в CSS, media-queries):<br><br>
+      <strong style="font-family:'Raleway';color:var(--indigo);">&lt; 720px:</strong> подписи станций на трассе мельче, поля <code>.grid2</code> схлопываются в одну колонку, сайдбар сжимается до 130px.<br>
+      <strong style="font-family:'Raleway';color:var(--indigo);">&lt; 560px:</strong> сайдбар прячется полностью — <em>карта важнее списка станций</em>, она остаётся.<br><br>
+      Принцип: <strong>сначала жертвуем вспомогательным (сайдбар, подписи), в последнюю очередь — рабочей областью (карта, таблица).</strong> Уменьшите окно браузера, чтобы проверить.
+    </p>
+  </div></div>
+</div>
+
+</body>
+</html>

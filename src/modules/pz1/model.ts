@@ -1,25 +1,29 @@
 import type { BridgeSchema, Passport, Pz1Result, Pz1Station, StationLabel, StationType } from '../../bridge/schema';
 import { createBridge } from '../../bridge/io';
 import type { DataEntryColumn, DataEntryRow } from '../../shared/ui/DataEntryTable';
-import type { Pz1Draft, Pz1StationDraft } from './types';
+import type { Pz1Draft, Pz1RoutePointDraft, Pz1StationDraft } from './types';
 
 const STATION_LABELS: StationLabel[] = ['А', 'Б', 'В', 'Г'];
 const TERMINAL_LABELS: StationLabel[] = ['А', 'Г'];
+const PASSPORT_LIMITS = {
+  team: { min: 2, max: 40 },
+  lineTitle: { min: 3, max: 80 },
+};
 
 export const transportColumns: DataEntryColumn[] = [
-  { id: 'transport1', label: 'Вид 1' },
-  { id: 'transport2', label: 'Вид 2' },
-  { id: 'transport3', label: 'Вид 3' },
-  { id: 'transport4', label: 'Вид 4' },
-  { id: 'transport5', label: 'Вид 5' },
+  { id: 'hSR', label: 'ВСМ' },
+  { id: 'airplane', label: 'Самолёт' },
+  { id: 'suburbanTrain', label: 'Пригородный поезд' },
+  { id: 'longDistanceTrain', label: 'Поезд дальнего следования' },
+  { id: 'bus', label: 'Автобус' },
+  { id: 'car', label: 'Личный автомобиль' },
 ];
 
 export const consumerRows: DataEntryRow[] = [
-  { id: 'travelTime', label: 'Время в пути', helper: 'По каждому виду транспорта' },
-  { id: 'discomfort', label: 'Коэффициент дискомфорта', helper: 'Диапазон 0-1 из методички' },
-  { id: 'frequencyCurrent', label: 'Частота сообщения, текущая' },
-  { id: 'frequencyPlanned', label: 'Частота сообщения, плановая' },
-  { id: 'fare', label: 'Средняя стоимость проезда' },
+  { id: 'travelTime', label: 'Время в пути', helper: 'ч' },
+  { id: 'discomfort', label: 'Коэффициент дискомфорта', helper: 'индекс' },
+  { id: 'dailyFrequency', label: 'Частота сообщения за сутки', helper: 'рейсов' },
+  { id: 'fare', label: 'Средняя стоимость проезда', helper: 'руб.' },
 ];
 
 export const finalIndicators = [
@@ -50,6 +54,7 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
     },
     selectedVariantId,
     stationDrafts: createStationDrafts(importedPz1?.stations ?? []),
+    routePointDrafts: createRoutePointDrafts(importedPz1?.routeLine ?? []),
     consumerProperties: mergeConsumerValues(importedPz1?.consumerProperties),
     finalIndicators: mergeFinalIndicators(importedPz1?.finalIndicators),
     notes: importedPz1?.notes ?? '',
@@ -67,10 +72,13 @@ export function createPz1Result(draft: Pz1Draft): Pz1Result {
     .filter((stationDraft) => stationDraft.enabled)
     .map(toStation)
     .filter((station): station is Pz1Station => station !== null);
+  const routeLine = draft.routePointDrafts
+    .map(toRoutePoint)
+    .filter((point): point is [number, number] => point !== null);
 
   return {
     stations,
-    routeLine: stations.map((station) => [station.lat, station.lng]),
+    routeLine,
     variantId: draft.selectedVariantId,
     consumerProperties: draft.consumerProperties,
     finalIndicators: draft.finalIndicators,
@@ -98,6 +106,77 @@ export function sanitizeFileName(value: string, fallback: string) {
   return cleaned || fallback;
 }
 
+export function isPassportComplete(draft: Pz1Draft) {
+  return (
+    isLengthInRange(draft.passport.team, PASSPORT_LIMITS.team.min, PASSPORT_LIMITS.team.max) &&
+    isLengthInRange(draft.passport.lineTitle, PASSPORT_LIMITS.lineTitle.min, PASSPORT_LIMITS.lineTitle.max) &&
+    isVariantInRange(draft.selectedVariantId)
+  );
+}
+
+export function validateConsumerCell(rowId: string, value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Заполните это поле, чтобы продолжить';
+  }
+
+  const parsed = parseCoordinate(trimmed);
+  if (parsed === null) {
+    return 'Значение должно быть числом';
+  }
+
+  if (parsed < 0) {
+    return 'Значение не может быть отрицательным';
+  }
+
+  if (rowId === 'discomfort' && parsed > 1) {
+    return 'Коэффициент дискомфорта — это индекс от 0 до 1';
+  }
+
+  if ((rowId === 'travelTime' || rowId === 'fare') && parsed <= 0) {
+    return 'Значение должно быть больше 0';
+  }
+
+  if (rowId === 'travelTime' && parsed > 48) {
+    return 'Время в пути должно быть не больше 48 ч';
+  }
+
+  if (rowId === 'dailyFrequency' && !Number.isInteger(parsed)) {
+    return 'Частота сообщения за сутки должна быть целым числом';
+  }
+
+  return null;
+}
+
+export function isConsumerPropertiesComplete(draft: Pz1Draft) {
+  return consumerRows.every((row) =>
+    transportColumns.every((column) => validateConsumerCell(row.id, draft.consumerProperties[row.id]?.[column.id] ?? '') === null),
+  );
+}
+
+export function isFinalIndicatorsComplete(draft: Pz1Draft) {
+  return finalIndicators.every((indicator) => {
+    const value = draft.finalIndicators[indicator.id] ?? '';
+    if (indicator.id === 'riskNotes') {
+      return value.trim().length > 0;
+    }
+
+    const parsed = parseCoordinate(value);
+    return value.trim().length > 0 && parsed !== null && parsed > 0;
+  });
+}
+
+export function isStationsStepComplete(draft: Pz1Draft) {
+  const enabledStations = draft.stationDrafts.filter((stationDraft) => stationDraft.enabled);
+  const routePoints = draft.routePointDrafts.map(toRoutePoint).filter((point): point is [number, number] => point !== null);
+
+  return (
+    TERMINAL_LABELS.every((label) => enabledStations.some((stationDraft) => stationDraft.label === label)) &&
+    enabledStations.every(isStationDraftComplete) &&
+    routePoints.length >= 2
+  );
+}
+
 function createPassport(draft: Pz1Draft): Passport {
   const parsedVariant = Number(draft.selectedVariantId);
 
@@ -123,6 +202,14 @@ function createStationDrafts(stations: Pz1Station[]): Pz1StationDraft[] {
       type,
     };
   });
+}
+
+function createRoutePointDrafts(routeLine: Pz1Result['routeLine']): Pz1RoutePointDraft[] {
+  return routeLine.map(([lng, lat], index) => ({
+    id: `route-point-${index}`,
+    lat: String(lat),
+    lng: String(lng),
+  }));
 }
 
 function mergeConsumerValues(importedValues: Pz1Result['consumerProperties']) {
@@ -172,6 +259,17 @@ function toStation(stationDraft: Pz1StationDraft): Pz1Station | null {
   };
 }
 
+function toRoutePoint(routePointDraft: Pz1RoutePointDraft): [number, number] | null {
+  const lat = parseCoordinate(routePointDraft.lat);
+  const lng = parseCoordinate(routePointDraft.lng);
+
+  if (lat === null || lng === null) {
+    return null;
+  }
+
+  return [lng, lat];
+}
+
 function parseCoordinate(value: string) {
   if (!value.trim()) {
     return null;
@@ -183,4 +281,22 @@ function parseCoordinate(value: string) {
 
 function getStationType(label: StationLabel): StationType {
   return TERMINAL_LABELS.includes(label) ? 'terminal' : 'intermediate';
+}
+
+function isStationDraftComplete(stationDraft: Pz1StationDraft) {
+  return (
+    stationDraft.name.trim().length > 0 &&
+    parseCoordinate(stationDraft.lat) !== null &&
+    parseCoordinate(stationDraft.lng) !== null
+  );
+}
+
+function isLengthInRange(value: string, min: number, max: number) {
+  const length = value.trim().length;
+  return length >= min && length <= max;
+}
+
+function isVariantInRange(value: string) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 6;
 }

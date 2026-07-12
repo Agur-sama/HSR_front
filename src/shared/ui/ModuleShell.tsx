@@ -136,7 +136,7 @@ export function ModuleShell({
       {phase !== 'result' ? (
         <footer className="module-actions">
           <button className="button button--ghost" disabled={phase === 'intro'} onClick={goBack} type="button">
-            Назад
+            ← Назад
           </button>
           <span className="module-actions__hint">{progressHint}</span>
           <button className="button button--primary" disabled={!canGoForward} onClick={goForward} type="button">
@@ -175,7 +175,7 @@ function TheoryOverlay({ children, onComplete }: { children: ReactNode; onComple
         <footer className="theory-panel__actions">
           <span>После этого откроется выполнение текущего шага.</span>
           <button className="button button--primary" onClick={onComplete} type="button">
-            Перейти к заданию
+            Вернуться к заданию
           </button>
         </footer>
       </section>
@@ -185,14 +185,14 @@ function TheoryOverlay({ children, onComplete }: { children: ReactNode; onComple
 
 function getPrimaryActionLabel(phase: ModulePhase, currentStepIndex: number, taskStepCount: number) {
   if (phase === 'intro') {
-    return 'Начать обучение';
+    return 'Начать';
   }
 
   if (currentStepIndex >= taskStepCount - 1) {
     return 'К итогу';
   }
 
-  return 'Далее';
+  return 'Далее →';
 }
 
 function getProgressHint({
@@ -215,7 +215,7 @@ function getProgressHint({
   }
 
   if (!theoryComplete) {
-    return 'Изучите теорию в overlay и подтвердите переход к практике.';
+    return 'Откройте теорию и подтвердите переход к практике.';
   }
 
   if (!activeTaskStepComplete) {

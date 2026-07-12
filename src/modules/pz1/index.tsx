@@ -6,7 +6,6 @@ import { ModuleShell } from '../../shared/ui/ModuleShell';
 import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
 import { DataEntryTable } from '../../shared/ui/DataEntryTable';
 import { FieldWithHint } from '../../shared/ui/FieldWithHint';
-import { downloadPz1Pdf } from '../../pdf/render';
 import { OsmStationMap } from './OsmStationMap';
 import {
   consumerRows,
@@ -14,9 +13,14 @@ import {
   createPz1Bridge,
   createPz1Result,
   finalIndicators,
+  isConsumerPropertiesComplete,
+  isFinalIndicatorsComplete,
+  isPassportComplete,
+  isStationsStepComplete,
   sanitizeFileName,
   transportColumns,
   updateCellValue,
+  validateConsumerCell,
 } from './model';
 import type { Pz1Draft, Pz1StationDraft } from './types';
 import { getPz1VariantTitle, pz1Variants } from './variants';
@@ -34,27 +38,30 @@ function Pz1Workspace() {
   const taskSteps: ModuleTaskStep[] = [
     {
       id: 'stations',
-      title: 'Трасса и станции',
-      goal: 'Зафиксировать конечные и промежуточные станции для результата ПЗ1.',
+      title: 'Размещение станций и план трассы',
+      goal:
+        'Назначьте начально-конечные станции (А и Г) и не более двух промежуточных (Б, В), затем проложите линию ВСМ между ними.',
       content: <StationsStep />,
       isComplete: isStationsStepComplete(draft),
-      completionHint: 'Заполните названия и координаты всех включённых станций.',
+      completionHint: 'Проложите линию трассы — нужно минимум две точки',
     },
     {
       id: 'consumer-properties',
-      title: 'Потребительские свойства',
-      goal: 'Заполнить сравнение видов транспорта для дальнейшего технико-экономического обоснования.',
+      title: 'Потребительские свойства линии',
+      goal:
+        'Заполните характеристики поездки на каждом виде транспорта — они понадобятся для прогноза пассажиропотока.',
       content: <ConsumerPropertiesStep />,
       isComplete: isConsumerPropertiesComplete(draft),
-      completionHint: 'Заполните все ячейки таблицы потребительских свойств.',
+      completionHint: 'Заполните все обязательные поля, чтобы продолжить',
     },
     {
       id: 'final-indicators',
-      title: 'Итоговые показатели',
-      goal: 'Собрать 13 итоговых показателей ПЗ1 с явными справочными подсказками.',
+      title: 'Технико-экономические показатели',
+      goal:
+        'Сведите ключевые параметры линии. У капиталоёмких показателей рядом приведены справочные диапазоны — используйте их, чтобы прикинуть порядок величины.',
       content: <FinalIndicatorsStep />,
       isComplete: isFinalIndicatorsComplete(draft),
-      completionHint: 'Заполните все итоговые показатели ПЗ1.',
+      completionHint: 'Заполните все обязательные поля, чтобы продолжить',
     },
   ];
 
@@ -62,12 +69,12 @@ function Pz1Workspace() {
     <ModuleShell
       intro={<IntroStep />}
       introComplete={isIntroComplete(draft)}
-      introCompletionHint="Заполните команду и название линии, затем выберите вариант направления."
+      introCompletionHint="Заполните все поля, чтобы начать"
       result={<ResultStep />}
-      subtitle="Статический MVP без бэкенда: паспорт, теория, ручная трасса, таблицы, JSON-мост и PDF."
+      subtitle="Практическое задание № 1"
       taskSteps={taskSteps}
       theory={<TheoryStep />}
-      title="ПЗ1. Технико-экономическое обоснование"
+      title="Технико-экономическое обоснование проекта ВСМ"
     />
   );
 }
@@ -114,31 +121,37 @@ function IntroStep() {
         <h2>Входные данные</h2>
         <div className="form-grid">
           <label>
-            <span>Команда</span>
+            <span>Название команды</span>
             <input
+              maxLength={40}
+              minLength={2}
               onChange={(event) =>
                 updateDraft((currentDraft) => ({
                   ...currentDraft,
                   passport: { ...currentDraft.passport, team: event.target.value },
                 }))
               }
+              placeholder="напр. Юнит-3"
               value={draft.passport.team}
             />
           </label>
           <label>
             <span>Название линии</span>
             <input
+              maxLength={80}
+              minLength={3}
               onChange={(event) =>
                 updateDraft((currentDraft) => ({
                   ...currentDraft,
                   passport: { ...currentDraft.passport, lineTitle: event.target.value },
                 }))
               }
+              placeholder="напр. ВСМ Владивосток — Хабаровск"
               value={draft.passport.lineTitle}
             />
           </label>
           <label>
-            <span>Вариант направления</span>
+            <span>Вариант, который вам назначили</span>
             <select
               onChange={(event) =>
                 updateDraft((currentDraft) => ({
@@ -189,7 +202,10 @@ function TheoryStep() {
         <article>
           <span>01</span>
           <h3>Трасса</h3>
-          <p>Станции А-Б-В-Г ставятся на OpenStreetMap: клик по карте записывает координаты, а включённые станции соединяются линией трассы.</p>
+          <p>
+            Станции А, Г и опциональные Б, В ставятся на OpenStreetMap. Линия трассы прокладывается отдельными
+            точками, чтобы обойти водоёмы и возвышенности.
+          </p>
         </article>
         <article>
           <span>02</span>
@@ -219,12 +235,21 @@ function StationsStep() {
     }));
   }
 
+  function replaceRoutePointDrafts(routePointDrafts: Pz1Draft['routePointDrafts']) {
+    updateDraft((currentDraft) => ({
+      ...currentDraft,
+      routePointDrafts,
+    }));
+  }
+
   return (
     <div className="stations-step">
       <OsmStationMap
         activeStationLabel={activeStationLabel}
         onActiveStationChange={setActiveStationLabel}
+        onRoutePointDraftsChange={replaceRoutePointDrafts}
         onStationChange={updateStation}
+        routePointDrafts={draft.routePointDrafts}
         stations={draft.stationDrafts}
       />
       <div className="station-grid">
@@ -284,18 +309,24 @@ function ConsumerPropertiesStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
 
   return (
-    <DataEntryTable
-      caption="Таблицы потребительских свойств"
-      columns={transportColumns}
-      onChange={(rowId, columnId, value) =>
-        updateDraft((currentDraft) => ({
-          ...currentDraft,
-          consumerProperties: updateCellValue(currentDraft.consumerProperties, rowId, columnId, value),
-        }))
-      }
-      rows={consumerRows}
-      values={draft.consumerProperties}
-    />
+    <div className="consumer-tables">
+      {consumerRows.map((row) => (
+        <DataEntryTable
+          caption={row.label}
+          columns={transportColumns}
+          getError={(rowId, columnId) => validateConsumerCell(rowId, draft.consumerProperties[rowId]?.[columnId] ?? '')}
+          key={row.id}
+          onChange={(rowId, columnId, value) =>
+            updateDraft((currentDraft) => ({
+              ...currentDraft,
+              consumerProperties: updateCellValue(currentDraft.consumerProperties, rowId, columnId, value),
+            }))
+          }
+          rows={[row]}
+          values={draft.consumerProperties}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -340,6 +371,7 @@ function FinalIndicatorsStep() {
 
 function ResultStep() {
   const { draft } = useModuleState<Pz1Draft>();
+  const [exportStatus, setExportStatus] = useState('');
   const bridge = createPz1Bridge(draft);
   const result = createPz1Result(draft);
   const fileSlug = sanitizeFileName(draft.passport.lineTitle, 'pz1');
@@ -348,69 +380,79 @@ function ResultStep() {
 
   function downloadJson() {
     downloadBridgeJson(bridge, `${fileSlug}-bridge.json`);
+    setExportStatus('✓ Файл сохранён');
   }
 
-  function downloadPdf() {
-    downloadPz1Pdf(
-      {
-        team: draft.passport.team,
-        lineTitle: draft.passport.lineTitle,
-        variantTitle: getPz1VariantTitle(draft.selectedVariantId),
-        stationCount: result.stations.length,
-        filledConsumerCells,
-        filledIndicatorCount,
-        createdAt: draft.passport.createdAt,
-      },
-      `${fileSlug}-report.pdf`,
-    );
-  }
-
-  function saveResult() {
-    downloadPdf();
-    window.setTimeout(downloadJson, 120);
+  async function downloadPdf() {
+    try {
+      const { downloadPz1Pdf } = await import('../../pdf/render');
+      await downloadPz1Pdf(
+        {
+          team: draft.passport.team,
+          lineTitle: draft.passport.lineTitle,
+          variantTitle: getPz1VariantTitle(draft.selectedVariantId),
+          stationCount: result.stations.length,
+          routePointCount: result.routeLine.length,
+          filledConsumerCells,
+          filledIndicatorCount,
+          createdAt: draft.passport.createdAt,
+          routeLine: result.routeLine,
+          stations: result.stations,
+        },
+        `${fileSlug}-report.pdf`,
+      );
+      setExportStatus('✓ Файл сохранён');
+    } catch {
+      setExportStatus('Не удалось сформировать PDF. Попробуйте скачать JSON и повторить экспорт.');
+    }
   }
 
   return (
     <div className="result-layout">
       <section className="result-summary">
         <p className="eyebrow">Итог ПЗ1</p>
-        <h2>Сводка результата</h2>
+        <h2>Задание выполнено</h2>
+        <p>Проверьте сводку и скачайте отчёт. Файл JSON понадобится, если вы захотите перенести данные в следующее задание.</p>
         <dl className="summary-grid">
-          <div>
-            <dt>Команда</dt>
-            <dd>{draft.passport.team || 'Не заполнено'}</dd>
-          </div>
-          <div>
-            <dt>Линия</dt>
-            <dd>{draft.passport.lineTitle || 'Не заполнено'}</dd>
-          </div>
           <div>
             <dt>Вариант</dt>
             <dd>{getPz1VariantTitle(draft.selectedVariantId)}</dd>
           </div>
           <div>
-            <dt>Станции</dt>
+            <dt>Число станций</dt>
             <dd>{result.stations.length}</dd>
           </div>
           <div>
-            <dt>Ячейки свойств</dt>
-            <dd>{filledConsumerCells}</dd>
+            <dt>Длина трассы</dt>
+            <dd>{draft.finalIndicators.lineLength || 'не рассчитано'}</dd>
           </div>
           <div>
-            <dt>Итоговые показатели</dt>
-            <dd>{filledIndicatorCount}</dd>
+            <dt>Общий пассажиропоток</dt>
+            <dd>{draft.finalIndicators.annualFlow || 'не рассчитано'}</dd>
+          </div>
+          <div>
+            <dt>Прогноз</dt>
+            <dd>{draft.finalIndicators.ticketRevenue || 'не рассчитано'}</dd>
+          </div>
+          <div>
+            <dt>Точки трассы</dt>
+            <dd>{result.routeLine.length}</dd>
           </div>
         </dl>
-        <p className="save-warning">Сохраните файл перед выходом, иначе прогресс не восстановится.</p>
+        <p className="save-warning">Сохраните файл перед выходом — прогресс не восстановится, если закрыть страницу.</p>
       </section>
 
       <section className="result-actions">
         <p className="eyebrow">Экспорт</p>
-        <h2>Сохранить результат</h2>
-        <p className="status-note">Будут сформированы два файла: PDF-отчёт и JSON-мост для повторной загрузки.</p>
-        <button className="button button--primary" onClick={saveResult} type="button">
-          Сохранить результат
+        <h2>Скачать файлы</h2>
+        <p className="status-note">PDF нужен для сдачи преподавателю. JSON можно загрузить позже, чтобы продолжить работу с теми же данными.</p>
+        <button className="button button--primary" onClick={() => void downloadPdf()} type="button">
+          Скачать PDF
         </button>
+        <button className="button button--secondary" onClick={downloadJson} type="button">
+          Скачать JSON
+        </button>
+        {exportStatus ? <p className="status-note">{exportStatus}</p> : null}
       </section>
     </div>
   );
@@ -421,32 +463,5 @@ function isFilled(value: string) {
 }
 
 function isIntroComplete(draft: Pz1Draft) {
-  return isFilled(draft.passport.team) && isFilled(draft.passport.lineTitle) && isFilled(draft.selectedVariantId);
-}
-
-function isStationsStepComplete(draft: Pz1Draft) {
-  const enabledStations = draft.stationDrafts.filter((stationDraft) => stationDraft.enabled);
-  const terminalLabels: Array<Pz1StationDraft['label']> = ['А', 'Г'];
-
-  return (
-    terminalLabels.every((label) => enabledStations.some((stationDraft) => stationDraft.label === label)) &&
-    enabledStations.every(isStationDraftComplete)
-  );
-}
-
-function isStationDraftComplete(stationDraft: Pz1StationDraft) {
-  return isFilled(stationDraft.name) && isValidCoordinate(stationDraft.lat) && isValidCoordinate(stationDraft.lng);
-}
-
-function isValidCoordinate(value: string) {
-  const parsed = Number(value.replace(',', '.'));
-  return isFilled(value) && Number.isFinite(parsed);
-}
-
-function isConsumerPropertiesComplete(draft: Pz1Draft) {
-  return consumerRows.every((row) => transportColumns.every((column) => isFilled(draft.consumerProperties[row.id]?.[column.id] ?? '')));
-}
-
-function isFinalIndicatorsComplete(draft: Pz1Draft) {
-  return finalIndicators.every((indicator) => isFilled(draft.finalIndicators[indicator.id] ?? ''));
+  return isPassportComplete(draft);
 }
