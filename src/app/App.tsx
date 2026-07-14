@@ -3,7 +3,7 @@ import type { PzNumber } from '../modules/types';
 
 export function App() {
   const pzNumber = readPzNumber(window.location.search);
-  const module = pzNumber === null ? undefined : moduleRegistry[pzNumber];
+  const module = moduleRegistry[pzNumber];
 
   if (!module) {
     return <ModuleNotFound requestedPz={pzNumber} />;
@@ -13,12 +13,16 @@ export function App() {
   return <SelectedModule />;
 }
 
-function readPzNumber(search: string): PzNumber | null {
+function readPzNumber(search: string): PzNumber {
   const rawValue = new URLSearchParams(search).get('pz');
+  if (rawValue === null) {
+    return 1;
+  }
+
   const parsed = Number(rawValue);
 
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 8) {
-    return null;
+    return 1;
   }
 
   return parsed as PzNumber;
