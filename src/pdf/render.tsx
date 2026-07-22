@@ -1,14 +1,17 @@
 import { Document, Font, Image, Page, StyleSheet, Text, View, pdf } from '@react-pdf/renderer';
 import ptSerifRegular from '@fontsource/pt-serif/files/pt-serif-cyrillic-400-normal.woff?url';
+import ptSerifItalic from '@fontsource/pt-serif/files/pt-serif-cyrillic-400-italic.woff?url';
 import ptSerifBold from '@fontsource/pt-serif/files/pt-serif-cyrillic-700-normal.woff?url';
 import ralewayMedium from '@fontsource/raleway/files/raleway-cyrillic-500-normal.woff?url';
 import ralewayBold from '@fontsource/raleway/files/raleway-cyrillic-800-normal.woff?url';
 import { downloadTextFile } from '../bridge/io';
-import type { RouteLine } from '../bridge/schema';
+import type { CorrespondenceTable, Pz1Result, RouteLine } from '../bridge/schema';
+import { consumerRows, finalIndicators, transportColumns } from '../modules/pz1/model';
 import { computeRouteLineMetrics } from '../shared/lib/routeGeometry';
 
 const PAGE_SIZE = 'A4';
 const MARGIN_MM = 20;
+const runtimeProcess = (globalThis as { process?: { cwd: () => string; versions?: { node?: string } } }).process;
 
 interface PdfStation {
   label: string;
@@ -28,6 +31,9 @@ export interface Pz1PdfSummary {
   filledConsumerCells: number;
   filledIndicatorCount: number;
   createdAt: string;
+  consumerProperties?: Pz1Result['consumerProperties'];
+  finalIndicators?: Pz1Result['finalIndicators'];
+  notes?: string;
   stations?: PdfStation[];
   routeLine?: RouteLine;
   previewImage?: string;
@@ -41,16 +47,17 @@ export interface Pz1PdfSection {
 Font.register({
   family: 'RalewayPdf',
   fonts: [
-    { src: ralewayMedium, fontWeight: 500 },
-    { src: ralewayBold, fontWeight: 800 },
+    { src: resolveFontSource(ralewayMedium), fontWeight: 500 },
+    { src: resolveFontSource(ralewayBold), fontWeight: 800 },
   ],
 });
 
 Font.register({
   family: 'PtSerifPdf',
   fonts: [
-    { src: ptSerifRegular, fontWeight: 400 },
-    { src: ptSerifBold, fontWeight: 700 },
+    { src: resolveFontSource(ptSerifRegular), fontWeight: 400 },
+    { src: resolveFontSource(ptSerifItalic), fontStyle: 'italic', fontWeight: 400 },
+    { src: resolveFontSource(ptSerifBold), fontWeight: 700 },
   ],
 });
 
@@ -95,6 +102,14 @@ export function createPz1PdfSections(summary: Pz1PdfSummary): Pz1PdfSection[] {
   ];
 }
 
+function resolveFontSource(source: string) {
+  if (runtimeProcess?.versions?.node && source.startsWith('/node_modules/')) {
+    return `${runtimeProcess.cwd()}${source}`;
+  }
+
+  return source;
+}
+
 function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
   const sections = createPz1PdfSections(summary);
 
@@ -114,17 +129,18 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
           <Text style={styles.sectionTitle}>Содержание</Text>
           <Text style={styles.contentsLine}>1. Исходные данные варианта</Text>
           <Text style={styles.contentsLine}>2. План трассы и размещение станций</Text>
-          <Text style={styles.contentsLine}>3. Заполнение расчётных таблиц</Text>
-          <Text style={styles.contentsLine}>4. Итоговая сводка</Text>
+          <Text style={styles.contentsLine}>3. Матрица корреспонденций</Text>
+          <Text style={styles.contentsLine}>4. Расчёт длины трассы</Text>
+          <Text style={styles.contentsLine}>5. Технико-экономические показатели</Text>
         </View>
       </Page>
 
       <Page size={PAGE_SIZE} style={styles.page}>
         <RunningHeader summary={summary} pageNumber="2" />
+        <Text style={styles.sectionTitle}>1. Исходные данные варианта</Text>
+        <KeyValueTable rows={sections[0].rows} />
         <Text style={styles.sectionTitle}>2. План трассы и размещение станций</Text>
         <KeyValueTable rows={sections[1].rows} />
-        <StationTable stations={summary.stations ?? []} />
-        <RouteSegmentTable routeLine={summary.routeLine} />
         <Text style={styles.caption}>Рисунок 1 — План трассы ВСМ с размещением станций</Text>
         <View style={styles.mapFrame}>
           {summary.previewImage ? (
@@ -133,26 +149,38 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
             <Text style={styles.mapText}>Снимок карты не был сохранён в результате шага.</Text>
           )}
         </View>
+        <StationTable stations={summary.stations ?? []} />
+        <RouteSegmentTable routeLine={summary.routeLine} />
       </Page>
 
       <Page size={PAGE_SIZE} style={styles.page}>
         <RunningHeader summary={summary} pageNumber="3" />
-        <Text style={styles.sectionTitle}>3. Заполнение расчётных таблиц</Text>
+        <Text style={styles.sectionTitle}>3. Матрица корреспонденций</Text>
         <KeyValueTable rows={sections[2].rows} />
+        <CorrespondenceTables tables={summary.consumerProperties ?? {}} />
+        <Text style={styles.caption}>Таблица 1 — Потребительские свойства по корреспонденциям</Text>
+        <Text style={styles.sectionTitle}>4. Расчёт длины трассы</Text>
+        <View style={styles.formulaBox}>
+          <Text>R = h / 2 + c² / (8h)</Text>
+          <Text>L = R · 2 · asin(c / (2R))</Text>
+          <Text>При h = 0 сегмент считается прямой вставкой, L = c.</Text>
+        </View>
         <Text style={styles.paragraph}>
-          Итоговый PDF фиксирует данные, введённые студентом в статическом симуляторе. JSON-файл сохраняется отдельно
-          и может быть загружен при продолжении работы.
+          Прогноз пассажиропотока по модальному сплиту в этом MVP не рассчитывается автоматически: правило для
+          знаменателя при исключённых видах транспорта требует решения по методичке.
         </Text>
-        <Text style={styles.sectionTitle}>4. Итоговая сводка</Text>
-        <KeyValueTable
-          rows={[
-            ['Вариант', formatRequiredValue(summary.variantTitle)],
-            ['Число станций', String(summary.stationCount)],
-            ['Точек линии трассы', String(summary.routePointCount)],
-            ['Общая длина трассы', formatKm(summary.totalLengthKm)],
-            ['Дата формирования отчёта', formatDate(new Date().toISOString())],
-          ]}
-        />
+      </Page>
+
+      <Page size={PAGE_SIZE} style={styles.page}>
+        <RunningHeader summary={summary} pageNumber="4" />
+        <Text style={styles.sectionTitle}>5. Технико-экономические показатели</Text>
+        <FinalIndicatorsTable finalIndicatorValues={summary.finalIndicators ?? {}} totalLengthKm={summary.totalLengthKm} />
+        {summary.notes ? (
+          <>
+            <Text style={styles.sectionTitle}>Комментарий к исходным данным</Text>
+            <Text style={styles.paragraph}>{summary.notes}</Text>
+          </>
+        ) : null}
       </Page>
     </Document>
   );
@@ -227,13 +255,84 @@ function RouteSegmentTable({ routeLine }: { routeLine?: RouteLine }) {
       {metrics.segments.map((segment, index) => (
         <View key={segment.segmentId} style={styles.tableRow}>
           <Text style={styles.stationLabelCell}>{index + 1}</Text>
-          <Text style={styles.stationTypeCell}>{formatKm(routeLine.segments[index].sagittaKm)}</Text>
+          <Text style={styles.stationTypeCell}>{formatKm(routeLine.segments[index].sagittaKm, '0 км')}</Text>
           <Text style={styles.stationNameCell}>{segment.radiusKm ? formatKm(segment.radiusKm) : 'прямая вставка'}</Text>
           <Text style={styles.stationCoordCell}>{formatKm(segment.arcLengthKm)}</Text>
         </View>
       ))}
     </View>
   );
+}
+
+function CorrespondenceTables({ tables }: { tables: Record<string, CorrespondenceTable> }) {
+  const tableList = Object.values(tables);
+
+  if (tableList.length === 0) {
+    return <Text style={styles.paragraph}>Таблицы корреспонденций пока не заполнены.</Text>;
+  }
+
+  return (
+    <View>
+      {tableList.map((table) => (
+        <View key={table.pairKey} style={styles.compactTableBlock} wrap={false}>
+          <Text style={styles.compactTableTitle}>Корреспонденция {table.pairKey}</Text>
+          <View style={styles.compactTable}>
+            <View style={styles.compactHeaderRow}>
+              <Text style={styles.metricCell}>Показатель</Text>
+              {table.activeModes.map((modeId) => (
+                <Text key={modeId} style={styles.modeCell}>
+                  {getTransportModeLabel(modeId)}
+                </Text>
+              ))}
+            </View>
+            {consumerRows.map((row) => (
+              <View key={row.id} style={styles.compactRow}>
+                <Text style={styles.metricCell}>{row.label}</Text>
+                {table.activeModes.map((modeId) => (
+                  <Text key={modeId} style={styles.modeCell}>
+                    {formatRequiredValue(table.values[row.id]?.[modeId] ?? '')}
+                  </Text>
+                ))}
+              </View>
+            ))}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function FinalIndicatorsTable({
+  finalIndicatorValues,
+  totalLengthKm,
+}: {
+  finalIndicatorValues: Record<string, string>;
+  totalLengthKm: number;
+}) {
+  return (
+    <View style={styles.table}>
+      <View style={styles.tableHeaderRow}>
+        <Text style={styles.finalIndexCell}>№</Text>
+        <Text style={styles.finalNameCell}>Показатель</Text>
+        <Text style={styles.finalValueCell}>Значение</Text>
+      </View>
+      {finalIndicators.map((indicator, index) => (
+        <View key={indicator.id} style={styles.tableRow}>
+          <Text style={styles.finalIndexCell}>{index + 1}</Text>
+          <Text style={styles.finalNameCell}>{indicator.label}</Text>
+          <Text style={styles.finalValueCell}>
+            {indicator.id === 'lineLength'
+              ? formatKm(totalLengthKm)
+              : formatRequiredValue(finalIndicatorValues[indicator.id] ?? '')}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function getTransportModeLabel(modeId: string) {
+  return transportColumns.find((column) => column.id === modeId)?.label ?? modeId;
 }
 
 function formatRequiredValue(value: string) {
@@ -250,9 +349,9 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 5 }).format(value);
 }
 
-function formatKm(value: number) {
+function formatKm(value: number, zeroText = 'не рассчитано') {
   if (value <= 0) {
-    return 'не рассчитано';
+    return zeroText;
   }
 
   return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)} км`;
@@ -380,6 +479,67 @@ const styles = StyleSheet.create({
     padding: 5,
     width: '30%',
   },
+  compactTableBlock: {
+    marginBottom: 10,
+  },
+  compactTableTitle: {
+    fontFamily: 'RalewayPdf',
+    fontSize: 10,
+    fontWeight: 800,
+    marginBottom: 4,
+  },
+  compactTable: {
+    borderLeft: '1 solid #111111',
+    borderTop: '1 solid #111111',
+  },
+  compactHeaderRow: {
+    backgroundColor: '#f4f2fa',
+    display: 'flex',
+    flexDirection: 'row',
+    fontWeight: 700,
+  },
+  compactRow: {
+    display: 'flex',
+    flexDirection: 'row',
+  },
+  metricCell: {
+    borderBottom: '1 solid #111111',
+    borderRight: '1 solid #111111',
+    padding: 4,
+    width: '28%',
+  },
+  modeCell: {
+    borderBottom: '1 solid #111111',
+    borderRight: '1 solid #111111',
+    flexBasis: 0,
+    flexGrow: 1,
+    fontSize: 8.5,
+    padding: 4,
+  },
+  formulaBox: {
+    alignItems: 'center',
+    border: '1 solid #111111',
+    marginBottom: 12,
+    padding: 10,
+  },
+  finalIndexCell: {
+    borderBottom: '1 solid #111111',
+    borderRight: '1 solid #111111',
+    padding: 5,
+    width: '8%',
+  },
+  finalNameCell: {
+    borderBottom: '1 solid #111111',
+    borderRight: '1 solid #111111',
+    padding: 5,
+    width: '52%',
+  },
+  finalValueCell: {
+    borderBottom: '1 solid #111111',
+    borderRight: '1 solid #111111',
+    padding: 5,
+    width: '40%',
+  },
   caption: {
     fontSize: 10,
     fontStyle: 'italic',
@@ -389,10 +549,11 @@ const styles = StyleSheet.create({
   mapFrame: {
     alignItems: 'center',
     border: '1 solid #111111',
-    height: 150,
+    height: 105,
     justifyContent: 'center',
     overflow: 'hidden',
-    padding: 12,
+    marginBottom: 10,
+    padding: 10,
   },
   mapImage: {
     height: '100%',

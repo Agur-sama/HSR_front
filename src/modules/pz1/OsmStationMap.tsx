@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MutableRefObject } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -14,6 +14,8 @@ const MIN_ZOOM = 4;
 const MAX_ZOOM = 19;
 const ROUTE_SOURCE_ID = 'vsm-route-source';
 const ROUTE_LAYER_ID = 'vsm-route-layer';
+const DRAFT_ROUTE_SOURCE_ID = 'vsm-draft-route-source';
+const DRAFT_ROUTE_LAYER_ID = 'vsm-draft-route-layer';
 const STATION_SOURCE_ID = 'vsm-station-source';
 const STATION_LAYER_ID = 'vsm-station-layer';
 const ROUTE_POINT_SOURCE_ID = 'vsm-route-point-source';
@@ -30,6 +32,11 @@ interface OsmStationMapProps {
   routeMetrics: RouteLineMetrics;
   routePointDrafts: Pz1RoutePointDraft[];
   stations: Pz1StationDraft[];
+}
+
+interface ScreenPoint {
+  x: number;
+  y: number;
 }
 
 export function OsmStationMap({
@@ -49,17 +56,16 @@ export function OsmStationMap({
   const modeRef = useRef<MapMode>('station');
   const activeStationLabelRef = useRef(activeStationLabel);
   const routePointDraftsRef = useRef(routePointDrafts);
+  const routeCoordinatesRef = useRef<number[][]>([]);
   const onPreviewImageChangeRef = useRef(onPreviewImageChange);
   const onRoutePointDraftsChangeRef = useRef(onRoutePointDraftsChange);
   const onStationChangeRef = useRef(onStationChange);
   const [isMapReady, setIsMapReady] = useState(false);
   const [mode, setMode] = useState<MapMode>('station');
   const [selectedSegmentId, setSelectedSegmentId] = useState('');
+  const [draftOverlayPoints, setDraftOverlayPoints] = useState<ScreenPoint[]>([]);
+  const [routeOverlayPoints, setRouteOverlayPoints] = useState<ScreenPoint[]>([]);
   const routeLine = useMemo(() => createRouteLine(routePointDrafts), [routePointDrafts]);
-  const routeCoordinates = useMemo(
-    () => buildDisplayRoutePoints(routeLine).map((point) => [point.lon, point.lat]),
-    [routeLine],
-  );
   const stationCoordinates = useMemo(
     () => stations.filter((station) => station.enabled).map(parseLngLat).filter((point): point is [number, number] => point !== null),
     [stations],
@@ -68,6 +74,11 @@ export function OsmStationMap({
     () => routePointDrafts.map(parseLngLat).filter((point): point is [number, number] => point !== null),
     [routePointDrafts],
   );
+  const routeCoordinates = useMemo(() => {
+    const computedCoordinates = buildDisplayRoutePoints(routeLine).map((point) => [point.lon, point.lat]);
+
+    return computedCoordinates.length >= 2 ? computedCoordinates : routePointCoordinates;
+  }, [routeLine, routePointCoordinates]);
   const routeSegmentById = new Map(routeMetrics.segments.map((segment) => [segment.segmentId, segment]));
   const activeStation = stations.find((station) => station.label === activeStationLabel) ?? stations[0];
 
@@ -82,6 +93,22 @@ export function OsmStationMap({
   useEffect(() => {
     routePointDraftsRef.current = routePointDrafts;
   }, [routePointDrafts]);
+
+  useEffect(() => {
+    routeCoordinatesRef.current = routeCoordinates;
+  }, [routeCoordinates]);
+
+  useEffect(() => {
+    if (mode === 'route') {
+      return;
+    }
+
+    setDraftOverlayPoints([]);
+    const map = mapRef.current;
+    if (map && isMapReady) {
+      clearDraftRoute(map);
+    }
+  }, [isMapReady, mode]);
 
   useEffect(() => {
     onPreviewImageChangeRef.current = onPreviewImageChange;
@@ -122,11 +149,23 @@ export function OsmStationMap({
     mapRef.current = map;
     map.scrollZoom.enable();
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
+    const syncCurrentRouteOverlay = () => {
+      syncRouteOverlay(map, routeCoordinatesRef.current, setRouteOverlayPoints);
+    };
+    const clearDraftRouteOverlay = () => {
+      clearDraftRoute(map);
+      setDraftOverlayPoints([]);
+    };
+    const handleMouseLeave = () => clearDraftRouteOverlay();
+
     map.on('load', () => {
       ensureMapLayers(map);
       setIsMapReady(true);
+      syncCurrentRouteOverlay();
     });
+    map.on('move', syncCurrentRouteOverlay);
+    map.on('zoom', syncCurrentRouteOverlay);
+    map.on('resize', syncCurrentRouteOverlay);
     map.on('click', (event: MapMouseEvent) => {
       if (modeRef.current === 'station') {
         onStationChangeRef.current(activeStationLabelRef.current, {
@@ -137,7 +176,7 @@ export function OsmStationMap({
         return;
       }
 
-      onRoutePointDraftsChangeRef.current([
+      const nextRoutePointDrafts = [
         ...routePointDraftsRef.current,
         {
           id: `route-point-${Date.now()}-${routePointDraftsRef.current.length}`,
@@ -145,13 +184,42 @@ export function OsmStationMap({
           lng: event.lngLat.lng.toFixed(5),
           sagittaToNextKm: '0',
         },
-      ]);
+      ];
+      const nextCoordinates = getRoutePointCoordinates(nextRoutePointDrafts);
+
+      onRoutePointDraftsChangeRef.current(nextRoutePointDrafts);
+      routeCoordinatesRef.current = nextCoordinates;
+      updateGeoJsonSource(map, ROUTE_SOURCE_ID, createRouteGeoJson(nextCoordinates));
+      syncRouteOverlay(map, nextCoordinates, setRouteOverlayPoints);
+      clearDraftRouteOverlay();
     });
+    map.on('mousemove', (event: MapMouseEvent) => {
+      if (modeRef.current !== 'route') {
+        clearDraftRouteOverlay();
+        return;
+      }
+
+      const coordinates = getRoutePointCoordinates(routePointDraftsRef.current);
+      const lastCoordinate = coordinates[coordinates.length - 1];
+      if (!lastCoordinate) {
+        clearDraftRouteOverlay();
+        return;
+      }
+
+      const draftCoordinates = [lastCoordinate, [event.lngLat.lng, event.lngLat.lat]];
+      updateGeoJsonSource(map, DRAFT_ROUTE_SOURCE_ID, createRouteGeoJson(draftCoordinates));
+      setDraftOverlayPoints(projectCoordinates(map, draftCoordinates));
+    });
+    map.getContainer().addEventListener('mouseleave', handleMouseLeave);
 
     return () => {
       if (previewTimerRef.current !== null) {
         window.clearTimeout(previewTimerRef.current);
       }
+      map.off('move', syncCurrentRouteOverlay);
+      map.off('zoom', syncCurrentRouteOverlay);
+      map.off('resize', syncCurrentRouteOverlay);
+      map.getContainer().removeEventListener('mouseleave', handleMouseLeave);
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
       map.remove();
@@ -168,6 +236,8 @@ export function OsmStationMap({
     updateGeoJsonSource(map, ROUTE_SOURCE_ID, createRouteGeoJson(routeCoordinates));
     updateGeoJsonSource(map, STATION_SOURCE_ID, createPointGeoJson(stationCoordinates));
     updateGeoJsonSource(map, ROUTE_POINT_SOURCE_ID, createPointGeoJson(routePointCoordinates));
+    routeCoordinatesRef.current = routeCoordinates;
+    syncRouteOverlay(map, routeCoordinates, setRouteOverlayPoints);
     schedulePreviewCapture(map, onPreviewImageChangeRef, previewTimerRef);
   }, [isMapReady, routeCoordinates, routePointCoordinates, stationCoordinates]);
 
@@ -305,6 +375,14 @@ export function OsmStationMap({
 
       <div className="maplibre-stage">
         <div className="maplibre-container" ref={containerRef} />
+        <svg className="route-svg-overlay" aria-hidden="true">
+          {routeOverlayPoints.length >= 2 ? (
+            <polyline className="route-svg-overlay__line" points={formatScreenPoints(routeOverlayPoints)} />
+          ) : null}
+          {draftOverlayPoints.length >= 2 ? (
+            <polyline className="route-svg-overlay__draft" points={formatScreenPoints(draftOverlayPoints)} />
+          ) : null}
+        </svg>
         {!isMapReady ? <div className="osm-map-empty">Загружаем карту…</div> : null}
         <div className="maplibre-zoom-panel" aria-label="Масштаб карты">
           <button aria-label="Приблизить карту" onClick={() => mapRef.current?.zoomIn()} type="button">
@@ -381,6 +459,7 @@ export function OsmStationMap({
 
 function ensureMapLayers(map: MapLibreMap) {
   ensureRouteLayer(map);
+  ensureDraftRouteLayer(map);
   ensurePointLayer(map, STATION_SOURCE_ID, STATION_LAYER_ID, '#003D84', 9);
   ensurePointLayer(map, ROUTE_POINT_SOURCE_ID, ROUTE_POINT_LAYER_ID, '#E0182D', 5);
 }
@@ -406,6 +485,33 @@ function ensureRouteLayer(map: MapLibreMap) {
         'line-color': '#E0182D',
         'line-width': 5,
         'line-opacity': 0.95,
+      },
+    });
+  }
+}
+
+function ensureDraftRouteLayer(map: MapLibreMap) {
+  if (!map.getSource(DRAFT_ROUTE_SOURCE_ID)) {
+    map.addSource(DRAFT_ROUTE_SOURCE_ID, {
+      type: 'geojson',
+      data: createRouteGeoJson([]),
+    });
+  }
+
+  if (!map.getLayer(DRAFT_ROUTE_LAYER_ID)) {
+    map.addLayer({
+      id: DRAFT_ROUTE_LAYER_ID,
+      type: 'line',
+      source: DRAFT_ROUTE_SOURCE_ID,
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+      },
+      paint: {
+        'line-color': '#E0182D',
+        'line-dasharray': [1.5, 1.5],
+        'line-width': 4,
+        'line-opacity': 0.7,
       },
     });
   }
@@ -462,6 +568,34 @@ function schedulePreviewCapture(
       // If a tile provider taints the canvas, keep the previous preview image.
     }
   }, 300);
+}
+
+function clearDraftRoute(map: MapLibreMap) {
+  updateGeoJsonSource(map, DRAFT_ROUTE_SOURCE_ID, createRouteGeoJson([]));
+}
+
+function syncRouteOverlay(
+  map: MapLibreMap,
+  coordinates: number[][],
+  setRouteOverlayPoints: Dispatch<SetStateAction<ScreenPoint[]>>,
+) {
+  setRouteOverlayPoints(projectCoordinates(map, coordinates));
+}
+
+function projectCoordinates(map: MapLibreMap, coordinates: number[][]): ScreenPoint[] {
+  return coordinates.map(([lng, lat]) => {
+    const point = map.project([lng, lat]);
+
+    return { x: point.x, y: point.y };
+  });
+}
+
+function formatScreenPoints(points: ScreenPoint[]) {
+  return points.map((point) => `${point.x},${point.y}`).join(' ');
+}
+
+function getRoutePointCoordinates(routePointDrafts: Pz1RoutePointDraft[]) {
+  return routePointDrafts.map(parseLngLat).filter((point): point is [number, number] => point !== null);
 }
 
 function createRouteGeoJson(coordinates: number[][]): GeoJSON.FeatureCollection<GeoJSON.LineString> {
