@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialPz1Draft, createPz1Result, getSyncedCorrespondenceTables, updateCellValue, validateConsumerCell } from './model';
+import {
+  createInitialPz1Draft,
+  createPz1Result,
+  getComputedFinalIndicators,
+  getSyncedCorrespondenceTables,
+  updateCellValue,
+  validateConsumerCell,
+} from './model';
 
 describe('pz1 model', () => {
   it('keeps routeLine independent from enabled station drafts', () => {
@@ -58,5 +65,73 @@ describe('pz1 model', () => {
     expect(validateConsumerCell('discomfort', '1,2')).toBe('Коэффициент дискомфорта — это индекс от 0 до 1');
     expect(validateConsumerCell('dailyFrequency', '-1')).toBe('Значение не может быть отрицательным');
     expect(validateConsumerCell('fare', '1200')).toBeNull();
+  });
+
+  it('fills annual flow from the passenger flow forecast', () => {
+    const draft = createInitialPz1Draft();
+    const existingAnnualFlow = 2_325_272.4;
+    const expectedBaseForecast = 2_208_992.6;
+    draft.passengerFlowForecast.regional = {
+      grpCurrentRegionA: '1',
+      grpCurrentRegionB: '0',
+      grpGrowthPctRegionA: '0',
+      grpGrowthPctRegionB: '0',
+      populationCurrentRegionA: '1',
+      populationCurrentRegionB: '0',
+      populationGrowthPctRegionA: '0',
+      populationGrowthPctRegionB: '0',
+      gdpPassengerFlowCoefficientRegionA: String(expectedBaseForecast / existingAnnualFlow),
+      gdpPassengerFlowCoefficientRegionB: '0',
+      inducedDemandPct: '0.35',
+    };
+    draft.passengerFlowForecast.modes = {
+      hSR: {
+        existingAnnualFlow: '0',
+        travelTimeHours: '2',
+        waitingTimeHours: '0',
+        totalTransportCost: '1000',
+        existingTravelTimeHours: '3',
+      },
+      airplane: {
+        existingAnnualFlow: '475856.4',
+        travelTimeHours: '4',
+        waitingTimeHours: '0.5',
+        totalTransportCost: '1200',
+        existingTravelTimeHours: '4',
+      },
+      bus: {
+        existingAnnualFlow: '277052.3',
+        travelTimeHours: '6',
+        waitingTimeHours: '0.2',
+        totalTransportCost: '800',
+        existingTravelTimeHours: '6',
+      },
+      suburbanTrain: {
+        existingAnnualFlow: '157820',
+        travelTimeHours: '5',
+        waitingTimeHours: '0.2',
+        totalTransportCost: '700',
+        existingTravelTimeHours: '5',
+      },
+      longDistanceTrain: {
+        existingAnnualFlow: '165367',
+        travelTimeHours: '5',
+        waitingTimeHours: '0.3',
+        totalTransportCost: '900',
+        existingTravelTimeHours: '5',
+      },
+      car: {
+        existingAnnualFlow: '1249176.7',
+        travelTimeHours: '5',
+        waitingTimeHours: '0',
+        totalTransportCost: '1100',
+        existingTravelTimeHours: '5',
+      },
+    };
+
+    const expectedAnnualFlow = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(2_982_140);
+
+    expect(getComputedFinalIndicators(draft).annualFlow).toBe(expectedAnnualFlow);
+    expect(createPz1Result(draft).finalIndicators?.annualFlow).toBe(expectedAnnualFlow);
   });
 });

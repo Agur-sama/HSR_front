@@ -1078,6 +1078,76 @@ button:focus-visible {
   gap: 14px;
 }
 
+.passenger-flow-step {
+  display: grid;
+  gap: 16px;
+}
+
+.passenger-flow-regions {
+  display: grid;
+  gap: 10px;
+}
+
+.forecast-summary-panel {
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: #fff;
+  padding: 16px;
+}
+
+.form-section h3,
+.forecast-summary-panel h3 {
+  margin: 0 0 14px;
+  color: var(--indigo);
+  font-size: 20px;
+}
+
+.forecast-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.forecast-summary-grid div {
+  border-radius: 8px;
+  background: var(--bg-soft);
+  padding: 12px;
+}
+
+.forecast-summary-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.forecast-summary-grid dd {
+  margin: 6px 0 0;
+  color: var(--indigo);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.forecast-output-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.forecast-chart {
+  min-height: 320px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.forecast-result-table th,
+.forecast-result-table td {
+  white-space: nowrap;
+}
+
 .correspondence-table {
   display: grid;
   gap: 8px;
@@ -1351,7 +1421,8 @@ button:focus-visible {
   .result-layout,
   .stations-step,
   .theory-grid,
-  .indicator-grid {
+  .indicator-grid,
+  .forecast-output-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1391,6 +1462,7 @@ button:focus-visible {
   .station-grid,
   .form-grid,
   .summary-grid,
+  .forecast-summary-grid,
   .field-with-hint {
     grid-template-columns: 1fr;
   }

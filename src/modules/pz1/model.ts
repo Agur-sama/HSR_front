@@ -2,6 +2,10 @@ import type {
   BridgeSchema,
   CorrespondenceTable,
   Passport,
+  Pz1PassengerFlowInputs,
+  Pz1PassengerFlowModeInputs,
+  Pz1PassengerFlowRegionalInputs,
+  Pz1PassengerFlowResult,
   Pz1Result,
   Pz1Station,
   RouteLine,
@@ -10,6 +14,9 @@ import type {
   TransportModeId,
 } from '../../bridge/schema';
 import { createBridge } from '../../bridge/io';
+import { distributePassengerFlowByMode, forecastTotalDemand } from '../../shared/lib/passengerFlow';
+import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../shared/lib/passengerFlow';
+import { passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
 import { computeRouteLineMetrics } from '../../shared/lib/routeGeometry';
 import type { DataEntryColumn, DataEntryRow } from '../../shared/ui/DataEntryTable';
 import type { Pz1CorrespondenceTableDraft, Pz1Draft, Pz1RoutePointDraft, Pz1StationDraft } from './types';
@@ -44,7 +51,7 @@ export const finalIndicators = [
   { id: 'gauge', label: 'Ширина колеи', hint: 'Значение уточняется по методичке', unit: 'мм' },
   { id: 'stationCount', label: 'Количество станций', hint: 'Проверьте с трассировкой' },
   { id: 'travelTime', label: 'Время в пути ВСМ', hint: 'Справочный диапазон уточняется по методичке' },
-  { id: 'annualFlow', label: 'Годовой пассажиропоток', hint: 'Формула уточняется по методичке' },
+  { id: 'annualFlow', label: 'Годовой пассажиропоток', hint: 'Рассчитывается автоматически на шаге прогноза пассажиропотока' },
   { id: 'dailyTrains', label: 'Размеры движения N_сут', hint: 'Формула уточняется по методичке' },
   { id: 'maxCapacity', label: 'A_max', hint: 'Формула уточняется по методичке' },
   { id: 'rollingStockNeed', label: 'Потребный парк', hint: 'I_ВСМ, T_об и M уточняются по методичке' },
@@ -53,6 +60,32 @@ export const finalIndicators = [
   { id: 'ticketRevenue', label: 'Билетная выручка', hint: '0, 5, 10, 15, 20 годы' },
   { id: 'riskNotes', label: 'Ограничения и допущения', hint: 'Запишите, какие данные требуют уточнения' },
 ] as const;
+
+export const passengerFlowRegionalFields: Array<{
+  id: keyof Pz1PassengerFlowRegionalInputs;
+  label: string;
+  hint: string;
+}> = [
+  { id: 'grpCurrentRegionA', label: 'ВРП региона A', hint: 'Текущее значение, Росстат' },
+  { id: 'grpCurrentRegionB', label: 'ВРП региона B', hint: 'Текущее значение, Росстат' },
+  { id: 'grpGrowthPctRegionA', label: 'Рост ВРП региона A', hint: 'Доля: 0,12 = 12%' },
+  { id: 'grpGrowthPctRegionB', label: 'Рост ВРП региона B', hint: 'Доля: 0,12 = 12%' },
+  { id: 'populationCurrentRegionA', label: 'Население региона A', hint: 'Текущее значение, человек' },
+  { id: 'populationCurrentRegionB', label: 'Население региона B', hint: 'Текущее значение, человек' },
+  { id: 'populationGrowthPctRegionA', label: 'Рост населения региона A', hint: 'Доля: 0,01 = 1%' },
+  { id: 'populationGrowthPctRegionB', label: 'Рост населения региона B', hint: 'Доля: 0,01 = 1%' },
+  { id: 'gdpPassengerFlowCoefficientRegionA', label: 'Коэф. ВРП-потока A', hint: 'Из варианта задания' },
+  { id: 'gdpPassengerFlowCoefficientRegionB', label: 'Коэф. ВРП-потока B', hint: 'Из варианта задания' },
+  { id: 'inducedDemandPct', label: 'Индуцированный спрос', hint: 'Доля: 0,35 = 35%' },
+];
+
+export const passengerFlowModeRows: Array<DataEntryRow & { id: keyof Pz1PassengerFlowModeInputs }> = [
+  { id: 'existingAnnualFlow', label: 'Существующий поток', helper: 'пасс./год' },
+  { id: 'travelTimeHours', label: 'Время в пути в модели', helper: 'ч' },
+  { id: 'waitingTimeHours', label: 'Время ожидания', helper: 'ч' },
+  { id: 'totalTransportCost', label: 'TTC', helper: 'руб.' },
+  { id: 'existingTravelTimeHours', label: 'Существующее время в пути', helper: 'ч' },
+];
 
 export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1Draft {
   const importedPz1 = importedBridge?.completed.pz1;
@@ -76,6 +109,7 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
       },
       stationDrafts,
     ),
+    passengerFlowForecast: mergePassengerFlowForecast(importedPz1?.passengerFlowForecast?.inputs),
     finalIndicators: mergeFinalIndicators(importedPz1?.finalIndicators),
     notes: importedPz1?.notes ?? '',
   };
@@ -95,6 +129,7 @@ export function createPz1Result(draft: Pz1Draft): Pz1Result {
   const routeLine = createRouteLine(draft.routePointDrafts);
   const metrics = computeRouteLineMetrics(routeLine);
   const correspondenceTables = getSyncedCorrespondenceTables(draft);
+  const passengerFlowForecast = getPz1PassengerFlowForecast(draft);
 
   return {
     stations,
@@ -110,7 +145,8 @@ export function createPz1Result(draft: Pz1Draft): Pz1Result {
       };
       return tables;
     }, {}),
-    finalIndicators: draft.finalIndicators,
+    passengerFlowForecast: passengerFlowForecast ?? undefined,
+    finalIndicators: getComputedFinalIndicators(draft),
     notes: draft.notes,
   };
 }
@@ -191,6 +227,99 @@ export function countFilledConsumerCells(draft: Pz1Draft) {
     .filter((value) => value.trim().length > 0).length;
 }
 
+export function getPz1PassengerFlowForecast(draft: Pz1Draft): Pz1PassengerFlowResult | null {
+  const regionalInput = parseRegionalPassengerFlowInput(draft.passengerFlowForecast.regional);
+  const modeInputs = passengerFlowModeIds.reduce<PassengerFlowModeInput[] | null>((modes, modeId) => {
+    if (modes === null) {
+      return null;
+    }
+
+    const mode = draft.passengerFlowForecast.modes[modeId];
+    const existingAnnualFlow = parseNumericInput(mode.existingAnnualFlow);
+    const travelTimeHours = parseNumericInput(mode.travelTimeHours);
+    const waitingTimeHours = parseNumericInput(mode.waitingTimeHours);
+    const totalTransportCost = parseNumericInput(mode.totalTransportCost);
+    const existingTravelTimeHours = parseNumericInput(mode.existingTravelTimeHours);
+
+    if (
+      existingAnnualFlow === null ||
+      travelTimeHours === null ||
+      waitingTimeHours === null ||
+      totalTransportCost === null ||
+      existingTravelTimeHours === null
+    ) {
+      return null;
+    }
+
+    modes.push({
+      modeId,
+      existingAnnualFlow,
+      travelTimeHours,
+      waitingTimeHours,
+      totalTransportCost,
+      existingTravelTimeHours,
+    });
+
+    return modes;
+  }, []);
+
+  if (!regionalInput || !modeInputs) {
+    return null;
+  }
+
+  const existingAnnualFlow = modeInputs.reduce((sum, mode) => sum + mode.existingAnnualFlow, 0);
+
+  if (existingAnnualFlow <= 0) {
+    return null;
+  }
+
+  try {
+    const totalDemand = forecastTotalDemand({
+      existingAnnualFlow,
+      ...regionalInput,
+    });
+    const distribution = distributePassengerFlowByMode({
+      existingAnnualFlow,
+      baseForecast: totalDemand.baseForecast,
+      inducedDemand: totalDemand.inducedDemand,
+      modes: modeInputs,
+    });
+
+    return {
+      inputs: clonePassengerFlowInputs(draft.passengerFlowForecast),
+      totalDemand: {
+        existingAnnualFlow,
+        baseForecast: totalDemand.baseForecast,
+        inducedDemand: totalDemand.inducedDemand,
+        totalForecast: totalDemand.totalForecast,
+        grpDelta: totalDemand.grpDelta,
+        populationDelta: totalDemand.populationDelta,
+        weightedGdpPassengerFlowCoefficient: totalDemand.weightedGdpPassengerFlowCoefficient,
+      },
+      modes: distribution.modes.map((mode) => ({
+        modeId: mode.modeId,
+        existingAnnualFlow: mode.existingAnnualFlow,
+        forecastAnnualFlow: mode.forecastAnnualFlow,
+        forecastShare: mode.forecastShare,
+        directCapture: mode.directCapture,
+        gravityCapture: mode.gravityCapture,
+        inducedCapture: mode.inducedCapture,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function getComputedFinalIndicators(draft: Pz1Draft): Record<string, string> {
+  const passengerFlowForecast = getPz1PassengerFlowForecast(draft);
+
+  return {
+    ...draft.finalIndicators,
+    annualFlow: passengerFlowForecast ? formatInteger(passengerFlowForecast.totalDemand.totalForecast) : '',
+  };
+}
+
 export function getPz1TaskStepCount(draft: Pz1Draft) {
   const correspondenceCount = getSyncedCorrespondenceTables(draft).length;
   return 3 + 2 * correspondenceCount;
@@ -252,6 +381,10 @@ export function isFinalIndicatorsComplete(draft: Pz1Draft) {
       return getRouteMetrics(draft).totalLengthKm > 0;
     }
 
+    if (indicator.id === 'annualFlow') {
+      return getPz1PassengerFlowForecast(draft) !== null;
+    }
+
     const value = draft.finalIndicators[indicator.id] ?? '';
     if (indicator.id === 'riskNotes') {
       return value.trim().length > 0;
@@ -260,6 +393,10 @@ export function isFinalIndicatorsComplete(draft: Pz1Draft) {
     const parsed = parseCoordinate(value);
     return value.trim().length > 0 && parsed !== null && parsed > 0;
   });
+}
+
+export function isPassengerFlowForecastComplete(draft: Pz1Draft) {
+  return getPz1PassengerFlowForecast(draft) !== null;
 }
 
 export function isStationsStepComplete(draft: Pz1Draft) {
@@ -354,6 +491,63 @@ function mergeConsumerValues(importedValues?: Record<string, Record<string, stri
   return values;
 }
 
+function mergePassengerFlowForecast(importedValues?: Pz1PassengerFlowInputs) {
+  const regional = passengerFlowRegionalFields.reduce<Pz1PassengerFlowRegionalInputs>((values, field) => {
+    values[field.id] = importedValues?.regional?.[field.id] ?? '';
+    return values;
+  }, createEmptyRegionalPassengerFlowInputs());
+
+  const modes = passengerFlowModeIds.reduce<Record<TransportModeId, Pz1PassengerFlowModeInputs>>((modeMap, modeId) => {
+    const importedMode = importedValues?.modes?.[modeId];
+    modeMap[modeId] = passengerFlowModeRows.reduce<Pz1PassengerFlowModeInputs>((values, row) => {
+      values[row.id] = importedMode?.[row.id] ?? '';
+      return values;
+    }, createEmptyModePassengerFlowInputs());
+    return modeMap;
+  }, {} as Record<TransportModeId, Pz1PassengerFlowModeInputs>);
+
+  return {
+    regional,
+    modes,
+  };
+}
+
+function createEmptyRegionalPassengerFlowInputs(): Pz1PassengerFlowRegionalInputs {
+  return {
+    grpCurrentRegionA: '',
+    grpCurrentRegionB: '',
+    grpGrowthPctRegionA: '',
+    grpGrowthPctRegionB: '',
+    populationCurrentRegionA: '',
+    populationCurrentRegionB: '',
+    populationGrowthPctRegionA: '',
+    populationGrowthPctRegionB: '',
+    gdpPassengerFlowCoefficientRegionA: '',
+    gdpPassengerFlowCoefficientRegionB: '',
+    inducedDemandPct: '',
+  };
+}
+
+function createEmptyModePassengerFlowInputs(): Pz1PassengerFlowModeInputs {
+  return {
+    existingAnnualFlow: '',
+    travelTimeHours: '',
+    waitingTimeHours: '',
+    totalTransportCost: '',
+    existingTravelTimeHours: '',
+  };
+}
+
+function clonePassengerFlowInputs(input: Pz1Draft['passengerFlowForecast']): Pz1PassengerFlowInputs {
+  return {
+    regional: { ...input.regional },
+    modes: passengerFlowModeIds.reduce<Record<TransportModeId, Pz1PassengerFlowModeInputs>>((modeMap, modeId) => {
+      modeMap[modeId] = { ...input.modes[modeId] };
+      return modeMap;
+    }, {} as Record<TransportModeId, Pz1PassengerFlowModeInputs>),
+  };
+}
+
 function createEmptyConsumerValues() {
   return consumerRows.reduce<Record<string, Record<string, string>>>((rowMap, row) => {
     rowMap[row.id] = transportColumns.reduce<Record<string, string>>((columnMap, column) => {
@@ -366,9 +560,55 @@ function createEmptyConsumerValues() {
 
 function mergeFinalIndicators(importedValues: Pz1Result['finalIndicators']) {
   return finalIndicators.reduce<Record<string, string>>((values, indicator) => {
-    values[indicator.id] = importedValues?.[indicator.id] ?? '';
+    values[indicator.id] = indicator.id === 'annualFlow' ? '' : importedValues?.[indicator.id] ?? '';
     return values;
   }, {});
+}
+
+function parseRegionalPassengerFlowInput(
+  input: Pz1PassengerFlowRegionalInputs,
+): Omit<TotalDemandForecastInput, 'existingAnnualFlow'> | null {
+  const grpCurrentRegionA = parseNumericInput(input.grpCurrentRegionA);
+  const grpCurrentRegionB = parseNumericInput(input.grpCurrentRegionB);
+  const grpGrowthPctRegionA = parseNumericInput(input.grpGrowthPctRegionA);
+  const grpGrowthPctRegionB = parseNumericInput(input.grpGrowthPctRegionB);
+  const populationCurrentRegionA = parseNumericInput(input.populationCurrentRegionA);
+  const populationCurrentRegionB = parseNumericInput(input.populationCurrentRegionB);
+  const populationGrowthPctRegionA = parseNumericInput(input.populationGrowthPctRegionA);
+  const populationGrowthPctRegionB = parseNumericInput(input.populationGrowthPctRegionB);
+  const gdpPassengerFlowCoefficientRegionA = parseNumericInput(input.gdpPassengerFlowCoefficientRegionA);
+  const gdpPassengerFlowCoefficientRegionB = parseNumericInput(input.gdpPassengerFlowCoefficientRegionB);
+  const inducedDemandPct = parseNumericInput(input.inducedDemandPct);
+
+  if (
+    grpCurrentRegionA === null ||
+    grpCurrentRegionB === null ||
+    grpGrowthPctRegionA === null ||
+    grpGrowthPctRegionB === null ||
+    populationCurrentRegionA === null ||
+    populationCurrentRegionB === null ||
+    populationGrowthPctRegionA === null ||
+    populationGrowthPctRegionB === null ||
+    gdpPassengerFlowCoefficientRegionA === null ||
+    gdpPassengerFlowCoefficientRegionB === null ||
+    inducedDemandPct === null
+  ) {
+    return null;
+  }
+
+  return {
+    grpCurrentRegionA,
+    grpCurrentRegionB,
+    grpGrowthPctRegionA,
+    grpGrowthPctRegionB,
+    populationCurrentRegionA,
+    populationCurrentRegionB,
+    populationGrowthPctRegionA,
+    populationGrowthPctRegionB,
+    gdpPassengerFlowCoefficientRegionA,
+    gdpPassengerFlowCoefficientRegionB,
+    inducedDemandPct,
+  };
 }
 
 function toStation(stationDraft: Pz1StationDraft): Pz1Station | null {
@@ -411,6 +651,19 @@ function parseCoordinate(value: string) {
 
   const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseNumericInput(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const parsed = Number(value.replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatInteger(value: number) {
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
 }
 
 function getStationType(label: StationLabel): StationType {

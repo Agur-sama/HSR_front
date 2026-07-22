@@ -38,6 +38,59 @@ export interface CorrespondenceTable {
   values: Record<string, Record<string, string>>;
 }
 
+export interface Pz1PassengerFlowRegionalInputs {
+  grpCurrentRegionA: string;
+  grpCurrentRegionB: string;
+  grpGrowthPctRegionA: string;
+  grpGrowthPctRegionB: string;
+  populationCurrentRegionA: string;
+  populationCurrentRegionB: string;
+  populationGrowthPctRegionA: string;
+  populationGrowthPctRegionB: string;
+  gdpPassengerFlowCoefficientRegionA: string;
+  gdpPassengerFlowCoefficientRegionB: string;
+  inducedDemandPct: string;
+}
+
+export interface Pz1PassengerFlowModeInputs {
+  existingAnnualFlow: string;
+  travelTimeHours: string;
+  waitingTimeHours: string;
+  totalTransportCost: string;
+  existingTravelTimeHours: string;
+}
+
+export interface Pz1PassengerFlowInputs {
+  regional: Pz1PassengerFlowRegionalInputs;
+  modes: Record<TransportModeId, Pz1PassengerFlowModeInputs>;
+}
+
+export interface Pz1PassengerFlowTotalDemand {
+  existingAnnualFlow: number;
+  baseForecast: number;
+  inducedDemand: number;
+  totalForecast: number;
+  grpDelta: number;
+  populationDelta: number;
+  weightedGdpPassengerFlowCoefficient: number;
+}
+
+export interface Pz1PassengerFlowModeResult {
+  modeId: TransportModeId;
+  existingAnnualFlow: number;
+  forecastAnnualFlow: number;
+  forecastShare: number;
+  directCapture: number;
+  gravityCapture: number;
+  inducedCapture: number;
+}
+
+export interface Pz1PassengerFlowResult {
+  inputs: Pz1PassengerFlowInputs;
+  totalDemand: Pz1PassengerFlowTotalDemand;
+  modes: Pz1PassengerFlowModeResult[];
+}
+
 export interface Pz1Result {
   stations: Pz1Station[];
   routeLine: RouteLine;
@@ -45,6 +98,7 @@ export interface Pz1Result {
   previewImage?: string;
   variantId?: string;
   consumerProperties?: Record<string, CorrespondenceTable>;
+  passengerFlowForecast?: Pz1PassengerFlowResult;
   finalIndicators?: Record<string, string>;
   notes?: string;
 }
