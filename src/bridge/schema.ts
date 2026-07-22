@@ -9,11 +9,42 @@ export interface Pz1Station {
   type: StationType;
 }
 
+export interface GeoPoint {
+  lon: number;
+  lat: number;
+}
+
+export interface RouteVertex extends GeoPoint {
+  id: string;
+}
+
+export interface RouteSegment {
+  id: string;
+  fromVertexId: string;
+  toVertexId: string;
+  sagittaKm: number;
+}
+
+export interface RouteLine {
+  vertices: RouteVertex[];
+  segments: RouteSegment[];
+}
+
+export type TransportModeId = 'hSR' | 'airplane' | 'suburbanTrain' | 'longDistanceTrain' | 'bus' | 'car';
+
+export interface CorrespondenceTable {
+  pairKey: string;
+  activeModes: TransportModeId[];
+  values: Record<string, Record<string, string>>;
+}
+
 export interface Pz1Result {
   stations: Pz1Station[];
-  routeLine: Array<[number, number]>;
+  routeLine: RouteLine;
+  totalLengthKm: number;
+  previewImage?: string;
   variantId?: string;
-  consumerProperties?: Record<string, Record<string, string>>;
+  consumerProperties?: Record<string, CorrespondenceTable>;
   finalIndicators?: Record<string, string>;
   notes?: string;
 }

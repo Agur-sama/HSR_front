@@ -9,6 +9,7 @@ describe('pdf render', () => {
       variantTitle: 'Вариант 1',
       stationCount: 4,
       routePointCount: 7,
+      totalLengthKm: 654.3,
       filledConsumerCells: 25,
       filledIndicatorCount: 13,
       createdAt: '2026-07-12T00:00:00.000Z',

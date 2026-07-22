@@ -1,9 +1,11 @@
-import { Document, Font, Page, StyleSheet, Text, View, pdf } from '@react-pdf/renderer';
+import { Document, Font, Image, Page, StyleSheet, Text, View, pdf } from '@react-pdf/renderer';
 import ptSerifRegular from '@fontsource/pt-serif/files/pt-serif-cyrillic-400-normal.woff?url';
 import ptSerifBold from '@fontsource/pt-serif/files/pt-serif-cyrillic-700-normal.woff?url';
 import ralewayMedium from '@fontsource/raleway/files/raleway-cyrillic-500-normal.woff?url';
 import ralewayBold from '@fontsource/raleway/files/raleway-cyrillic-800-normal.woff?url';
 import { downloadTextFile } from '../bridge/io';
+import type { RouteLine } from '../bridge/schema';
+import { computeRouteLineMetrics } from '../shared/lib/routeGeometry';
 
 const PAGE_SIZE = 'A4';
 const MARGIN_MM = 20;
@@ -22,11 +24,13 @@ export interface Pz1PdfSummary {
   variantTitle: string;
   stationCount: number;
   routePointCount: number;
+  totalLengthKm: number;
   filledConsumerCells: number;
   filledIndicatorCount: number;
   createdAt: string;
   stations?: PdfStation[];
-  routeLine?: Array<[number, number]>;
+  routeLine?: RouteLine;
+  previewImage?: string;
 }
 
 export interface Pz1PdfSection {
@@ -77,6 +81,7 @@ export function createPz1PdfSections(summary: Pz1PdfSummary): Pz1PdfSection[] {
       rows: [
         ['Станций с координатами', String(summary.stationCount)],
         ['Точек линии трассы', String(summary.routePointCount)],
+        ['Общая длина трассы', formatKm(summary.totalLengthKm)],
         ['Формат линии', 'Отдельный массив вершин [долгота, широта], не линия по станциям'],
       ],
     },
@@ -119,9 +124,14 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
         <Text style={styles.sectionTitle}>2. План трассы и размещение станций</Text>
         <KeyValueTable rows={sections[1].rows} />
         <StationTable stations={summary.stations ?? []} />
+        <RouteSegmentTable routeLine={summary.routeLine} />
         <Text style={styles.caption}>Рисунок 1 — План трассы ВСМ с размещением станций</Text>
         <View style={styles.mapFrame}>
-          <Text style={styles.mapText}>Снимок карты будет добавлен после подключения previewImage для визуальных шагов.</Text>
+          {summary.previewImage ? (
+            <Image src={summary.previewImage} style={styles.mapImage} />
+          ) : (
+            <Text style={styles.mapText}>Снимок карты не был сохранён в результате шага.</Text>
+          )}
         </View>
       </Page>
 
@@ -139,6 +149,7 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
             ['Вариант', formatRequiredValue(summary.variantTitle)],
             ['Число станций', String(summary.stationCount)],
             ['Точек линии трассы', String(summary.routePointCount)],
+            ['Общая длина трассы', formatKm(summary.totalLengthKm)],
             ['Дата формирования отчёта', formatDate(new Date().toISOString())],
           ]}
         />
@@ -198,6 +209,33 @@ function StationTable({ stations }: { stations: PdfStation[] }) {
   );
 }
 
+function RouteSegmentTable({ routeLine }: { routeLine?: RouteLine }) {
+  if (!routeLine || routeLine.segments.length === 0) {
+    return <Text style={styles.paragraph}>Сегменты трассы пока не заданы.</Text>;
+  }
+
+  const metrics = computeRouteLineMetrics(routeLine);
+
+  return (
+    <View style={styles.table}>
+      <View style={styles.tableHeaderRow}>
+        <Text style={styles.stationLabelCell}>№</Text>
+        <Text style={styles.stationTypeCell}>Стрела прогиба</Text>
+        <Text style={styles.stationNameCell}>Радиус</Text>
+        <Text style={styles.stationCoordCell}>Длина</Text>
+      </View>
+      {metrics.segments.map((segment, index) => (
+        <View key={segment.segmentId} style={styles.tableRow}>
+          <Text style={styles.stationLabelCell}>{index + 1}</Text>
+          <Text style={styles.stationTypeCell}>{formatKm(routeLine.segments[index].sagittaKm)}</Text>
+          <Text style={styles.stationNameCell}>{segment.radiusKm ? formatKm(segment.radiusKm) : 'прямая вставка'}</Text>
+          <Text style={styles.stationCoordCell}>{formatKm(segment.arcLengthKm)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function formatRequiredValue(value: string) {
   const trimmed = value.trim();
   return trimmed || 'не заполнено';
@@ -210,6 +248,14 @@ function formatDate(value: string) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 5 }).format(value);
+}
+
+function formatKm(value: number) {
+  if (value <= 0) {
+    return 'не рассчитано';
+  }
+
+  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)} км`;
 }
 
 function formatStationType(type: PdfStation['type']) {
@@ -345,7 +391,12 @@ const styles = StyleSheet.create({
     border: '1 solid #111111',
     height: 150,
     justifyContent: 'center',
+    overflow: 'hidden',
     padding: 12,
+  },
+  mapImage: {
+    height: '100%',
+    width: '100%',
   },
   mapText: {
     color: '#555555',

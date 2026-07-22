@@ -1,4 +1,4 @@
-import type { StationLabel, StationType } from '../../bridge/schema';
+import type { StationLabel, StationType, TransportModeId } from '../../bridge/schema';
 
 export interface Pz1Variant {
   id: string;
@@ -25,6 +25,15 @@ export interface Pz1RoutePointDraft {
   id: string;
   lat: string;
   lng: string;
+  sagittaToNextKm: string;
+}
+
+export interface Pz1CorrespondenceTableDraft {
+  pairKey: string;
+  fromLabel: StationLabel;
+  toLabel: StationLabel;
+  activeModes: TransportModeId[];
+  values: Record<string, Record<string, string>>;
 }
 
 export interface Pz1Draft {
@@ -32,7 +41,8 @@ export interface Pz1Draft {
   selectedVariantId: string;
   stationDrafts: Pz1StationDraft[];
   routePointDrafts: Pz1RoutePointDraft[];
-  consumerProperties: Record<string, Record<string, string>>;
+  previewImage: string;
+  correspondenceTables: Record<string, Pz1CorrespondenceTableDraft>;
   finalIndicators: Record<string, string>;
   notes: string;
   importedFileName?: string;

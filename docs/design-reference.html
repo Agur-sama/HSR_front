@@ -3,8 +3,8 @@
   ЭТАЛОН ДИЗАЙНА для vsm-simulator — вектор «Магистраль/табло».
   Codex: копируй стили, размеры, цвета и структуру ОТСЮДА, не придумывай заново.
   Открой файл в браузере, чтобы увидеть как должно выглядеть.
-  Токены: indigo #3a288b, teal #08a696, teal-подложка #e1f5ee, teal-текст #0f6e56/#04342c,
-  рамки #ece9f5/#d8d5e8, приглушённый #8b87a0, «будущее»/disabled #b3affc, шрифт Raleway.
+  Токены: indigo #003D84, teal #08A696, teal-подложка #e1f5ee, teal-текст #0f6e56/#04342c,
+  рамки #E4EDFA/#C9DAF2, приглушённый #6B7A90, «будущее»/disabled #B9D2FF, шрифт Raleway.
 
   ========================= СТАТУС ПОКРЫТИЯ =========================
   1) ВСЕ 13 типов шага + оболочка / интро / итог / locked-состояние.
@@ -36,23 +36,30 @@
 <title>VSM design reference</title>
 <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@500;600;800&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --indigo: #3a288b;
-    --teal: #08a696;
-    --teal-bg: #e1f5ee;
-    --teal-text: #0f6e56;
-    --teal-text-dark: #04342c;
-    --border: #ece9f5;
-    --border-strong: #d8d5e8;
-    --muted: #8b87a0;
-    --future: #b3affc;
-    --panel-alt: #f4f2fa;
+    :root {
+    /* Палитра из SCHOOLVSMCOLOURS.svg — утверждена заказчиком */
+    --primary: #003D84;       /* основной синий */
+    --teal: #08A696;          /* акцент */
+    --accent-light: #B9D2FF;  /* светлый акцент: будущее, disabled */
+    --bg-soft: #F3F7FF;       /* фон-подложка панелей */
+    --ink: #232323;           /* основной текст */
+    /* Производные */
+    --teal-bg: #E1F5EE;
+    --teal-text: #0F6E56;
+    --teal-text-dark: #04342C;
+    --border: #E4EDFA;
+    --border-strong: #C9DAF2;
+    --muted: #6B7A90;
+    /* Обратная совместимость со старыми именами */
+    --indigo: #003D84;
+    --future: #B9D2FF;
+    --panel-alt: #F3F7FF;
     /* Семантические цвета состояний */
-    --error: #c0392b;
-    --error-bg: #fdf3f2;
-    --error-border: #f0c6c0;
-    --error-text: #7d2a1f;
-    --warn-bg: #faeeda;
+    --error: #C0392B;
+    --error-bg: #FDF3F2;
+    --error-border: #F0C6C0;
+    --error-text: #7D2A1F;
+    --warn-bg: #FAEEDA;
     --warn-text: #412402;
   }
   body { font-family: -apple-system, sans-serif; background: #fff; margin: 0; padding: 24px; color: #222; }
@@ -162,7 +169,7 @@
   table.hybrid { width: 100%; border-collapse: collapse; font-size: 11px; }
   table.hybrid td { padding: 7px 8px; }
   table.hybrid thead td { color: var(--muted); font-family: 'Raleway'; font-weight: 600; border-bottom: 1px solid var(--border); }
-  table.hybrid tbody tr { border-bottom: 1px solid #f4f2fa; }
+  table.hybrid tbody tr { border-bottom: 1px solid #F3F7FF; }
   table.hybrid input { width: 56px; border: 1px solid var(--border-strong); border-radius: 5px; padding: 3px 5px; font-size: 11px; text-align: right; }
   td.computed { text-align: right; font-family: 'Raleway'; font-weight: 700; color: var(--teal-text-dark); background: var(--teal-bg); }
   tfoot tr.total-row { border-top: 1.5px solid var(--indigo); }
@@ -217,13 +224,13 @@
   .empty-state .es-text { font-size: 11px; margin: 0; }
 
   /* ===== ЗАГРУЗКА ===== */
-  .skeleton { background: linear-gradient(90deg, #f1eff7 25%, #e8e5f0 50%, #f1eff7 75%); background-size: 200% 100%; animation: sk 1.4s infinite; border-radius: 8px; }
+  .skeleton { background: linear-gradient(90deg, #F3F7FF 25%, #E4EDFA 50%, #F3F7FF 75%); background-size: 200% 100%; animation: sk 1.4s infinite; border-radius: 8px; }
   @keyframes sk { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
   .spinner { width: 18px; height: 18px; border: 2px solid var(--border-strong); border-top-color: var(--indigo); border-radius: 50%; animation: spin .7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ===== КНОПКИ: полный набор состояний ===== */
-  .btn-primary:hover { background: #2e2070; }
+  .btn-primary:hover { background: #002C60; }
   .btn-primary:disabled { background: var(--border-strong); color: #fff; cursor: not-allowed; }
   .btn-secondary:hover { background: var(--panel-alt); }
   .btn-ghost { font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: var(--muted); background: transparent; border: none; padding: 7px 10px; cursor: pointer; }
@@ -534,10 +541,10 @@
     <div class="card-head"><div class="tag"><div class="dot"></div><span class="title">ПЗ2 · анализ продольного профиля</span></div></div>
     <div class="card-body">
       <svg viewBox="0 0 440 110" style="width:100%;display:block;background:#fafaf8;border-radius:8px;margin-bottom:12px;">
-        <line x1="20" y1="90" x2="420" y2="90" stroke="#ece9f5" stroke-width="1"/>
-        <polyline points="20,80 110,80 190,35 280,35 340,65 420,65" fill="none" stroke="#3a288b" stroke-width="2.5"/>
-        <circle cx="110" cy="80" r="3" fill="#3a288b"/><circle cx="190" cy="35" r="3" fill="#3a288b"/>
-        <circle cx="280" cy="35" r="3" fill="#3a288b"/><circle cx="340" cy="65" r="3" fill="#3a288b"/>
+        <line x1="20" y1="90" x2="420" y2="90" stroke="#E4EDFA" stroke-width="1"/>
+        <polyline points="20,80 110,80 190,35 280,35 340,65 420,65" fill="none" stroke="#003D84" stroke-width="2.5"/>
+        <circle cx="110" cy="80" r="3" fill="#003D84"/><circle cx="190" cy="35" r="3" fill="#003D84"/>
+        <circle cx="280" cy="35" r="3" fill="#003D84"/><circle cx="340" cy="65" r="3" fill="#003D84"/>
         <text x="150" y="52" font-family="Raleway" font-weight="700" font-size="10" fill="#0f6e56" text-anchor="middle">12‰</text>
         <text x="310" y="55" font-family="Raleway" font-weight="700" font-size="10" fill="#0f6e56" text-anchor="middle">−8‰</text>
       </svg>
@@ -557,14 +564,14 @@
     <div style="display:flex;">
       <div style="flex:1;">
         <svg viewBox="0 0 440 150" style="width:100%;display:block;background:#fafaf8;">
-          <line x1="30" y1="60" x2="410" y2="60" stroke="#3a288b" stroke-width="2"/>
-          <line x1="60" y1="100" x2="380" y2="100" stroke="#3a288b" stroke-width="2"/>
-          <line x1="60" y1="100" x2="90" y2="60" stroke="#3a288b" stroke-width="2"/>
-          <line x1="350" y1="60" x2="380" y2="100" stroke="#3a288b" stroke-width="2"/>
-          <polygon points="60,54 60,66 72,60" fill="#3a288b"/><text x="52" y="48" font-family="Raleway" font-weight="800" font-size="9" fill="#3a288b" text-anchor="middle">Н1</text>
-          <polygon points="90,94 90,106 102,100" fill="#08a696"/><text x="82" y="122" font-family="Raleway" font-weight="800" font-size="9" fill="#0f6e56" text-anchor="middle">Н2</text>
-          <polygon points="340,94 340,106 328,100" fill="none" stroke="#c8c4dc" stroke-width="1.5" stroke-dasharray="2 2"/>
-          <text x="345" y="122" font-family="Raleway" font-weight="600" font-size="9" fill="#c8c4dc" text-anchor="middle">Ч2?</text>
+          <line x1="30" y1="60" x2="410" y2="60" stroke="#003D84" stroke-width="2"/>
+          <line x1="60" y1="100" x2="380" y2="100" stroke="#003D84" stroke-width="2"/>
+          <line x1="60" y1="100" x2="90" y2="60" stroke="#003D84" stroke-width="2"/>
+          <line x1="350" y1="60" x2="380" y2="100" stroke="#003D84" stroke-width="2"/>
+          <polygon points="60,54 60,66 72,60" fill="#003D84"/><text x="52" y="48" font-family="Raleway" font-weight="800" font-size="9" fill="#003D84" text-anchor="middle">Н1</text>
+          <polygon points="90,94 90,106 102,100" fill="#08A696"/><text x="82" y="122" font-family="Raleway" font-weight="800" font-size="9" fill="#0f6e56" text-anchor="middle">Н2</text>
+          <polygon points="340,94 340,106 328,100" fill="none" stroke="#C9DAF2" stroke-width="1.5" stroke-dasharray="2 2"/>
+          <text x="345" y="122" font-family="Raleway" font-weight="600" font-size="9" fill="#C9DAF2" text-anchor="middle">Ч2?</text>
         </svg>
       </div>
       <div class="side-panel">
@@ -584,17 +591,17 @@
     <div class="card-body">
       <div class="draft-note">Механика «увязки поездов по станциям оборота» НЕ утверждена (см. open-questions №9). Здесь только визуальный стиль ниток и курсора-счётчика.</div>
       <svg viewBox="0 0 440 200" style="width:100%;display:block;background:#fafaf8;border-radius:8px;">
-        <line x1="30" y1="20" x2="420" y2="20" stroke="#ece9f5"/><line x1="30" y1="70" x2="420" y2="70" stroke="#ece9f5"/>
-        <line x1="30" y1="120" x2="420" y2="120" stroke="#ece9f5"/><line x1="30" y1="170" x2="420" y2="170" stroke="#ece9f5"/>
-        <text x="18" y="24" font-family="Raleway" font-weight="700" font-size="9" fill="#3a288b">А</text>
-        <text x="18" y="74" font-family="Raleway" font-weight="700" font-size="9" fill="#3a288b">Б</text>
-        <text x="18" y="124" font-family="Raleway" font-weight="700" font-size="9" fill="#3a288b">В</text>
-        <text x="18" y="174" font-family="Raleway" font-weight="700" font-size="9" fill="#3a288b">Г</text>
-        <line x1="40" y1="20" x2="130" y2="170" stroke="#3a288b" stroke-width="1.5"/>
-        <line x1="120" y1="20" x2="210" y2="170" stroke="#3a288b" stroke-width="1.5"/>
-        <line x1="80" y1="170" x2="170" y2="20" stroke="#08a696" stroke-width="1.5"/>
-        <line x1="230" y1="170" x2="320" y2="20" stroke="#08a696" stroke-width="1.5"/>
-        <line x1="260" y1="20" x2="350" y2="170" stroke="#3a288b" stroke-width="1.5"/>
+        <line x1="30" y1="20" x2="420" y2="20" stroke="#E4EDFA"/><line x1="30" y1="70" x2="420" y2="70" stroke="#E4EDFA"/>
+        <line x1="30" y1="120" x2="420" y2="120" stroke="#E4EDFA"/><line x1="30" y1="170" x2="420" y2="170" stroke="#E4EDFA"/>
+        <text x="18" y="24" font-family="Raleway" font-weight="700" font-size="9" fill="#003D84">А</text>
+        <text x="18" y="74" font-family="Raleway" font-weight="700" font-size="9" fill="#003D84">Б</text>
+        <text x="18" y="124" font-family="Raleway" font-weight="700" font-size="9" fill="#003D84">В</text>
+        <text x="18" y="174" font-family="Raleway" font-weight="700" font-size="9" fill="#003D84">Г</text>
+        <line x1="40" y1="20" x2="130" y2="170" stroke="#003D84" stroke-width="1.5"/>
+        <line x1="120" y1="20" x2="210" y2="170" stroke="#003D84" stroke-width="1.5"/>
+        <line x1="80" y1="170" x2="170" y2="20" stroke="#08A696" stroke-width="1.5"/>
+        <line x1="230" y1="170" x2="320" y2="20" stroke="#08A696" stroke-width="1.5"/>
+        <line x1="260" y1="20" x2="350" y2="170" stroke="#003D84" stroke-width="1.5"/>
         <line x1="200" y1="12" x2="200" y2="185" stroke="#e24b4a" stroke-width="2"/>
       </svg>
       <p style="font-size:11px;color:var(--muted);margin-top:8px;">Индиго — чётное направление, teal — нечётное. Красный курсор — момент времени, считает пересечения (= поездов в движении).</p>

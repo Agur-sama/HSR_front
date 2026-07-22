@@ -23,6 +23,7 @@ interface ModuleShellProps {
   theory: ReactNode;
   taskSteps: ModuleTaskStep[];
   result: ReactNode;
+  onSaveDraft?: () => void;
 }
 
 export function ModuleShell({
@@ -34,10 +35,12 @@ export function ModuleShell({
   theory,
   taskSteps,
   result,
+  onSaveDraft,
 }: ModuleShellProps) {
   const { phase, currentStepIndex, setPhase, setCurrentStepIndex } = useModuleState<unknown>();
   const [theoryOpen, setTheoryOpen] = useState(false);
   const [theoryComplete, setTheoryComplete] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('');
   const activeTaskStep = taskSteps[currentStepIndex] ?? taskSteps[0];
   const activeTaskStepComplete = activeTaskStep?.isComplete ?? true;
   const canGoForward =
@@ -138,7 +141,19 @@ export function ModuleShell({
           <button className="button button--ghost" disabled={phase === 'intro'} onClick={goBack} type="button">
             ← Назад
           </button>
-          <span className="module-actions__hint">{progressHint}</span>
+          <span className="module-actions__hint">{saveStatus || progressHint}</span>
+          {phase === 'task' && onSaveDraft ? (
+            <button
+              className="button button--secondary"
+              onClick={() => {
+                onSaveDraft();
+                setSaveStatus(`Сохранено, ${new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`);
+              }}
+              type="button"
+            >
+              Сохранить
+            </button>
+          ) : null}
           <button className="button button--primary" disabled={!canGoForward} onClick={goForward} type="button">
             {getPrimaryActionLabel(phase, currentStepIndex, taskSteps.length)}
           </button>

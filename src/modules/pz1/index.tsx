@@ -8,21 +8,26 @@ import { DataEntryTable } from '../../shared/ui/DataEntryTable';
 import { FieldWithHint } from '../../shared/ui/FieldWithHint';
 import { OsmStationMap } from './OsmStationMap';
 import {
+  countFilledConsumerCells,
   consumerRows,
   createInitialPz1Draft,
   createPz1Bridge,
   createPz1Result,
   finalIndicators,
+  getPz1TaskStepCount,
+  getRouteMetrics,
+  getSyncedCorrespondenceTables,
   isConsumerPropertiesComplete,
   isFinalIndicatorsComplete,
   isPassportComplete,
   isStationsStepComplete,
   sanitizeFileName,
+  syncCorrespondenceTables,
   transportColumns,
   updateCellValue,
   validateConsumerCell,
 } from './model';
-import type { Pz1Draft, Pz1StationDraft } from './types';
+import type { Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
 import { getPz1VariantTitle, pz1Variants } from './variants';
 
 export function Pz1Module() {
@@ -35,6 +40,7 @@ export function Pz1Module() {
 
 function Pz1Workspace() {
   const { draft } = useModuleState<Pz1Draft>();
+  const fileSlug = sanitizeFileName(draft.passport.lineTitle, 'pz1');
   const taskSteps: ModuleTaskStep[] = [
     {
       id: 'stations',
@@ -70,6 +76,7 @@ function Pz1Workspace() {
       intro={<IntroStep />}
       introComplete={isIntroComplete(draft)}
       introCompletionHint="Заполните все поля, чтобы начать"
+      onSaveDraft={() => downloadBridgeJson(createPz1Bridge(draft), `${fileSlug}-bridge.json`)}
       result={<ResultStep />}
       subtitle="Практическое задание № 1"
       taskSteps={taskSteps}
@@ -225,12 +232,23 @@ function TheoryStep() {
 function StationsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const [activeStationLabel, setActiveStationLabel] = useState<Pz1StationDraft['label']>('А');
+  const routeMetrics = getRouteMetrics(draft);
+  const correspondenceCount = getSyncedCorrespondenceTables(draft).length;
+  const estimatedStepCount = getPz1TaskStepCount(draft);
 
   function updateStation(label: Pz1StationDraft['label'], patch: Partial<Pz1StationDraft>) {
     updateDraft((currentDraft) => ({
       ...currentDraft,
       stationDrafts: currentDraft.stationDrafts.map((stationDraft) =>
         stationDraft.label === label ? { ...stationDraft, ...patch } : stationDraft,
+      ),
+      correspondenceTables: syncCorrespondenceTables(
+        {
+          stationDrafts: currentDraft.stationDrafts.map((stationDraft) =>
+            stationDraft.label === label ? { ...stationDraft, ...patch } : stationDraft,
+          ),
+          correspondenceTables: currentDraft.correspondenceTables,
+        },
       ),
     }));
   }
@@ -247,8 +265,14 @@ function StationsStep() {
       <OsmStationMap
         activeStationLabel={activeStationLabel}
         onActiveStationChange={setActiveStationLabel}
+        onPreviewImageChange={(previewImage) =>
+          updateDraft((currentDraft) =>
+            currentDraft.previewImage === previewImage ? currentDraft : { ...currentDraft, previewImage },
+          )
+        }
         onRoutePointDraftsChange={replaceRoutePointDrafts}
         onStationChange={updateStation}
+        routeMetrics={routeMetrics}
         routePointDrafts={draft.routePointDrafts}
         stations={draft.stationDrafts}
       />
@@ -301,37 +325,98 @@ function StationsStep() {
           );
         })}
       </div>
+      <aside className="correspondence-estimate">
+        <p className="eyebrow">Объём ПЗ1</p>
+        <strong>{correspondenceCount} корреспонденций</strong>
+        <span>{estimatedStepCount} шагов в фазе задания при текущем наборе станций.</span>
+      </aside>
     </div>
   );
 }
 
 function ConsumerPropertiesStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const correspondenceTables = getSyncedCorrespondenceTables(draft);
 
   return (
     <div className="consumer-tables">
-      {consumerRows.map((row) => (
-        <DataEntryTable
-          caption={row.label}
-          columns={transportColumns}
-          getError={(rowId, columnId) => validateConsumerCell(rowId, draft.consumerProperties[rowId]?.[columnId] ?? '')}
-          key={row.id}
-          onChange={(rowId, columnId, value) =>
-            updateDraft((currentDraft) => ({
-              ...currentDraft,
-              consumerProperties: updateCellValue(currentDraft.consumerProperties, rowId, columnId, value),
-            }))
-          }
-          rows={[row]}
-          values={draft.consumerProperties}
-        />
-      ))}
+      {correspondenceTables.length === 0 ? (
+        <section className="empty-state">
+          <h3>Корреспонденции пока не сформированы</h3>
+          <p>Назначьте станции на карте, чтобы появились пары для таблиц потребительских свойств.</p>
+        </section>
+      ) : null}
+      {correspondenceTables.map((table) => {
+        const activeColumns = transportColumns.filter((column) => table.activeModes.includes(column.id));
+        const excludedColumns = transportColumns.filter((column) => !table.activeModes.includes(column.id));
+
+        return (
+          <section className="correspondence-table" key={table.pairKey}>
+            <DataEntryTable
+              caption={`Корреспонденция ${table.pairKey}`}
+              columns={activeColumns}
+              getCellMeta={(rowId, columnId) => getConsumerCellMeta(rowId, table.values[rowId]?.[columnId] ?? '')}
+              getError={(rowId, columnId) => validateConsumerCell(rowId, table.values[rowId]?.[columnId] ?? '')}
+              onChange={(rowId, columnId, value) => updateCorrespondenceTable(table.pairKey, { values: updateCellValue(table.values, rowId, columnId, value) })}
+              onRemoveColumn={(columnId) =>
+                updateCorrespondenceTable(table.pairKey, {
+                  activeModes: table.activeModes.filter((modeId) => modeId !== columnId),
+                })
+              }
+              rows={consumerRows}
+              values={table.values}
+            />
+            {excludedColumns.length > 0 ? (
+              <div className="excluded-modes">
+                <span>Исключены для этой пары:</span>
+                {excludedColumns.map((column) => (
+                  <button
+                    className="button button--ghost"
+                    key={column.id}
+                    onClick={() =>
+                      updateCorrespondenceTable(table.pairKey, {
+                        activeModes: [...table.activeModes, column.id],
+                      })
+                    }
+                    type="button"
+                  >
+                    Вернуть {column.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        );
+      })}
     </div>
   );
+
+  function updateCorrespondenceTable(pairKey: string, patch: Partial<Pz1CorrespondenceTableDraft>) {
+    updateDraft((currentDraft) => {
+      const syncedTables = syncCorrespondenceTables(currentDraft);
+      const currentTable = syncedTables[pairKey];
+
+      if (!currentTable) {
+        return currentDraft;
+      }
+
+      return {
+        ...currentDraft,
+        correspondenceTables: {
+          ...syncedTables,
+          [pairKey]: {
+            ...currentTable,
+            ...patch,
+          },
+        },
+      };
+    });
+  }
 }
 
 function FinalIndicatorsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const totalLengthText = formatKm(getRouteMetrics(draft).totalLengthKm);
 
   return (
     <div className="indicator-step">
@@ -348,8 +433,9 @@ function FinalIndicatorsStep() {
                 finalIndicators: { ...currentDraft.finalIndicators, [indicator.id]: value },
               }))
             }
+            readOnly={indicator.id === 'lineLength'}
             unit={'unit' in indicator ? indicator.unit : undefined}
-            value={draft.finalIndicators[indicator.id] ?? ''}
+            value={indicator.id === 'lineLength' ? totalLengthText : draft.finalIndicators[indicator.id] ?? ''}
           />
         ))}
       </div>
@@ -375,8 +461,11 @@ function ResultStep() {
   const bridge = createPz1Bridge(draft);
   const result = createPz1Result(draft);
   const fileSlug = sanitizeFileName(draft.passport.lineTitle, 'pz1');
-  const filledConsumerCells = Object.values(draft.consumerProperties).flatMap((row) => Object.values(row)).filter(isFilled).length;
-  const filledIndicatorCount = Object.values(draft.finalIndicators).filter(isFilled).length;
+  const filledConsumerCells = countFilledConsumerCells(draft);
+  const filledIndicatorCount = finalIndicators.filter((indicator) =>
+    indicator.id === 'lineLength' ? result.totalLengthKm > 0 : isFilled(draft.finalIndicators[indicator.id] ?? ''),
+  ).length;
+  const totalLengthText = formatKm(result.totalLengthKm);
 
   function downloadJson() {
     downloadBridgeJson(bridge, `${fileSlug}-bridge.json`);
@@ -392,11 +481,13 @@ function ResultStep() {
           lineTitle: draft.passport.lineTitle,
           variantTitle: getPz1VariantTitle(draft.selectedVariantId),
           stationCount: result.stations.length,
-          routePointCount: result.routeLine.length,
+          routePointCount: result.routeLine.vertices.length,
+          totalLengthKm: result.totalLengthKm,
           filledConsumerCells,
           filledIndicatorCount,
           createdAt: draft.passport.createdAt,
           routeLine: result.routeLine,
+          previewImage: result.previewImage,
           stations: result.stations,
         },
         `${fileSlug}-report.pdf`,
@@ -424,7 +515,7 @@ function ResultStep() {
           </div>
           <div>
             <dt>Длина трассы</dt>
-            <dd>{draft.finalIndicators.lineLength || 'не рассчитано'}</dd>
+            <dd>{totalLengthText}</dd>
           </div>
           <div>
             <dt>Общий пассажиропоток</dt>
@@ -436,7 +527,7 @@ function ResultStep() {
           </div>
           <div>
             <dt>Точки трассы</dt>
-            <dd>{result.routeLine.length}</dd>
+            <dd>{result.routeLine.vertices.length}</dd>
           </div>
         </dl>
         <p className="save-warning">Сохраните файл перед выходом — прогресс не восстановится, если закрыть страницу.</p>
@@ -460,6 +551,35 @@ function ResultStep() {
 
 function isFilled(value: string) {
   return value.trim().length > 0;
+}
+
+function getConsumerCellMeta(rowId: string, value: string) {
+  if (rowId !== 'discomfort' || !value.trim()) {
+    return null;
+  }
+
+  const parsed = Number(value.replace(',', '.'));
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  if (parsed === 0) {
+    return '0 — комфортнее';
+  }
+
+  if (parsed === 1) {
+    return '1 — менее комфортно';
+  }
+
+  return 'Диапазон 0…1';
+}
+
+function formatKm(value: number) {
+  if (value <= 0) {
+    return 'не рассчитано';
+  }
+
+  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)} км`;
 }
 
 function isIntroComplete(draft: Pz1Draft) {
