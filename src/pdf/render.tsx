@@ -6,7 +6,8 @@ import ralewayMedium from '@fontsource/raleway/files/raleway-cyrillic-500-normal
 import ralewayBold from '@fontsource/raleway/files/raleway-cyrillic-800-normal.woff?url';
 import { downloadTextFile } from '../bridge/io';
 import type { CorrespondenceTable, GeoPoint, Pz1PassengerFlowResult, Pz1Result, RouteLine } from '../bridge/schema';
-import { consumerRows, finalIndicators, transportColumns } from '../modules/pz1/model';
+import { consumerRows, discomfortRows, finalIndicators, transportColumns } from '../modules/pz1/model';
+import type { StationRouteDistance } from '../modules/pz1/model';
 import { buildDisplayRoutePoints, computeRouteLineMetrics } from '../shared/lib/routeGeometry';
 
 const PAGE_SIZE = 'A4';
@@ -49,12 +50,14 @@ export interface Pz1PdfSummary {
   filledIndicatorCount: number;
   createdAt: string;
   consumerProperties?: Pz1Result['consumerProperties'];
+  discomfortMatrix?: Pz1Result['discomfortMatrix'];
   finalIndicators?: Pz1Result['finalIndicators'];
   passengerFlowForecast?: Pz1PassengerFlowResult;
   passengerFlowChartImage?: string;
   notes?: string;
   stations?: PdfStation[];
   routeLine?: RouteLine;
+  stationRouteDistances?: StationRouteDistance[];
   previewImage?: string;
 }
 
@@ -142,11 +145,11 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
         <KeyValueTable rows={sections[0].rows} />
         <View style={styles.contents}>
           <Text style={styles.sectionTitle}>Содержание</Text>
-          <Text style={styles.contentsLine}>1. Исходные данные варианта</Text>
-          <Text style={styles.contentsLine}>2. План трассы и размещение станций</Text>
-          <Text style={styles.contentsLine}>3. Матрица корреспонденций</Text>
-          <Text style={styles.contentsLine}>4. Прогноз пассажиропотока</Text>
-          <Text style={styles.contentsLine}>5. Технико-экономические показатели</Text>
+        <Text style={styles.contentsLine}>1. Исходные данные варианта</Text>
+        <Text style={styles.contentsLine}>2. План трассы и размещение станций</Text>
+        <Text style={styles.contentsLine}>3. Матрица корреспонденций и коэффициенты дискомфорта</Text>
+        <Text style={styles.contentsLine}>4. Прогноз пассажиропотока</Text>
+        <Text style={styles.contentsLine}>5. Технико-экономические показатели</Text>
         </View>
       </Page>
 
@@ -160,6 +163,7 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
         <MapPlanPreview previewImage={summary.previewImage} routeLine={summary.routeLine} stations={summary.stations ?? []} />
         <StationTable stations={summary.stations ?? []} />
         <RouteSegmentTable routeLine={summary.routeLine} />
+        <StationRouteDistanceTable distances={summary.stationRouteDistances ?? []} />
       </Page>
 
       <Page size={PAGE_SIZE} style={styles.page}>
@@ -168,6 +172,8 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
         <KeyValueTable rows={sections[2].rows} />
         <CorrespondenceTables tables={summary.consumerProperties ?? {}} />
         <Text style={styles.caption}>Таблица 1 — Потребительские свойства по корреспонденциям</Text>
+        <DiscomfortMatrixTable matrix={summary.discomfortMatrix} />
+        <Text style={styles.caption}>Таблица 2 — Коэффициенты дискомфорта по видам транспорта</Text>
         <Text style={styles.sectionTitle}>4. Прогноз пассажиропотока</Text>
         <PassengerFlowForecastReport
           chartImage={summary.passengerFlowChartImage}
@@ -315,6 +321,32 @@ function RouteSegmentTable({ routeLine }: { routeLine?: RouteLine }) {
   );
 }
 
+function StationRouteDistanceTable({ distances }: { distances: StationRouteDistance[] }) {
+  if (distances.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <Text style={styles.caption}>Таблица 1 — Расстояния между соседними станциями вдоль трассы</Text>
+      <View style={styles.table}>
+        <View style={styles.tableHeaderRow}>
+          <Text style={styles.stationTypeCell}>Участок</Text>
+          <Text style={styles.stationCoordCell}>Длина по трассе</Text>
+        </View>
+        {distances.map((distance) => (
+          <View key={`${distance.fromLabel}-${distance.toLabel}`} style={styles.tableRow}>
+            <Text style={styles.stationTypeCell}>
+              {distance.fromLabel} — {distance.toLabel}
+            </Text>
+            <Text style={styles.stationCoordCell}>{formatKm(distance.distanceKm)}</Text>
+          </View>
+        ))}
+      </View>
+    </>
+  );
+}
+
 function CorrespondenceTables({ tables }: { tables: Record<string, CorrespondenceTable> }) {
   const tableList = Object.values(tables);
 
@@ -353,6 +385,37 @@ function CorrespondenceTables({ tables }: { tables: Record<string, Correspondenc
   );
 }
 
+function DiscomfortMatrixTable({ matrix }: { matrix?: Pz1Result['discomfortMatrix'] }) {
+  if (!matrix) {
+    return <Text style={styles.paragraph}>Таблица дискомфорта пока не заполнена.</Text>;
+  }
+
+  return (
+    <View style={styles.compactTableBlock} wrap={false}>
+      <View style={styles.compactTable}>
+        <View style={styles.compactHeaderRow}>
+          <Text style={styles.metricCell}>Критерий</Text>
+          {transportColumns.map((column) => (
+            <Text key={column.id} style={styles.modeCell}>
+              {column.label}
+            </Text>
+          ))}
+        </View>
+        {discomfortRows.map((row) => (
+          <View key={row.id} style={styles.compactRow}>
+            <Text style={styles.metricCell}>{row.label}</Text>
+            {transportColumns.map((column) => (
+              <Text key={column.id} style={styles.modeCell}>
+                {formatRequiredValue(matrix.values[row.id]?.[column.id] ?? '')}
+              </Text>
+            ))}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const pdfPassengerFlowChartColors: Record<string, string> = {
   hSR: '#e0182d',
   airplane: '#003d84',
@@ -383,7 +446,7 @@ function PassengerFlowForecastReport({
           ['Итоговый прогноз, пасс./год', formatInteger(forecast.totalDemand.totalForecast)],
         ]}
       />
-      <Text style={styles.caption}>Таблица 2 — Распределение прогноза пассажиропотока по видам транспорта</Text>
+      <Text style={styles.caption}>Таблица 3 — Распределение прогноза пассажиропотока по видам транспорта</Text>
       <View style={styles.table}>
         <View style={styles.tableHeaderRow}>
           <Text style={styles.flowModeCell}>Вид транспорта</Text>

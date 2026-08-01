@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 export interface DataEntryColumn {
   id: string;
   label: string;
@@ -13,10 +15,13 @@ interface DataEntryTableProps {
   caption: string;
   columns: DataEntryColumn[];
   rows: DataEntryRow[];
-  values: Record<string, Record<string, string>>;
+  values: Record<string, Partial<Record<string, string>>>;
   onChange: (rowId: string, columnId: string, value: string) => void;
   getError?: (rowId: string, columnId: string) => string | null;
   getCellMeta?: (rowId: string, columnId: string) => string | null;
+  getInputClassName?: (rowId: string, columnId: string) => string | undefined;
+  getInputStyle?: (rowId: string, columnId: string) => CSSProperties | undefined;
+  canRemoveColumn?: (columnId: string) => boolean;
   onRemoveColumn?: (columnId: string) => void;
 }
 
@@ -28,6 +33,9 @@ export function DataEntryTable({
   onChange,
   getError,
   getCellMeta,
+  getInputClassName,
+  getInputStyle,
+  canRemoveColumn,
   onRemoveColumn,
 }: DataEntryTableProps) {
   return (
@@ -42,7 +50,7 @@ export function DataEntryTable({
                 <th key={column.id}>
                   <span className="data-entry__column-head">
                     {column.label}
-                    {onRemoveColumn ? (
+                    {onRemoveColumn && (canRemoveColumn?.(column.id) ?? true) ? (
                       <button
                         aria-label={`Исключить ${column.label}`}
                         className="data-entry__remove-column"
@@ -69,14 +77,18 @@ export function DataEntryTable({
                     {(() => {
                       const error = getError?.(row.id, column.id) ?? null;
                       const cellMeta = getCellMeta?.(row.id, column.id) ?? null;
+                      const inputClassName = [error ? 'is-invalid' : '', getInputClassName?.(row.id, column.id) ?? '']
+                        .filter(Boolean)
+                        .join(' ');
 
                       return (
                         <>
                           <input
                             aria-invalid={error ? true : undefined}
                             aria-label={`${row.label}: ${column.label}`}
-                            className={error ? 'is-invalid' : undefined}
+                            className={inputClassName || undefined}
                             onChange={(event) => onChange(row.id, column.id, event.target.value)}
+                            style={getInputStyle?.(row.id, column.id)}
                             value={values[row.id]?.[column.id] ?? ''}
                           />
                           {error ? <small className="field-error">{error}</small> : null}

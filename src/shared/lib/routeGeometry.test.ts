@@ -17,6 +17,39 @@ describe('route geometry', () => {
     expect(metrics.arcLengthKm).toBe(100);
   });
 
+  it('keeps invalid numeric input from leaking NaN into route metrics', () => {
+    const arcMetrics = computeArcMetrics(Number.NaN, Number.POSITIVE_INFINITY);
+    const routeMetrics = computeRouteLineMetrics({
+      vertices: [
+        { id: 'a', lon: 0, lat: 0 },
+        { id: 'b', lon: 181, lat: 0 },
+      ],
+      segments: [{ id: 'a-b', fromVertexId: 'a', toVertexId: 'b', sagittaKm: Number.NaN }],
+    });
+
+    expect(arcMetrics.arcLengthKm).toBe(0);
+    expect(routeMetrics.totalLengthKm).toBe(0);
+  });
+
+  it('keeps the longitude 111 control input as valid geography', () => {
+    const distance = haversineDistanceKm({ lon: 111, lat: 55 }, { lon: 112, lat: 55 });
+
+    expect(distance).toBeGreaterThan(60);
+    expect(distance).toBeLessThan(65);
+  });
+
+  it('guards display route building near projection limits', () => {
+    const displayPoints = buildDisplayRoutePoints({
+      vertices: [
+        { id: 'a', lon: 0, lat: 90 },
+        { id: 'b', lon: 1, lat: 90 },
+      ],
+      segments: [{ id: 'a-b', fromVertexId: 'a', toVertexId: 'b', sagittaKm: 1 }],
+    });
+
+    expect(displayPoints.every((point) => Number.isFinite(point.lon) && Number.isFinite(point.lat))).toBe(true);
+  });
+
   it('calculates geodesic distance without Web Mercator distortion', () => {
     const distance = haversineDistanceKm({ lon: 0, lat: 0 }, { lon: 1, lat: 0 });
 

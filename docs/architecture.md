@@ -139,8 +139,9 @@ interface Passport {
 }
 
 interface BridgeSchema {
-  schemaVersion: '1.0';
+  schemaVersion: '1.0' | '1.1';
   passport: Passport;
+  progress?: Partial<Record<'pz1' | 'pz2' | 'pz3' | 'pz4' | 'pz5' | 'pz6' | 'pz7' | 'pz8', Record<string, boolean>>>;
   completed: Partial<{
     pz1: Pz1Result; pz2: Pz2Result; pz3: Pz3Result; pz4: Pz4Result;
     pz5: Pz5Result; pz6: Pz6Result; pz7: Pz7Result; pz8: Pz8Result;
@@ -149,6 +150,10 @@ interface BridgeSchema {
 ```
 
 **Принцип:** мост только пред-заполняет входы следующего модуля, никогда не блокирует. Каждый ПЗ автономен — при отсутствии данных сверху работает ручной ввод/выбор варианта. Команды могут проходить ПЗ не по порядку.
+
+**Версия 1.1:** добавляет `progress` для статуса шагов и входную таблицу `pz1.discomfortMatrix`. Импорт сохраняет обратную совместимость с `schemaVersion: '1.0'`.
+
+**Черновики и файлы:** экраны модулей не обращаются к `File.text()`, `Blob` или скачиванию напрямую. Для JSON-файлов используется абстракция `DraftStorage`; текущая реализация — `JsonFileDraftStorage`.
 
 ### Граф зависимостей (проверено по методичкам — версия 2)
 

@@ -31,6 +31,11 @@ export interface RouteLine {
 }
 
 export type TransportModeId = 'hSR' | 'airplane' | 'suburbanTrain' | 'longDistanceTrain' | 'bus' | 'car';
+export type BridgeSchemaVersion = '1.0' | '1.1';
+
+export interface Pz1DiscomfortMatrix {
+  values: Record<string, Record<TransportModeId, string>>;
+}
 
 export interface CorrespondenceTable {
   pairKey: string;
@@ -98,6 +103,7 @@ export interface Pz1Result {
   previewImage?: string;
   variantId?: string;
   consumerProperties?: Record<string, CorrespondenceTable>;
+  discomfortMatrix?: Pz1DiscomfortMatrix;
   passengerFlowForecast?: Pz1PassengerFlowResult;
   finalIndicators?: Record<string, string>;
   notes?: string;
@@ -126,8 +132,9 @@ export interface Passport {
 }
 
 export interface BridgeSchema {
-  schemaVersion: '1.0';
+  schemaVersion: BridgeSchemaVersion;
   passport: Passport;
+  progress?: Partial<Record<'pz1' | 'pz2' | 'pz3' | 'pz4' | 'pz5' | 'pz6' | 'pz7' | 'pz8', Record<string, boolean>>>;
   completed: Partial<{
     pz1: Pz1Result;
     pz2: Pz2Result;

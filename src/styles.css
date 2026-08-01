@@ -689,13 +689,14 @@ button:focus-visible {
   position: absolute;
   left: 12px;
   top: 88px;
-  z-index: 3;
+  z-index: 8;
   display: grid;
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 6px 18px rgba(20, 29, 60, 0.12);
+  pointer-events: auto;
 }
 
 .maplibre-zoom-panel button {
@@ -784,7 +785,7 @@ button:focus-visible {
 
 .route-segment-row {
   display: grid;
-  grid-template-columns: minmax(80px, 0.5fr) minmax(160px, 0.9fr) minmax(110px, 0.7fr) minmax(110px, 0.7fr);
+  grid-template-columns: minmax(80px, 0.5fr) minmax(160px, 0.9fr) minmax(110px, 0.7fr) minmax(110px, 0.7fr) auto;
   gap: 10px;
   align-items: center;
   border: 1px solid var(--border);
@@ -820,6 +821,17 @@ button:focus-visible {
 .route-segment-row small {
   color: var(--muted);
   font-weight: 700;
+}
+
+.route-segment-row__delete {
+  justify-self: end;
+  border: 1px solid #f0c6c0;
+  border-radius: 7px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .osm-map-stage:active {
@@ -1015,6 +1027,50 @@ button:focus-visible {
   line-height: 1.4;
 }
 
+.station-route-distances {
+  grid-column: 2;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: #fff;
+  padding: 14px;
+}
+
+.station-route-distances h3 {
+  margin: 4px 0 10px;
+  color: var(--indigo);
+  font-size: 16px;
+}
+
+.station-route-distances dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.station-route-distances div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.station-route-distances div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.station-route-distances dt {
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.station-route-distances dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 800;
+}
+
 .station-editor {
   display: grid;
   gap: 12px;
@@ -1049,6 +1105,18 @@ button:focus-visible {
 
 .station-editor__select:hover {
   background: var(--panel-alt);
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+input.is-invalid {
+  border-color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .compact-toggle {
@@ -1208,6 +1276,11 @@ button:focus-visible {
 .data-entry input.is-invalid {
   border-color: var(--danger);
   background: var(--danger-bg);
+}
+
+.data-entry input.discomfort-value {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .data-entry .field-error {
@@ -1430,6 +1503,10 @@ button:focus-visible {
   .osm-map-card {
     position: static;
   }
+
+  .station-route-distances {
+    grid-column: auto;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1477,6 +1554,14 @@ button:focus-visible {
 
   .osm-map-stage {
     min-height: 300px;
+  }
+
+  .route-segment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .route-segment-row__delete {
+    justify-self: stretch;
   }
 
   .progress-route ol {

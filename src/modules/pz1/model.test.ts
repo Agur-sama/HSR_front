@@ -3,9 +3,12 @@ import {
   createInitialPz1Draft,
   createPz1Result,
   getComputedFinalIndicators,
+  getStationRouteDistances,
   getSyncedCorrespondenceTables,
+  isStationsStepComplete,
   updateCellValue,
   validateConsumerCell,
+  validateDiscomfortCell,
 } from './model';
 
 describe('pz1 model', () => {
@@ -42,6 +45,53 @@ describe('pz1 model', () => {
     expect(result.routeLine.vertices).toEqual([]);
   });
 
+  it('accepts valid manual longitude values and rejects invalid coordinate ranges without crashing', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], name: 'Точка 111', lat: '55.7558', lng: '111' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], name: 'Финиш', lat: '59.9343', lng: '30.3351' };
+    draft.routePointDrafts = [
+      { id: 'route-point-1', lat: '55.7558', lng: '111', sagittaToNextKm: '0' },
+      { id: 'route-point-2', lat: '59.9343', lng: '30.3351', sagittaToNextKm: '0' },
+      { id: 'route-point-invalid', lat: '91', lng: 'text', sagittaToNextKm: '20' },
+    ];
+
+    const result = createPz1Result(draft);
+
+    expect(result.stations).toHaveLength(2);
+    expect(result.routeLine.vertices).toHaveLength(2);
+    expect(result.routeLine.vertices[0].lon).toBe(111);
+    expect(Number.isFinite(result.totalLengthKm)).toBe(true);
+  });
+
+  it('blocks station step when enabled station names are duplicated', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], name: 'Москва', lat: '55.7558', lng: '37.6173' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], name: ' москва ', lat: '59.9343', lng: '30.3351' };
+    draft.routePointDrafts = [
+      { id: 'route-point-1', lat: '55.7558', lng: '37.6173', sagittaToNextKm: '0' },
+      { id: 'route-point-2', lat: '59.9343', lng: '30.3351', sagittaToNextKm: '0' },
+    ];
+
+    expect(isStationsStepComplete(draft)).toBe(false);
+  });
+
+  it('calculates distances between neighboring stations along the route line', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], name: 'A', lat: '0', lng: '0' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], name: 'B', lat: '0', lng: '2' };
+    draft.routePointDrafts = [
+      { id: 'route-point-1', lat: '0', lng: '0', sagittaToNextKm: '0' },
+      { id: 'route-point-2', lat: '0', lng: '1', sagittaToNextKm: '20' },
+      { id: 'route-point-3', lat: '0', lng: '2', sagittaToNextKm: '0' },
+    ];
+
+    const [distance] = getStationRouteDistances(draft);
+
+    expect(distance.fromLabel).toBe('А');
+    expect(distance.toLabel).toBe('Г');
+    expect(distance.distanceKm).toBeGreaterThan(222);
+  });
+
   it('updates nested table cells without mutating sibling rows', () => {
     const draft = createInitialPz1Draft();
     const [table] = getSyncedCorrespondenceTables(draft);
@@ -61,8 +111,17 @@ describe('pz1 model', () => {
     expect(tables[0].activeModes).toContain('hSR');
   });
 
+  it('keeps HSR in correspondence tables even if imported active modes exclude it', () => {
+    const draft = createInitialPz1Draft();
+    draft.correspondenceTables['А-Г'].activeModes = ['airplane'];
+
+    const [table] = getSyncedCorrespondenceTables(draft);
+
+    expect(table.activeModes).toEqual(['hSR', 'airplane']);
+  });
+
   it('validates consumer properties by metric rules', () => {
-    expect(validateConsumerCell('discomfort', '1,2')).toBe('Коэффициент дискомфорта — это индекс от 0 до 1');
+    expect(validateDiscomfortCell('1,2')).toBe('Значение должно быть в диапазоне от 0 до 1');
     expect(validateConsumerCell('dailyFrequency', '-1')).toBe('Значение не может быть отрицательным');
     expect(validateConsumerCell('fare', '1200')).toBeNull();
   });

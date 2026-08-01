@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ChangeEvent, DragEvent } from 'react';
+import type { CSSProperties, ChangeEvent, DragEvent } from 'react';
 import {
   Bar,
   BarChart,
@@ -17,7 +17,7 @@ import type {
   TransportModeId,
 } from '../../bridge/schema';
 import { ModuleStateProvider, useModuleState } from '../../bridge/context';
-import { downloadBridgeJson, parseBridgeJson } from '../../bridge/io';
+import { jsonFileDraftStorage } from '../../bridge/storage';
 import { ModuleShell } from '../../shared/ui/ModuleShell';
 import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
 import { DataEntryTable } from '../../shared/ui/DataEntryTable';
@@ -29,17 +29,21 @@ import {
   createInitialPz1Draft,
   createPz1Bridge,
   createPz1Result,
+  discomfortRows,
   finalIndicators,
   getComputedFinalIndicators,
+  getDuplicateStationNames,
   getPz1TaskStepCount,
   getPz1PassengerFlowForecast,
   getRouteMetrics,
+  getStationRouteDistances,
   getSyncedCorrespondenceTables,
   isConsumerPropertiesComplete,
   isFinalIndicatorsComplete,
   isPassengerFlowForecastComplete,
   isPassportComplete,
   isStationsStepComplete,
+  isTransportModeRemovable,
   passengerFlowModeRows,
   passengerFlowRegionalFields,
   sanitizeFileName,
@@ -47,6 +51,8 @@ import {
   transportColumns,
   updateCellValue,
   validateConsumerCell,
+  validateDiscomfortCell,
+  validateStationField,
 } from './model';
 import type { Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
 import { getPz1VariantTitle, pz1Variants } from './variants';
@@ -106,7 +112,7 @@ function Pz1Workspace() {
       intro={<IntroStep />}
       introComplete={isIntroComplete(draft)}
       introCompletionHint="Заполните все поля, чтобы начать"
-      onSaveDraft={() => downloadBridgeJson(createPz1Bridge(draft), `${fileSlug}-bridge.json`)}
+      onSaveDraft={() => jsonFileDraftStorage.save(createPz1Bridge(draft), `${fileSlug}-bridge.json`)}
       result={<ResultStep />}
       subtitle="Практическое задание № 1"
       taskSteps={taskSteps}
@@ -124,7 +130,7 @@ function IntroStep() {
 
   async function importBridgeFile(file: File) {
     try {
-      const bridge = parseBridgeJson(await file.text());
+      const bridge = await jsonFileDraftStorage.load(file);
       setImportedBridge(bridge);
       replaceDraft({ ...createInitialPz1Draft(bridge), importedFileName: file.name });
       setImportError('');
@@ -265,6 +271,8 @@ function StationsStep() {
   const routeMetrics = getRouteMetrics(draft);
   const correspondenceCount = getSyncedCorrespondenceTables(draft).length;
   const estimatedStepCount = getPz1TaskStepCount(draft);
+  const duplicateStationNames = getDuplicateStationNames(draft);
+  const stationRouteDistances = getStationRouteDistances(draft);
 
   function updateStation(label: Pz1StationDraft['label'], patch: Partial<Pz1StationDraft>) {
     updateDraft((currentDraft) => ({
@@ -309,6 +317,9 @@ function StationsStep() {
       <div className="station-grid">
         {draft.stationDrafts.map((stationDraft) => {
           const isTerminal = stationDraft.type === 'terminal';
+          const nameError = validateStationField(stationDraft, 'name', duplicateStationNames);
+          const latError = validateStationField(stationDraft, 'lat');
+          const lngError = validateStationField(stationDraft, 'lng');
 
           return (
             <fieldset
@@ -331,24 +342,36 @@ function StationsStep() {
               </label>
               <label>
                 <span>Название</span>
-                <input onChange={(event) => updateStation(stationDraft.label, { name: event.target.value })} value={stationDraft.name} />
+                <input
+                  aria-invalid={nameError ? true : undefined}
+                  className={nameError ? 'is-invalid' : undefined}
+                  onChange={(event) => updateStation(stationDraft.label, { name: event.target.value })}
+                  value={stationDraft.name}
+                />
+                {nameError ? <small className="field-error">{nameError}</small> : null}
               </label>
               <div className="coordinate-grid">
                 <label>
                   <span>Широта</span>
                   <input
+                    aria-invalid={latError ? true : undefined}
+                    className={latError ? 'is-invalid' : undefined}
                     inputMode="decimal"
                     onChange={(event) => updateStation(stationDraft.label, { lat: event.target.value })}
                     value={stationDraft.lat}
                   />
+                  {latError ? <small className="field-error">{latError}</small> : null}
                 </label>
                 <label>
                   <span>Долгота</span>
                   <input
+                    aria-invalid={lngError ? true : undefined}
+                    className={lngError ? 'is-invalid' : undefined}
                     inputMode="decimal"
                     onChange={(event) => updateStation(stationDraft.label, { lng: event.target.value })}
                     value={stationDraft.lng}
                   />
+                  {lngError ? <small className="field-error">{lngError}</small> : null}
                 </label>
               </div>
             </fieldset>
@@ -360,6 +383,22 @@ function StationsStep() {
         <strong>{correspondenceCount} корреспонденций</strong>
         <span>{estimatedStepCount} шагов в фазе задания при текущем наборе станций.</span>
       </aside>
+      {stationRouteDistances.length > 0 ? (
+        <aside className="station-route-distances">
+          <p className="eyebrow">Участки трассы</p>
+          <h3>Расстояние между станциями</h3>
+          <dl>
+            {stationRouteDistances.map((distance) => (
+              <div key={`${distance.fromLabel}-${distance.toLabel}`}>
+                <dt>
+                  {distance.fromLabel} — {distance.toLabel}
+                </dt>
+                <dd>{formatKm(distance.distanceKm)}</dd>
+              </div>
+            ))}
+          </dl>
+        </aside>
+      ) : null}
     </div>
   );
 }
@@ -385,14 +424,20 @@ function ConsumerPropertiesStep() {
             <DataEntryTable
               caption={`Корреспонденция ${table.pairKey}`}
               columns={activeColumns}
+              canRemoveColumn={(columnId) => isTransportModeRemovable(columnId as TransportModeId)}
               getCellMeta={(rowId, columnId) => getConsumerCellMeta(rowId, table.values[rowId]?.[columnId] ?? '')}
               getError={(rowId, columnId) => validateConsumerCell(rowId, table.values[rowId]?.[columnId] ?? '')}
               onChange={(rowId, columnId, value) => updateCorrespondenceTable(table.pairKey, { values: updateCellValue(table.values, rowId, columnId, value) })}
-              onRemoveColumn={(columnId) =>
+              onRemoveColumn={(columnId) => {
+                const modeId = columnId as TransportModeId;
+                if (!isTransportModeRemovable(modeId)) {
+                  return;
+                }
+
                 updateCorrespondenceTable(table.pairKey, {
-                  activeModes: table.activeModes.filter((modeId) => modeId !== columnId),
-                })
-              }
+                  activeModes: table.activeModes.filter((activeModeId) => activeModeId !== modeId),
+                });
+              }}
               rows={consumerRows}
               values={table.values}
             />
@@ -418,6 +463,21 @@ function ConsumerPropertiesStep() {
           </section>
         );
       })}
+      <section className="correspondence-table">
+        <DataEntryTable
+          caption="Коэффициент дискомфорта"
+          columns={transportColumns}
+          getCellMeta={(rowId, columnId) => getDiscomfortCellMeta(draft.discomfortMatrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
+          getError={(rowId, columnId) => validateDiscomfortCell(draft.discomfortMatrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
+          getInputClassName={() => 'discomfort-value'}
+          getInputStyle={(rowId, columnId) =>
+            getDiscomfortInputStyle(draft.discomfortMatrix.values[rowId]?.[columnId as TransportModeId] ?? '')
+          }
+          onChange={(rowId, columnId, value) => updateDiscomfortValue(rowId, columnId as TransportModeId, value)}
+          rows={discomfortRows}
+          values={draft.discomfortMatrix.values}
+        />
+      </section>
     </div>
   );
 
@@ -441,6 +501,18 @@ function ConsumerPropertiesStep() {
         },
       };
     });
+  }
+
+  function updateDiscomfortValue(rowId: string, modeId: TransportModeId, value: string) {
+    updateDraft((currentDraft) => ({
+      ...currentDraft,
+      discomfortMatrix: {
+        values: updateCellValue(currentDraft.discomfortMatrix.values, rowId, modeId, value) as Record<
+          string,
+          Record<TransportModeId, string>
+        >,
+      },
+    }));
   }
 }
 
@@ -664,9 +736,10 @@ function ResultStep() {
     indicator.id === 'lineLength' ? result.totalLengthKm > 0 : isFilled(computedFinalIndicators[indicator.id] ?? ''),
   ).length;
   const totalLengthText = formatKm(result.totalLengthKm);
+  const stationRouteDistances = getStationRouteDistances(draft);
 
   function downloadJson() {
-    downloadBridgeJson(bridge, `${fileSlug}-bridge.json`);
+    jsonFileDraftStorage.save(bridge, `${fileSlug}-bridge.json`);
     setExportStatus('✓ Файл сохранён');
   }
 
@@ -688,11 +761,13 @@ function ResultStep() {
           filledIndicatorCount,
           createdAt: draft.passport.createdAt,
           consumerProperties: result.consumerProperties,
+          discomfortMatrix: result.discomfortMatrix,
           finalIndicators: result.finalIndicators,
           notes: result.notes,
           passengerFlowForecast: result.passengerFlowForecast,
           passengerFlowChartImage,
           routeLine: result.routeLine,
+          stationRouteDistances,
           previewImage: result.previewImage,
           stations: result.stations,
         },
@@ -912,10 +987,13 @@ function isFilled(value: string) {
 }
 
 function getConsumerCellMeta(rowId: string, value: string) {
-  if (rowId !== 'discomfort' || !value.trim()) {
-    return null;
-  }
+  void rowId;
+  void value;
 
+  return null;
+}
+
+function getDiscomfortCellMeta(value: string) {
   const parsed = Number(value.replace(',', '.'));
   if (!Number.isFinite(parsed)) {
     return null;
@@ -930,6 +1008,25 @@ function getConsumerCellMeta(rowId: string, value: string) {
   }
 
   return 'Диапазон 0…1';
+}
+
+function getDiscomfortInputStyle(value: string): CSSProperties | undefined {
+  const parsed = parseNumberInput(value);
+  if (parsed === null || parsed < 0 || parsed > 1) {
+    return undefined;
+  }
+
+  const low = { r: 225, g: 245, b: 238 };
+  const high = { r: 253, g: 243, b: 242 };
+  const mix = {
+    r: Math.round(low.r + (high.r - low.r) * parsed),
+    g: Math.round(low.g + (high.g - low.g) * parsed),
+    b: Math.round(low.b + (high.b - low.b) * parsed),
+  };
+
+  return {
+    backgroundColor: `rgb(${mix.r}, ${mix.g}, ${mix.b})`,
+  };
 }
 
 function formatKm(value: number) {

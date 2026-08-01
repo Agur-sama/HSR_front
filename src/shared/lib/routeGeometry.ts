@@ -22,6 +22,10 @@ interface LocalPoint {
 }
 
 export function haversineDistanceKm(from: GeoPoint, to: GeoPoint): number {
+  if (!isValidGeoPoint(from) || !isValidGeoPoint(to)) {
+    return 0;
+  }
+
   const fromLat = toRadians(from.lat);
   const toLat = toRadians(to.lat);
   const deltaLat = toRadians(to.lat - from.lat);
@@ -35,6 +39,10 @@ export function haversineDistanceKm(from: GeoPoint, to: GeoPoint): number {
 }
 
 export function computeArcMetrics(chordKm: number, sagittaKm: number): Omit<RouteSegmentMetrics, 'segmentId'> {
+  if (!Number.isFinite(chordKm) || !Number.isFinite(sagittaKm)) {
+    return { chordKm: 0, radiusKm: null, arcLengthKm: 0 };
+  }
+
   const absSagittaKm = Math.abs(sagittaKm);
 
   if (chordKm <= EPS) {
@@ -99,6 +107,10 @@ export function buildDisplayRoutePoints(routeLine: RouteLine, stepsPerArc = DEFA
 }
 
 function buildSegmentDisplayPoints(from: GeoPoint, to: GeoPoint, sagittaKm: number, stepsPerArc: number): GeoPoint[] {
+  if (!isValidGeoPoint(from) || !isValidGeoPoint(to) || !Number.isFinite(sagittaKm)) {
+    return [];
+  }
+
   if (Math.abs(sagittaKm) < EPS) {
     return [from, to];
   }
@@ -201,7 +213,7 @@ function toLocalPoint(point: GeoPoint, origin: GeoPoint): LocalPoint {
   const lonScale = latScale * Math.cos(toRadians(origin.lat));
 
   return {
-    x: EARTH_RADIUS_KM * (point.lon - origin.lon) * lonScale,
+    x: Math.abs(lonScale) < EPS ? 0 : EARTH_RADIUS_KM * (point.lon - origin.lon) * lonScale,
     y: EARTH_RADIUS_KM * (point.lat - origin.lat) * latScale,
   };
 }
@@ -211,7 +223,7 @@ function fromLocalPoint(point: LocalPoint, origin: GeoPoint): GeoPoint {
   const lonScale = latScale * Math.cos(toRadians(origin.lat));
 
   return {
-    lon: origin.lon + point.x / (EARTH_RADIUS_KM * lonScale),
+    lon: Math.abs(lonScale) < EPS ? origin.lon : origin.lon + point.x / (EARTH_RADIUS_KM * lonScale),
     lat: origin.lat + point.y / (EARTH_RADIUS_KM * latScale),
   };
 }
@@ -233,4 +245,15 @@ function toRadians(value: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function isValidGeoPoint(point: GeoPoint) {
+  return (
+    Number.isFinite(point.lon) &&
+    Number.isFinite(point.lat) &&
+    point.lon >= -180 &&
+    point.lon <= 180 &&
+    point.lat >= -90 &&
+    point.lat <= 90
+  );
 }

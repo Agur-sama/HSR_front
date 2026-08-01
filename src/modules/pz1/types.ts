@@ -1,6 +1,7 @@
 import type {
   Pz1PassengerFlowModeInputs,
   Pz1PassengerFlowRegionalInputs,
+  Pz1DiscomfortMatrix,
   StationLabel,
   StationType,
   TransportModeId,
@@ -54,6 +55,7 @@ export interface Pz1Draft {
   routePointDrafts: Pz1RoutePointDraft[];
   previewImage: string;
   correspondenceTables: Record<string, Pz1CorrespondenceTableDraft>;
+  discomfortMatrix: Pz1DiscomfortMatrix;
   passengerFlowForecast: Pz1PassengerFlowForecastDraft;
   finalIndicators: Record<string, string>;
   notes: string;

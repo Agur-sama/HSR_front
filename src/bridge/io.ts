@@ -1,11 +1,17 @@
-import type { BridgeSchema, Passport } from './schema';
+import type { BridgeSchema, BridgeSchemaVersion, Passport } from './schema';
 
-const SUPPORTED_SCHEMA_VERSION = '1.0';
+const CURRENT_SCHEMA_VERSION: BridgeSchemaVersion = '1.1';
+const SUPPORTED_SCHEMA_VERSIONS: BridgeSchemaVersion[] = ['1.0', CURRENT_SCHEMA_VERSION];
 
-export function createBridge(passport: Passport, completed: BridgeSchema['completed'] = {}): BridgeSchema {
+export function createBridge(
+  passport: Passport,
+  completed: BridgeSchema['completed'] = {},
+  progress?: BridgeSchema['progress'],
+): BridgeSchema {
   return {
-    schemaVersion: SUPPORTED_SCHEMA_VERSION,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     passport,
+    ...(progress ? { progress } : {}),
     completed,
   };
 }
@@ -24,7 +30,7 @@ export function parseBridgeJson(input: string): BridgeSchema {
   }
 
   if (!isBridgeSchema(parsed)) {
-    throw new Error('Файл моста не соответствует schemaVersion 1.0.');
+    throw new Error('Файл моста не соответствует schemaVersion 1.0/1.1.');
   }
 
   return parsed;
@@ -51,7 +57,12 @@ function isBridgeSchema(value: unknown): value is BridgeSchema {
     return false;
   }
 
-  return value.schemaVersion === SUPPORTED_SCHEMA_VERSION && isPassport(value.passport) && isRecord(value.completed);
+  return (
+    typeof value.schemaVersion === 'string' &&
+    SUPPORTED_SCHEMA_VERSIONS.includes(value.schemaVersion as BridgeSchemaVersion) &&
+    isPassport(value.passport) &&
+    isRecord(value.completed)
+  );
 }
 
 function isPassport(value: unknown): value is Passport {

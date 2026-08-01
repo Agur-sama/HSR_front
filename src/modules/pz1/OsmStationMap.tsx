@@ -331,6 +331,18 @@ export function OsmStationMap({
     );
   }
 
+  function deleteRouteSegment(segmentIndex: number) {
+    if (routePointDrafts.length <= 2) {
+      onRoutePointDraftsChange([]);
+      setSelectedSegmentId('');
+      return;
+    }
+
+    const pointIndexToRemove = segmentIndex === 0 ? 0 : segmentIndex + 1;
+    onRoutePointDraftsChange(routePointDrafts.filter((_, index) => index !== pointIndexToRemove));
+    setSelectedSegmentId('');
+  }
+
   function focusRoute() {
     const coordinates = [
       ...stations.filter((station) => station.enabled).map(parseLngLat).filter((point): point is [number, number] => point !== null),
@@ -355,7 +367,7 @@ export function OsmStationMap({
     <section className="osm-map-card" aria-label="Карта MapLibre для выбора станций">
       <div className="osm-map-card__head">
         <div>
-          <p className="eyebrow">MapLibre · OpenStreetMap</p>
+          <p className="eyebrow">Карта трассы</p>
           <h3>Трасса и станции</h3>
         </div>
         <div className="osm-map-actions">
@@ -426,11 +438,18 @@ export function OsmStationMap({
           const metrics = routeSegmentById.get(segment.id);
 
           return (
-            <button
+            <div
               className={`route-segment-row ${selectedSegmentId === segment.id ? 'is-active' : ''}`}
               key={segment.id}
               onClick={() => setSelectedSegmentId(segment.id)}
-              type="button"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setSelectedSegmentId(segment.id);
+                }
+              }}
+              role="button"
+              tabIndex={0}
             >
               <span>Сегмент {index + 1}</span>
               <label onClick={(event) => event.stopPropagation()}>
@@ -443,7 +462,18 @@ export function OsmStationMap({
               </label>
               <small>Радиус: {metrics?.radiusKm ? formatKm(metrics.radiusKm) : 'прямая'}</small>
               <small>Длина: {metrics ? formatKm(metrics.arcLengthKm) : 'не рассчитано'}</small>
-            </button>
+              <button
+                aria-label={`Удалить сегмент ${index + 1}`}
+                className="route-segment-row__delete"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  deleteRouteSegment(index);
+                }}
+                type="button"
+              >
+                Удалить
+              </button>
+            </div>
           );
         })}
       </div>
@@ -583,11 +613,16 @@ function syncRouteOverlay(
 }
 
 function projectCoordinates(map: MapLibreMap, coordinates: number[][]): ScreenPoint[] {
-  return coordinates.map(([lng, lat]) => {
-    const point = map.project([lng, lat]);
-
-    return { x: point.x, y: point.y };
-  });
+  return coordinates
+    .filter(isValidLngLatPair)
+    .flatMap(([lng, lat]) => {
+      try {
+        const point = map.project([lng, lat]);
+        return Number.isFinite(point.x) && Number.isFinite(point.y) ? [{ x: point.x, y: point.y }] : [];
+      } catch {
+        return [];
+      }
+    });
 }
 
 function formatScreenPoints(points: ScreenPoint[]) {
@@ -599,17 +634,19 @@ function getRoutePointCoordinates(routePointDrafts: Pz1RoutePointDraft[]) {
 }
 
 function createRouteGeoJson(coordinates: number[][]): GeoJSON.FeatureCollection<GeoJSON.LineString> {
+  const validCoordinates = coordinates.filter(isValidLngLatPair);
+
   return {
     type: 'FeatureCollection',
     features:
-      coordinates.length >= 2
+      validCoordinates.length >= 2
         ? [
             {
               type: 'Feature',
               properties: {},
               geometry: {
                 type: 'LineString',
-                coordinates,
+                coordinates: validCoordinates,
               },
             },
           ]
@@ -620,7 +657,7 @@ function createRouteGeoJson(coordinates: number[][]): GeoJSON.FeatureCollection<
 function createPointGeoJson(coordinates: number[][]): GeoJSON.FeatureCollection<GeoJSON.Point> {
   return {
     type: 'FeatureCollection',
-    features: coordinates.map((coordinate) => ({
+    features: coordinates.filter(isValidLngLatPair).map((coordinate) => ({
       type: 'Feature',
       properties: {},
       geometry: {
@@ -635,7 +672,7 @@ function parseLngLat(point: { lat: string; lng: string }): [number, number] | nu
   const lat = parseCoordinate(point.lat);
   const lng = parseCoordinate(point.lng);
 
-  return lat === null || lng === null ? null : [lng, lat];
+  return lat === null || lng === null || !isValidLngLat(lng, lat) ? null : [lng, lat];
 }
 
 function parseCoordinate(value: string) {
@@ -645,6 +682,15 @@ function parseCoordinate(value: string) {
 
   const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isValidLngLatPair(coordinates: number[]): coordinates is [number, number] {
+  const [lng, lat] = coordinates;
+  return isValidLngLat(lng, lat);
+}
+
+function isValidLngLat(lng: number, lat: number) {
+  return Number.isFinite(lng) && Number.isFinite(lat) && lng >= -180 && lng <= 180 && lat >= -90 && lat <= 90;
 }
 
 function formatKm(value: number) {

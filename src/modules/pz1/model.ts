@@ -2,6 +2,7 @@ import type {
   BridgeSchema,
   CorrespondenceTable,
   Passport,
+  Pz1DiscomfortMatrix,
   Pz1PassengerFlowInputs,
   Pz1PassengerFlowModeInputs,
   Pz1PassengerFlowRegionalInputs,
@@ -17,12 +18,13 @@ import { createBridge } from '../../bridge/io';
 import { distributePassengerFlowByMode, forecastTotalDemand } from '../../shared/lib/passengerFlow';
 import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../shared/lib/passengerFlow';
 import { passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
-import { computeRouteLineMetrics } from '../../shared/lib/routeGeometry';
+import { buildDisplayRoutePoints, computeRouteLineMetrics, haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import type { DataEntryColumn, DataEntryRow } from '../../shared/ui/DataEntryTable';
 import type { Pz1CorrespondenceTableDraft, Pz1Draft, Pz1RoutePointDraft, Pz1StationDraft } from './types';
 
 const STATION_LABELS: StationLabel[] = ['А', 'Б', 'В', 'Г'];
 const TERMINAL_LABELS: StationLabel[] = ['А', 'Г'];
+const HSR_MODE_ID: TransportModeId = 'hSR';
 const PASSPORT_LIMITS = {
   team: { min: 2, max: 40 },
   lineTitle: { min: 3, max: 80 },
@@ -40,10 +42,30 @@ const ALL_TRANSPORT_MODE_IDS = transportColumns.map((column) => column.id);
 
 export const consumerRows: DataEntryRow[] = [
   { id: 'travelTime', label: 'Время в пути', helper: 'ч' },
-  { id: 'discomfort', label: 'Коэффициент дискомфорта', helper: 'индекс' },
   { id: 'dailyFrequency', label: 'Частота сообщения за сутки', helper: 'рейсов' },
   { id: 'fare', label: 'Средняя стоимость проезда', helper: 'руб.' },
 ];
+
+export const discomfortRows: DataEntryRow[] = [
+  { id: 'passengerDensity', label: 'Индекс плотности пассажиров в салоне' },
+  { id: 'noiseVibrationTransfers', label: 'Индекс уровня шума, вибрация, плавности хода, пересадки' },
+  { id: 'climateControl', label: 'Индекс качества работы климат-контроля, наличие неприятных запахов и пр.' },
+  { id: 'additionalServices', label: 'Индекс объёма и качества дополнительных услуг, оказываемых пассажиру' },
+  {
+    id: 'technicalSafety',
+    label: 'Индекс технической безопасности транспортного средства (индекс аварийности), предсказуемость в пути',
+  },
+  { id: 'personalSafety', label: 'Индекс личной безопасности (охрана, безопасность, вероятность кражи)' },
+  { id: 'seatAvailability', label: 'Наличие свободных мест' },
+  { id: 'ticketPurchaseComplexity', label: 'Сложность приобретения билета' },
+  { id: 'comfortElasticity', label: 'Коэффициент эластичности к уровню комфорта' },
+];
+
+export interface StationRouteDistance {
+  fromLabel: StationLabel;
+  toLabel: StationLabel;
+  distanceKm: number;
+}
 
 export const finalIndicators = [
   { id: 'lineLength', label: 'Протяженность участка', hint: 'Справочный диапазон уточняется по методичке', unit: 'км' },
@@ -109,6 +131,7 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
       },
       stationDrafts,
     ),
+    discomfortMatrix: mergeDiscomfortMatrix(importedPz1?.discomfortMatrix),
     passengerFlowForecast: mergePassengerFlowForecast(importedPz1?.passengerFlowForecast?.inputs),
     finalIndicators: mergeFinalIndicators(importedPz1?.finalIndicators),
     notes: importedPz1?.notes ?? '',
@@ -116,9 +139,20 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
 }
 
 export function createPz1Bridge(draft: Pz1Draft): BridgeSchema {
-  return createBridge(createPassport(draft), {
-    pz1: createPz1Result(draft),
-  });
+  return createBridge(
+    createPassport(draft),
+    {
+      pz1: createPz1Result(draft),
+    },
+    {
+      pz1: {
+        stations: isStationsStepComplete(draft),
+        consumerProperties: isConsumerPropertiesComplete(draft),
+        passengerFlowForecast: isPassengerFlowForecastComplete(draft),
+        finalIndicators: isFinalIndicatorsComplete(draft),
+      },
+    },
+  );
 }
 
 export function createPz1Result(draft: Pz1Draft): Pz1Result {
@@ -140,11 +174,12 @@ export function createPz1Result(draft: Pz1Draft): Pz1Result {
     consumerProperties: correspondenceTables.reduce<Record<string, CorrespondenceTable>>((tables, table) => {
       tables[table.pairKey] = {
         pairKey: table.pairKey,
-        activeModes: table.activeModes,
+        activeModes: normalizeActiveTransportModes(table.activeModes),
         values: table.values,
       };
       return tables;
     }, {}),
+    discomfortMatrix: cloneDiscomfortMatrix(draft.discomfortMatrix),
     passengerFlowForecast: passengerFlowForecast ?? undefined,
     finalIndicators: getComputedFinalIndicators(draft),
     notes: draft.notes,
@@ -172,17 +207,18 @@ export function sanitizeFileName(value: string, fallback: string) {
 }
 
 export function createRouteLine(routePointDrafts: Pz1RoutePointDraft[]): RouteLine {
-  const vertices = routePointDrafts
-    .map(toRouteVertex)
-    .filter((vertex): vertex is RouteLine['vertices'][number] => vertex !== null);
+  const validRoutePoints = routePointDrafts
+    .map((draft) => ({ draft, vertex: toRouteVertex(draft) }))
+    .filter((point): point is { draft: Pz1RoutePointDraft; vertex: RouteLine['vertices'][number] } => point.vertex !== null);
+  const vertices = validRoutePoints.map((point) => point.vertex);
 
   return {
     vertices,
-    segments: vertices.slice(0, -1).map((vertex, index) => ({
+    segments: validRoutePoints.slice(0, -1).map(({ draft, vertex }, index) => ({
       id: `${vertex.id}-${vertices[index + 1].id}`,
       fromVertexId: vertex.id,
       toVertexId: vertices[index + 1].id,
-      sagittaKm: parseCoordinate(routePointDrafts[index]?.sagittaToNextKm ?? '') ?? 0,
+      sagittaKm: parseCoordinate(draft.sagittaToNextKm) ?? 0,
     })),
   };
 }
@@ -212,7 +248,7 @@ export function syncCorrespondenceTables(
         pairKey,
         fromLabel,
         toLabel,
-        activeModes: existingTable?.activeModes ?? [...ALL_TRANSPORT_MODE_IDS],
+        activeModes: normalizeActiveTransportModes(existingTable?.activeModes ?? [...ALL_TRANSPORT_MODE_IDS]),
         values: mergeConsumerValues(existingTable?.values),
       };
     }
@@ -222,9 +258,11 @@ export function syncCorrespondenceTables(
 }
 
 export function countFilledConsumerCells(draft: Pz1Draft) {
-  return getSyncedCorrespondenceTables(draft)
+  const correspondenceCellCount = getSyncedCorrespondenceTables(draft)
     .flatMap((table) => consumerRows.flatMap((row) => table.activeModes.map((modeId) => table.values[row.id]?.[modeId] ?? '')))
     .filter((value) => value.trim().length > 0).length;
+
+  return correspondenceCellCount + countFilledDiscomfortCells(draft.discomfortMatrix);
 }
 
 export function getPz1PassengerFlowForecast(draft: Pz1Draft): Pz1PassengerFlowResult | null {
@@ -348,10 +386,6 @@ export function validateConsumerCell(rowId: string, value: string) {
     return 'Значение не может быть отрицательным';
   }
 
-  if (rowId === 'discomfort' && parsed > 1) {
-    return 'Коэффициент дискомфорта — это индекс от 0 до 1';
-  }
-
   if ((rowId === 'travelTime' || rowId === 'fare') && parsed <= 0) {
     return 'Значение должно быть больше 0';
   }
@@ -367,12 +401,32 @@ export function validateConsumerCell(rowId: string, value: string) {
   return null;
 }
 
+export function validateDiscomfortCell(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Заполните это поле, чтобы продолжить';
+  }
+
+  const parsed = parseCoordinate(trimmed);
+  if (parsed === null) {
+    return 'Значение должно быть числом';
+  }
+
+  if (parsed < 0 || parsed > 1) {
+    return 'Значение должно быть в диапазоне от 0 до 1';
+  }
+
+  return null;
+}
+
 export function isConsumerPropertiesComplete(draft: Pz1Draft) {
-  return getSyncedCorrespondenceTables(draft).every((table) =>
+  const correspondenceTablesComplete = getSyncedCorrespondenceTables(draft).every((table) =>
     consumerRows.every((row) =>
       table.activeModes.every((modeId) => validateConsumerCell(row.id, table.values[row.id]?.[modeId] ?? '') === null),
     ),
   );
+
+  return correspondenceTablesComplete && isDiscomfortMatrixComplete(draft.discomfortMatrix);
 }
 
 export function isFinalIndicatorsComplete(draft: Pz1Draft) {
@@ -402,12 +456,97 @@ export function isPassengerFlowForecastComplete(draft: Pz1Draft) {
 export function isStationsStepComplete(draft: Pz1Draft) {
   const enabledStations = draft.stationDrafts.filter((stationDraft) => stationDraft.enabled);
   const routeLine = createRouteLine(draft.routePointDrafts);
+  const duplicateStationNames = getDuplicateStationNames(draft);
 
   return (
     TERMINAL_LABELS.every((label) => enabledStations.some((stationDraft) => stationDraft.label === label)) &&
-    enabledStations.every(isStationDraftComplete) &&
+    enabledStations.every((stationDraft) => isStationDraftComplete(stationDraft, duplicateStationNames)) &&
     routeLine.vertices.length >= 2
   );
+}
+
+export function isTransportModeRemovable(modeId: TransportModeId) {
+  return modeId !== HSR_MODE_ID;
+}
+
+export function getDuplicateStationNames(draft: Pick<Pz1Draft, 'stationDrafts'>) {
+  const counts = new Map<string, number>();
+
+  for (const station of draft.stationDrafts) {
+    if (!station.enabled) {
+      continue;
+    }
+
+    const nameKey = normalizeStationName(station.name);
+    if (!nameKey) {
+      continue;
+    }
+
+    counts.set(nameKey, (counts.get(nameKey) ?? 0) + 1);
+  }
+
+  return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([name]) => name));
+}
+
+export function validateStationField(
+  stationDraft: Pz1StationDraft,
+  field: 'name' | 'lat' | 'lng',
+  duplicateStationNames = new Set<string>(),
+) {
+  if (!stationDraft.enabled) {
+    return null;
+  }
+
+  if (field === 'name') {
+    if (!stationDraft.name.trim()) {
+      return 'Укажите название станции';
+    }
+
+    if (duplicateStationNames.has(normalizeStationName(stationDraft.name))) {
+      return 'Название станции должно быть уникальным';
+    }
+
+    return null;
+  }
+
+  if (field === 'lat') {
+    return validateCoordinateField(stationDraft.lat, -90, 90, 'Широта');
+  }
+
+  return validateCoordinateField(stationDraft.lng, -180, 180, 'Долгота');
+}
+
+export function getStationRouteDistances(draft: Pz1Draft): StationRouteDistance[] {
+  const routeLine = createRouteLine(draft.routePointDrafts);
+  const routePoints = buildDisplayRoutePoints(routeLine, 48);
+  if (routePoints.length < 2) {
+    return [];
+  }
+
+  const cumulativeDistances = routePoints.reduce<number[]>((distances, point, index) => {
+    if (index === 0) {
+      distances.push(0);
+      return distances;
+    }
+
+    distances.push(distances[index - 1] + haversineDistanceKm(routePoints[index - 1], point));
+    return distances;
+  }, []);
+  const stationsOnRoute = draft.stationDrafts
+    .filter((stationDraft) => stationDraft.enabled)
+    .map(toStation)
+    .filter((station): station is Pz1Station => station !== null)
+    .map((station) => ({
+      label: station.label,
+      distanceFromStartKm: cumulativeDistances[getNearestRoutePointIndex({ lon: station.lng, lat: station.lat }, routePoints)],
+    }))
+    .sort((left, right) => left.distanceFromStartKm - right.distanceFromStartKm);
+
+  return stationsOnRoute.slice(0, -1).map((station, index) => ({
+    fromLabel: station.label,
+    toLabel: stationsOnRoute[index + 1].label,
+    distanceKm: Math.max(0, stationsOnRoute[index + 1].distanceFromStartKm - station.distanceFromStartKm),
+  }));
 }
 
 function createPassport(draft: Pz1Draft): Passport {
@@ -472,7 +611,7 @@ function mergeCorrespondenceTables(importedValues: Pz1Result['consumerProperties
       pairKey,
       fromLabel,
       toLabel,
-      activeModes: table.activeModes.length > 0 ? table.activeModes : [...ALL_TRANSPORT_MODE_IDS],
+      activeModes: normalizeActiveTransportModes(table.activeModes.length > 0 ? table.activeModes : [...ALL_TRANSPORT_MODE_IDS]),
       values: mergeConsumerValues(table.values),
     };
     return tables;
@@ -548,6 +687,48 @@ function clonePassengerFlowInputs(input: Pz1Draft['passengerFlowForecast']): Pz1
   };
 }
 
+function cloneDiscomfortMatrix(matrix: Pz1DiscomfortMatrix): Pz1DiscomfortMatrix {
+  return {
+    values: discomfortRows.reduce<Record<string, Record<TransportModeId, string>>>((rowMap, row) => {
+      rowMap[row.id] = transportColumns.reduce<Record<TransportModeId, string>>(
+        (columnMap, column) => {
+          columnMap[column.id] = matrix.values[row.id]?.[column.id] ?? '';
+          return columnMap;
+        },
+        {} as Record<TransportModeId, string>,
+      );
+      return rowMap;
+    }, {}),
+  };
+}
+
+function mergeDiscomfortMatrix(importedMatrix?: Pz1Result['discomfortMatrix']): Pz1DiscomfortMatrix {
+  return {
+    values: discomfortRows.reduce<Record<string, Record<TransportModeId, string>>>((rowMap, row) => {
+      rowMap[row.id] = transportColumns.reduce<Record<TransportModeId, string>>(
+        (columnMap, column) => {
+          columnMap[column.id] = importedMatrix?.values?.[row.id]?.[column.id] ?? '';
+          return columnMap;
+        },
+        {} as Record<TransportModeId, string>,
+      );
+      return rowMap;
+    }, {}),
+  };
+}
+
+function countFilledDiscomfortCells(matrix: Pz1DiscomfortMatrix) {
+  return discomfortRows
+    .flatMap((row) => transportColumns.map((column) => matrix.values[row.id]?.[column.id] ?? ''))
+    .filter((value) => value.trim().length > 0).length;
+}
+
+function isDiscomfortMatrixComplete(matrix: Pz1DiscomfortMatrix) {
+  return discomfortRows.every((row) =>
+    transportColumns.every((column) => validateDiscomfortCell(matrix.values[row.id]?.[column.id] ?? '') === null),
+  );
+}
+
 function createEmptyConsumerValues() {
   return consumerRows.reduce<Record<string, Record<string, string>>>((rowMap, row) => {
     rowMap[row.id] = transportColumns.reduce<Record<string, string>>((columnMap, column) => {
@@ -612,8 +793,8 @@ function parseRegionalPassengerFlowInput(
 }
 
 function toStation(stationDraft: Pz1StationDraft): Pz1Station | null {
-  const lat = parseCoordinate(stationDraft.lat);
-  const lng = parseCoordinate(stationDraft.lng);
+  const lat = parseLatitude(stationDraft.lat);
+  const lng = parseLongitude(stationDraft.lng);
   const name = stationDraft.name.trim();
 
   if (!name || lat === null || lng === null) {
@@ -630,8 +811,8 @@ function toStation(stationDraft: Pz1StationDraft): Pz1Station | null {
 }
 
 function toRouteVertex(routePointDraft: Pz1RoutePointDraft): RouteLine['vertices'][number] | null {
-  const lat = parseCoordinate(routePointDraft.lat);
-  const lng = parseCoordinate(routePointDraft.lng);
+  const lat = parseLatitude(routePointDraft.lat);
+  const lng = parseLongitude(routePointDraft.lng);
 
   if (lat === null || lng === null) {
     return null;
@@ -653,6 +834,16 @@ function parseCoordinate(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseLatitude(value: string) {
+  const parsed = parseCoordinate(value);
+  return parsed !== null && parsed >= -90 && parsed <= 90 ? parsed : null;
+}
+
+function parseLongitude(value: string) {
+  const parsed = parseCoordinate(value);
+  return parsed !== null && parsed >= -180 && parsed <= 180 ? parsed : null;
+}
+
 function parseNumericInput(value: string) {
   if (!value.trim()) {
     return null;
@@ -670,11 +861,11 @@ function getStationType(label: StationLabel): StationType {
   return TERMINAL_LABELS.includes(label) ? 'terminal' : 'intermediate';
 }
 
-function isStationDraftComplete(stationDraft: Pz1StationDraft) {
+function isStationDraftComplete(stationDraft: Pz1StationDraft, duplicateStationNames = new Set<string>()) {
   return (
-    stationDraft.name.trim().length > 0 &&
-    parseCoordinate(stationDraft.lat) !== null &&
-    parseCoordinate(stationDraft.lng) !== null
+    validateStationField(stationDraft, 'name', duplicateStationNames) === null &&
+    validateStationField(stationDraft, 'lat') === null &&
+    validateStationField(stationDraft, 'lng') === null
   );
 }
 
@@ -686,4 +877,42 @@ function isLengthInRange(value: string, min: number, max: number) {
 function isVariantInRange(value: string) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 6;
+}
+
+function normalizeActiveTransportModes(modeIds: TransportModeId[]) {
+  const requestedModes = new Set(modeIds.filter((modeId) => ALL_TRANSPORT_MODE_IDS.includes(modeId)));
+  requestedModes.add(HSR_MODE_ID);
+
+  return transportColumns.filter((column) => requestedModes.has(column.id)).map((column) => column.id);
+}
+
+function validateCoordinateField(value: string, min: number, max: number, label: string) {
+  if (!value.trim()) {
+    return `${label}: заполните координату`;
+  }
+
+  const parsed = parseCoordinate(value);
+  if (parsed === null) {
+    return `${label}: значение должно быть числом`;
+  }
+
+  if (parsed < min || parsed > max) {
+    return `${label}: допустимый диапазон ${min}…${max}`;
+  }
+
+  return null;
+}
+
+function normalizeStationName(value: string) {
+  return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
+}
+
+function getNearestRoutePointIndex(point: { lon: number; lat: number }, routePoints: Array<{ lon: number; lat: number }>) {
+  return routePoints.reduce(
+    (nearest, routePoint, index) => {
+      const distanceKm = haversineDistanceKm(point, routePoint);
+      return distanceKm < nearest.distanceKm ? { index, distanceKm } : nearest;
+    },
+    { index: 0, distanceKm: Number.POSITIVE_INFINITY },
+  ).index;
 }
