@@ -780,7 +780,9 @@ export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairK
     );
     const existingTravelTimeHours = getTravelTimeTotalHours(effectiveTravelTime, modeId, 'existing');
     const forecastTravelTimeHours = getTravelTimeTotalHours(effectiveTravelTime, modeId, 'forecast');
-    const totalTransportCost = getTotalTransportCost(draft, detail, modeId);
+    const discomfortAggregate = calculateDiscomfortAggregate(detail.discomfortForecast, modeId);
+    const totalTransportCost =
+      forecastTravelTimeHours === null ? null : getTotalTransportCost(draft, detail, modeId, forecastTravelTimeHours, discomfortAggregate);
 
     if (
       existingAnnualFlow === null ||
@@ -911,13 +913,44 @@ function getAggregateCorrespondencePassengerFlowForecast(draft: Pz1Draft): Pz1Pa
 
 export function getComputedFinalIndicators(draft: Pz1Draft): Record<string, string> {
   const passengerFlowForecast = getPz1PassengerFlowForecast(draft);
+  const annualFlowFromCorrespondences = getAnnualFlowForecastFromCorrespondenceTables(draft);
   const hsrTravelTime = getHsrTravelTimeResult(draft);
+  const enabledStationCount = draft.stationDrafts.filter((stationDraft) => stationDraft.enabled).length;
+  const annualFlow = passengerFlowForecast?.totalDemand.totalForecast ?? annualFlowFromCorrespondences;
 
   return {
     ...draft.finalIndicators,
+    stationCount: enabledStationCount > 0 ? String(enabledStationCount) : '',
     travelTime: hsrTravelTime ? formatDuration(hsrTravelTime.totalMinutes) : draft.finalIndicators.travelTime,
-    annualFlow: passengerFlowForecast ? formatInteger(passengerFlowForecast.totalDemand.totalForecast) : '',
+    annualFlow: annualFlow !== null ? formatInteger(annualFlow) : '',
   };
+}
+
+function getAnnualFlowForecastFromCorrespondenceTables(draft: Pz1Draft) {
+  const details = syncCorrespondenceDetails(draft);
+  const tables = syncCorrespondenceTables(draft);
+  let totalAnnualFlow = 0;
+  let hasCalculatedFlow = false;
+
+  for (const [pairKey, detail] of Object.entries(details)) {
+    const activeModes = tables[pairKey]?.activeModes ?? ALL_TRANSPORT_MODE_IDS;
+
+    for (const modeId of activeModes) {
+      const annualFlow = detail.annualFlows[modeId];
+      const forecastAnnualFlow = calculateAnnualFlow(
+        annualFlow.capacityForecast ?? annualFlow.capacity,
+        annualFlow.occupancyForecast,
+        detail.frequency[modeId].forecast,
+      );
+
+      if (forecastAnnualFlow !== null) {
+        totalAnnualFlow += forecastAnnualFlow;
+        hasCalculatedFlow = true;
+      }
+    }
+  }
+
+  return hasCalculatedFlow ? totalAnnualFlow : null;
 }
 
 export function getPz1TaskStepCount(draft: Pz1Draft) {
@@ -1047,6 +1080,42 @@ export function validateRegionParameterField(fieldId: keyof Pz1RegionalParameter
   return parsed > 0 ? null : 'Значение должно быть больше 0';
 }
 
+export function validateOtherParameterField(fieldId: string, value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Заполните поле';
+  }
+
+  const parsed = parseNumericInput(trimmed);
+  if (parsed === null) {
+    return 'Значение должно быть числом';
+  }
+
+  if (fieldId === 'cityFareOrigin' || fieldId === 'cityFareDestination' || fieldId === 'carMaintenanceCostKm') {
+    return parsed >= 0 ? null : 'Значение не может быть отрицательным';
+  }
+
+  return parsed > 0 ? null : 'Значение должно быть больше 0';
+}
+
+export function validateAnnualFlowField(fieldId: string, value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Заполните поле';
+  }
+
+  const parsed = parseNumericInput(trimmed);
+  if (parsed === null) {
+    return 'Значение должно быть числом';
+  }
+
+  if (fieldId === 'occupancyExisting' || fieldId === 'occupancyForecast') {
+    return parsed > 0 && parsed <= 1 ? null : 'Коэффициент должен быть в диапазоне 0…1';
+  }
+
+  return parsed > 0 ? null : 'Значение должно быть больше 0';
+}
+
 export function isConsumerPropertiesComplete(draft: Pz1Draft) {
   const correspondenceTablesComplete = getSyncedCorrespondenceTables(draft).every((table) =>
     consumerRows.every((row) =>
@@ -1064,7 +1133,11 @@ export function isFinalIndicatorsComplete(draft: Pz1Draft) {
     }
 
     if (indicator.id === 'annualFlow') {
-      return getPz1PassengerFlowForecast(draft) !== null;
+      return true;
+    }
+
+    if (indicator.id === 'stationCount') {
+      return draft.stationDrafts.some((stationDraft) => stationDraft.enabled);
     }
 
     if (indicator.id === 'travelTime') {
@@ -1800,10 +1873,21 @@ function getTravelTimeTotalHours(
   return totalMinutes === null ? null : totalMinutes / 60;
 }
 
-function getTotalTransportCost(draft: Pz1Draft, detail: Pz1CorrespondenceDetailDraft, modeId: TransportModeId) {
+function getTotalTransportCost(
+  draft: Pz1Draft,
+  detail: Pz1CorrespondenceDetailDraft,
+  modeId: TransportModeId,
+  travelTimeHours: number,
+  discomfortAggregate: number | null,
+) {
   const fare = parseNumericInput(detail.fare[modeId].forecast);
   const cityFareOrigin = parseNumericInput(detail.otherParameters.cityFareOrigin);
   const cityFareDestination = parseNumericInput(detail.otherParameters.cityFareDestination);
+  const timeCost = getTravelTimeMonetaryCost(draft, detail, modeId, travelTimeHours, discomfortAggregate);
+
+  if (timeCost === null) {
+    return null;
+  }
 
   if (modeId === CAR_MODE_ID) {
     const routeDistanceKm = getCorrespondenceDistanceKm(draft, detail.fromLabel, detail.toLabel);
@@ -1820,17 +1904,60 @@ function getTotalTransportCost(draft: Pz1Draft, detail: Pz1CorrespondenceDetailD
       carMaintenanceCostKm !== null &&
       carOccupancy > 0
     ) {
-      return ((gasolinePrice * gasolineConsumption) / 100 + carMaintenanceCostKm) * routeDistanceKm / carOccupancy;
+      return ((gasolinePrice * gasolineConsumption) / 100 + carMaintenanceCostKm) * routeDistanceKm / carOccupancy + timeCost;
     }
 
-    return fare;
+    return fare === null ? null : fare + timeCost;
   }
 
   if (fare === null || cityFareOrigin === null || cityFareDestination === null) {
     return null;
   }
 
-  return fare + cityFareOrigin + cityFareDestination;
+  return fare + cityFareOrigin + cityFareDestination + timeCost;
+}
+
+function getTravelTimeMonetaryCost(
+  draft: Pz1Draft,
+  detail: Pz1CorrespondenceDetailDraft,
+  modeId: TransportModeId,
+  travelTimeHours: number,
+  discomfortAggregate: number | null,
+) {
+  const hourlyWage = getAverageHourlyWageForCorrespondence(draft, detail);
+  const frequencyFactor = getFrequencyFactor(detail, modeId);
+
+  if (hourlyWage === null || frequencyFactor === null || discomfortAggregate === null) {
+    return null;
+  }
+
+  return hourlyWage * travelTimeHours * (1 + discomfortAggregate) * frequencyFactor;
+}
+
+function getAverageHourlyWageForCorrespondence(draft: Pz1Draft, detail: Pz1CorrespondenceDetailDraft) {
+  const annualWorkHours = parseNumericInput(detail.otherParameters.annualWorkHours);
+  const regional = getPz1RegionalCharacteristics(draft);
+  const endpointRegions = [detail.fromLabel, detail.toLabel]
+    .map((label) => draft.stationDrafts.find((station) => station.label === label)?.region.trim())
+    .filter((region): region is string => Boolean(region));
+  const uniqueRegions = [...new Set(endpointRegions)];
+  const salaries = uniqueRegions.map((region) => parseNumericInput(regional.regionParameters?.[region]?.averageSalary ?? ''));
+
+  if (annualWorkHours === null || annualWorkHours <= 0 || salaries.some((salary) => salary === null || salary <= 0)) {
+    return null;
+  }
+
+  const averageMonthlySalary = (salaries as number[]).reduce((sum, salary) => sum + salary, 0) / salaries.length;
+  return (averageMonthlySalary * 12) / annualWorkHours;
+}
+
+function getFrequencyFactor(detail: Pz1CorrespondenceDetailDraft, modeId: TransportModeId) {
+  if (modeId === CAR_MODE_ID) {
+    return 1;
+  }
+
+  const frequency = parseNumericInput(detail.frequency[modeId].forecast);
+  return frequency !== null && frequency > 0 ? 1 / frequency : null;
 }
 
 function averageForecastMetric(

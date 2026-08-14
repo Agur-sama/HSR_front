@@ -50,9 +50,7 @@ import {
   getSyncedCorrespondenceDetails,
   getSyncedCorrespondenceTables,
   isHsrTravelTimeComplete,
-  isConsumerPropertiesComplete,
   isFinalIndicatorsComplete,
-  isPassengerFlowForecastComplete,
   isPassportComplete,
   isRegionalCharacteristicsComplete,
   isStationsStepComplete,
@@ -69,7 +67,10 @@ import {
   validateConsumerCell,
   validateDiscomfortCell,
   validateHsrSpeed,
+  validateAnnualFlowField,
+  validateOtherParameterField,
   validateRegionalCharacteristicField,
+  validateRegionParameterField,
   validateStationField,
 } from './model';
 import type { Pz1CorrespondenceDetailDraft, Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
@@ -171,24 +172,6 @@ function Pz1Workspace() {
       completionHint: 'Заполните параметры обоих регионов и индуцированный спрос',
     },
     ...correspondenceTaskSteps,
-    {
-      id: 'consumer-properties',
-      title: 'Потребительские свойства линии',
-      goal:
-        'Заполните характеристики поездки на каждом виде транспорта — они понадобятся для прогноза пассажиропотока.',
-      content: <ConsumerPropertiesStep />,
-      isComplete: isConsumerPropertiesComplete(draft),
-      completionHint: 'Заполните все обязательные поля, чтобы продолжить',
-    },
-    {
-      id: 'passenger-flow-forecast',
-      title: 'Прогноз пассажиропотока',
-      goal:
-        'Рассчитайте общий рост рынка и распределите прогноз по шести видам транспорта через гравитационную модель.',
-      content: <PassengerFlowForecastStep />,
-      isComplete: isPassengerFlowForecastComplete(draft),
-      completionHint: 'Заполните региональные параметры и таблицу по видам транспорта, чтобы получить прогноз',
-    },
     {
       id: 'final-indicators',
       title: 'Технико-экономические показатели',
@@ -709,6 +692,19 @@ function RegionalCharacteristicsStep() {
     });
   }
 
+  function getRegionParameters(region: string): Pz1RegionalParameterInputs {
+    return (
+      regional.regionParameters?.[region] ?? {
+        grpExisting: '',
+        grpForecast: '',
+        populationExisting: '',
+        populationForecast: '',
+        averageSalary: '',
+        kGdpFlow: '',
+      }
+    );
+  }
+
   return (
     <div className="regional-step">
       <section className="form-section">
@@ -717,31 +713,53 @@ function RegionalCharacteristicsStep() {
         {stationRegions.length === 0 ? (
           <p className="status-note">Вернитесь к карте и выберите регион для каждой включённой станции.</p>
         ) : (
-          <div className="region-parameter-grid">
-            {stationRegions.map((region) => {
-              const parameters = regional.regionParameters?.[region];
+          <div className="table-scroll">
+            <table className="input-table regional-parameter-table">
+              <thead>
+                <tr>
+                  <th>Регион</th>
+                  {regionalParameterFields.map((field) => (
+                    <th key={field.id}>
+                      {field.label}
+                      <small>{field.helper}</small>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {stationRegions.map((region) => {
+                  const parameters = getRegionParameters(region);
 
-              return (
-                <section className="region-parameter-card" key={region}>
-                  <h4>{region}</h4>
-                  <div className="regional-fields">
-                    {regionalParameterFields.map((field) => (
-                      <FieldWithHint
-                        hint={field.helper}
-                        id={`regional-${region}-${field.id}`}
-                        key={field.id}
-                        label={field.label}
-                        onChange={(value) => updateRegionParameter(region, field.id, value)}
-                        value={parameters?.[field.id] ?? ''}
-                      />
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
+                  return (
+                    <tr key={region}>
+                      <th scope="row">{region}</th>
+                      {regionalParameterFields.map((field) => {
+                        const value = parameters[field.id];
+                        const error = validateRegionParameterField(field.id, value);
+
+                        return (
+                          <td key={field.id}>
+                            <input
+                              aria-invalid={error ? true : undefined}
+                              className={error ? 'is-invalid' : undefined}
+                              inputMode="decimal"
+                              onChange={(event) => updateRegionParameter(region, field.id, event.target.value)}
+                              value={value}
+                            />
+                            {error ? <small className="field-error">{error}</small> : null}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
             <FieldWithHint
+              error={validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct)}
               hint="%"
               id="regional-inducedDemandPct"
+              inputMode="decimal"
               label="Прогнозируемый индуцированный спрос"
               onChange={(value) => updateRegionalField('inducedDemandPct', value)}
               value={regional.inducedDemandPct}
@@ -782,7 +800,12 @@ function CorrespondenceTravelTimeStep({ pairKey }: { pairKey: string }) {
         const nextCell = {
           ...currentCell,
           [side]: value,
-          forecast: side === 'existing' && !currentCell.forecast.trim() ? value : side === 'forecast' ? value : currentCell.forecast,
+          forecast:
+            side === 'existing' && shouldMirrorForecast(currentCell.existing, currentCell.forecast)
+              ? value
+              : side === 'forecast'
+                ? value
+                : currentCell.forecast,
         };
 
         return {
@@ -945,8 +968,10 @@ function CorrespondenceOtherParametersStep({ pairKey }: { pairKey: string }) {
       <div className="regional-fields">
         {correspondenceOtherParameterRows.map((row) => (
           <FieldWithHint
+            error={validateOtherParameterField(row.id, detail.otherParameters[row.id] ?? '')}
             hint={row.helper ?? ''}
             id={`${pairKey}-${row.id}`}
+            inputMode="decimal"
             key={row.id}
             label={row.label}
             onChange={(value) =>
@@ -978,17 +1003,18 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
     updateDraft((currentDraft) =>
       patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => {
         const currentFlow = currentDetail.annualFlows[modeId];
+        const capacityExistingValue = currentFlow.capacityExisting ?? currentFlow.capacity;
         const nextFlow = {
           ...currentFlow,
           [fieldId]: value,
           capacityForecast:
-            fieldId === 'capacityExisting' && !(currentFlow.capacityForecast ?? '').trim()
+            fieldId === 'capacityExisting' && shouldMirrorForecast(capacityExistingValue, currentFlow.capacityForecast ?? '')
               ? value
               : fieldId === 'capacityForecast'
                 ? value
                 : currentFlow.capacityForecast,
           occupancyForecast:
-            fieldId === 'occupancyExisting' && !currentFlow.occupancyForecast.trim()
+            fieldId === 'occupancyExisting' && shouldMirrorForecast(currentFlow.occupancyExisting, currentFlow.occupancyForecast)
               ? value
               : fieldId === 'occupancyForecast'
                 ? value
@@ -1026,43 +1052,65 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
             </tr>
           </thead>
           <tbody>
-            {transportColumns.map((column) => (
-              <tr key={column.id}>
-                <th scope="row">{column.label}</th>
-                <td>
-                  <input
-                    inputMode="decimal"
-                    onChange={(event) => updateAnnualFlow(column.id, 'capacityExisting', event.target.value)}
-                    value={detail.annualFlows[column.id].capacityExisting ?? detail.annualFlows[column.id].capacity}
-                  />
-                </td>
-                <td>
-                  <input
-                    inputMode="decimal"
-                    onChange={(event) => updateAnnualFlow(column.id, 'capacityForecast', event.target.value)}
-                    value={detail.annualFlows[column.id].capacityForecast ?? detail.annualFlows[column.id].capacity}
-                  />
-                </td>
-                <td>
-                  <input
-                    inputMode="decimal"
-                    onChange={(event) => updateAnnualFlow(column.id, 'occupancyExisting', event.target.value)}
-                    value={detail.annualFlows[column.id].occupancyExisting}
-                  />
-                </td>
-                <td>
-                  <input
-                    inputMode="decimal"
-                    onChange={(event) => updateAnnualFlow(column.id, 'occupancyForecast', event.target.value)}
-                    value={detail.annualFlows[column.id].occupancyForecast}
-                  />
-                </td>
-                <td>{detail.frequency[column.id].existing || '—'}</td>
-                <td>{detail.frequency[column.id].forecast || '—'}</td>
-                <td>{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].existingAnnualFlow)}</td>
-                <td>{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].forecastAnnualFlow)}</td>
-              </tr>
-            ))}
+            {transportColumns.map((column) => {
+              const annualFlow = detail.annualFlows[column.id];
+              const capacityExistingValue = annualFlow.capacityExisting ?? annualFlow.capacity;
+              const capacityForecastValue = annualFlow.capacityForecast ?? annualFlow.capacity;
+              const capacityExistingError = validateAnnualFlowField('capacityExisting', capacityExistingValue);
+              const capacityForecastError = validateAnnualFlowField('capacityForecast', capacityForecastValue);
+              const occupancyExistingError = validateAnnualFlowField('occupancyExisting', annualFlow.occupancyExisting);
+              const occupancyForecastError = validateAnnualFlowField('occupancyForecast', annualFlow.occupancyForecast);
+
+              return (
+                <tr key={column.id}>
+                  <th scope="row">{column.label}</th>
+                  <td>
+                    <input
+                      aria-invalid={capacityExistingError ? true : undefined}
+                      className={capacityExistingError ? 'is-invalid' : undefined}
+                      inputMode="decimal"
+                      onChange={(event) => updateAnnualFlow(column.id, 'capacityExisting', event.target.value)}
+                      value={capacityExistingValue}
+                    />
+                    {capacityExistingError ? <small className="field-error">{capacityExistingError}</small> : null}
+                  </td>
+                  <td>
+                    <input
+                      aria-invalid={capacityForecastError ? true : undefined}
+                      className={capacityForecastError ? 'is-invalid' : undefined}
+                      inputMode="decimal"
+                      onChange={(event) => updateAnnualFlow(column.id, 'capacityForecast', event.target.value)}
+                      value={capacityForecastValue}
+                    />
+                    {capacityForecastError ? <small className="field-error">{capacityForecastError}</small> : null}
+                  </td>
+                  <td>
+                    <input
+                      aria-invalid={occupancyExistingError ? true : undefined}
+                      className={occupancyExistingError ? 'is-invalid' : undefined}
+                      inputMode="decimal"
+                      onChange={(event) => updateAnnualFlow(column.id, 'occupancyExisting', event.target.value)}
+                      value={annualFlow.occupancyExisting}
+                    />
+                    {occupancyExistingError ? <small className="field-error">{occupancyExistingError}</small> : null}
+                  </td>
+                  <td>
+                    <input
+                      aria-invalid={occupancyForecastError ? true : undefined}
+                      className={occupancyForecastError ? 'is-invalid' : undefined}
+                      inputMode="decimal"
+                      onChange={(event) => updateAnnualFlow(column.id, 'occupancyForecast', event.target.value)}
+                      value={annualFlow.occupancyForecast}
+                    />
+                    {occupancyForecastError ? <small className="field-error">{occupancyForecastError}</small> : null}
+                  </td>
+                  <td>{detail.frequency[column.id].existing || '—'}</td>
+                  <td>{detail.frequency[column.id].forecast || '—'}</td>
+                  <td>{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].existingAnnualFlow)}</td>
+                  <td>{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].forecastAnnualFlow)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1414,7 +1462,11 @@ function FinalIndicatorsStep() {
     <div className="indicator-step">
       <div className="indicator-grid">
         {finalIndicators.map((indicator) => {
-          const isComputed = indicator.id === 'lineLength' || indicator.id === 'annualFlow' || indicator.id === 'travelTime';
+          const isComputed =
+            indicator.id === 'lineLength' ||
+            indicator.id === 'stationCount' ||
+            indicator.id === 'annualFlow' ||
+            indicator.id === 'travelTime';
 
           return (
             <FieldWithHint
@@ -1433,11 +1485,13 @@ function FinalIndicatorsStep() {
               value={
                 indicator.id === 'lineLength'
                   ? totalLengthText
-                  : indicator.id === 'annualFlow'
-                    ? computedFinalIndicators.annualFlow
-                    : indicator.id === 'travelTime'
-                      ? computedFinalIndicators.travelTime
-                    : draft.finalIndicators[indicator.id] ?? ''
+                  : indicator.id === 'stationCount'
+                    ? computedFinalIndicators.stationCount
+                    : indicator.id === 'annualFlow'
+                      ? computedFinalIndicators.annualFlow || 'не рассчитано'
+                      : indicator.id === 'travelTime'
+                        ? computedFinalIndicators.travelTime
+                        : draft.finalIndicators[indicator.id] ?? ''
               }
             />
           );
@@ -1957,8 +2011,17 @@ function mergeSplitValueOnInput(
   return {
     ...currentValue,
     [side]: value,
-    forecast: side === 'existing' && !currentValue.forecast.trim() ? value : side === 'forecast' ? value : currentValue.forecast,
+    forecast:
+      side === 'existing' && shouldMirrorForecast(currentValue.existing, currentValue.forecast)
+        ? value
+        : side === 'forecast'
+          ? value
+          : currentValue.forecast,
   };
+}
+
+function shouldMirrorForecast(existingValue: string, forecastValue: string) {
+  return !forecastValue.trim() || forecastValue === existingValue;
 }
 
 function formatOptionalPassengerFlowValue(value: number | undefined) {

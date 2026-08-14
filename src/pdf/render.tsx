@@ -5,8 +5,8 @@ import ptSerifBold from '@fontsource/pt-serif/files/pt-serif-cyrillic-700-normal
 import ralewayMedium from '@fontsource/raleway/files/raleway-cyrillic-500-normal.woff?url';
 import ralewayBold from '@fontsource/raleway/files/raleway-cyrillic-800-normal.woff?url';
 import { downloadTextFile } from '../bridge/io';
-import type { CorrespondenceTable, GeoPoint, Pz1PassengerFlowResult, Pz1Result, RouteLine } from '../bridge/schema';
-import { consumerRows, discomfortRows, finalIndicators, transportColumns } from '../modules/pz1/model';
+import type { CorrespondenceTable, GeoPoint, Pz1PassengerFlowResult, Pz1Result, RouteLine, TransportModeId } from '../bridge/schema';
+import { correspondenceTravelTimeRows, consumerRows, discomfortRows, finalIndicators, transportColumns } from '../modules/pz1/model';
 import type { StationRouteDistance } from '../modules/pz1/model';
 import { buildDisplayRoutePoints, computeRouteLineMetrics } from '../shared/lib/routeGeometry';
 
@@ -177,10 +177,6 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
         <KeyValueTable rows={sections[2].rows} />
         <RegionalCharacteristicsTable regionalCharacteristics={summary.regionalCharacteristics} />
         <CorrespondenceScenariosTable scenarios={summary.correspondenceScenarios ?? {}} />
-        <CorrespondenceTables tables={summary.consumerProperties ?? {}} />
-        <Text style={styles.caption}>Таблица 1 — Потребительские свойства по корреспонденциям</Text>
-        <DiscomfortMatrixTable matrix={summary.discomfortMatrix} />
-        <Text style={styles.caption}>Таблица 2 — Коэффициенты дискомфорта по видам транспорта</Text>
         <Text style={styles.sectionTitle}>4. Прогноз пассажиропотока</Text>
         <PassengerFlowForecastReport
           chartImage={summary.passengerFlowChartImage}
@@ -500,6 +496,41 @@ function CorrespondenceScenariosTable({ scenarios }: { scenarios: NonNullable<Pz
       {scenarioList.map((scenario) => (
         <View key={scenario.pairKey} style={styles.compactTableBlock} wrap={false}>
           <Text style={styles.compactTableTitle}>{scenario.title}</Text>
+          <View style={styles.compactTable}>
+            <View style={styles.compactHeaderRow}>
+              <Text style={styles.flowModeCell}>Вид транспорта</Text>
+              <Text style={styles.modeCell}>Время, ЧЧ:ММ</Text>
+              <Text style={styles.modeCell}>Дискомфорт</Text>
+              <Text style={styles.modeCell}>Рейсов/сутки</Text>
+              <Text style={styles.modeCell}>Руб./пасс.</Text>
+              <Text style={styles.modeCell}>Пасс./год</Text>
+            </View>
+            {transportColumns.map((column) => (
+              <View key={column.id} style={styles.tableRow}>
+                <Text style={styles.flowModeCell}>{column.label}</Text>
+                <Text style={styles.modeCell}>{formatSplitValue(
+                  formatScenarioTravelTime(scenario.travelTime, column.id, 'existing'),
+                  formatScenarioTravelTime(scenario.travelTime, column.id, 'forecast'),
+                )}</Text>
+                <Text style={styles.modeCell}>{formatSplitValue(
+                  formatNullableNumber(scenario.discomfortAggregates[column.id]?.existing),
+                  formatNullableNumber(scenario.discomfortAggregates[column.id]?.forecast),
+                )}</Text>
+                <Text style={styles.modeCell}>{formatSplitValue(
+                  formatRequiredValue(scenario.frequency[column.id]?.existing ?? ''),
+                  formatRequiredValue(scenario.frequency[column.id]?.forecast ?? ''),
+                )}</Text>
+                <Text style={styles.modeCell}>{formatSplitValue(
+                  formatRequiredValue(scenario.fare[column.id]?.existing ?? ''),
+                  formatRequiredValue(scenario.fare[column.id]?.forecast ?? ''),
+                )}</Text>
+                <Text style={styles.modeCell}>{formatSplitValue(
+                  formatOptionalInteger(scenario.annualFlows[column.id]?.existingAnnualFlow),
+                  formatOptionalInteger(scenario.annualFlows[column.id]?.forecastAnnualFlow),
+                )}</Text>
+              </View>
+            ))}
+          </View>
           {scenario.passengerFlowForecast ? (
             <View style={styles.compactTable}>
               <View style={styles.compactHeaderRow}>
@@ -757,6 +788,41 @@ function FinalIndicatorsTable({
 
 function getTransportModeLabel(modeId: string) {
   return transportColumns.find((column) => column.id === modeId)?.label ?? modeId;
+}
+
+function formatScenarioTravelTime(
+  travelTime: NonNullable<Pz1Result['correspondenceScenarios']>[string]['travelTime'],
+  modeId: TransportModeId,
+  side: 'existing' | 'forecast',
+) {
+  const totalMinutes = correspondenceTravelTimeRows.reduce<number | null>((sum, row) => {
+    if (sum === null) {
+      return null;
+    }
+
+    const value = travelTime[row.id]?.[modeId]?.[side] ?? '';
+    const minutes = parseDurationToMinutes(value);
+    return minutes === null ? null : sum + minutes;
+  }, 0);
+
+  return totalMinutes === null ? 'не заполнено' : formatDuration(totalMinutes);
+}
+
+function formatSplitValue(existingValue: string, forecastValue: string) {
+  return `${existingValue} / ${forecastValue}`;
+}
+
+function formatOptionalInteger(value: number | undefined) {
+  return value === undefined ? 'не заполнено' : formatInteger(value);
+}
+
+function formatNullableNumber(value: number | null | undefined) {
+  return value === null || value === undefined ? 'не заполнено' : formatNumber(value);
+}
+
+function parseDurationToMinutes(value: string) {
+  const match = /^(\d{1,2}):([0-5]\d)$/.exec(value.trim());
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
 
 function formatRequiredValue(value: string) {

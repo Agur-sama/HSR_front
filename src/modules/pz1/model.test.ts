@@ -3,19 +3,27 @@ import {
   createInitialPz1Draft,
   createPz1Result,
   createRouteLine,
+  correspondenceTravelTimeRows,
+  finalIndicators,
   getComputedFinalIndicators,
+  discomfortRows,
   getEnabledStationRegions,
   getHsrTravelTimeResult,
   getPz1PassengerFlowForecast,
+  getPz1CorrespondencePassengerFlowForecast,
   getPz1CorrespondenceScenarios,
   getPz1RegionalCharacteristics,
   getStationRouteDistances,
   getSyncedCorrespondenceDetails,
   getSyncedCorrespondenceTables,
+  isFinalIndicatorsComplete,
   isStationsStepComplete,
   updateCellValue,
+  transportColumns,
+  validateAnnualFlowField,
   validateConsumerCell,
   validateDiscomfortCell,
+  validateOtherParameterField,
 } from './model';
 
 describe('pz1 model', () => {
@@ -230,6 +238,61 @@ describe('pz1 model', () => {
     expect(createPz1Result(draft).finalIndicators?.annualFlow).toBe(expectedAnnualFlow);
   });
 
+  it('does not require manual annual flow on the final indicators step', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], lat: '0', lng: '0' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], lat: '0', lng: '1' };
+    draft.routePointDrafts = [
+      { id: 'route-point-1', lat: '0', lng: '0', sagittaToNextKm: '0' },
+      { id: 'route-point-2', lat: '0', lng: '1', sagittaToNextKm: '0' },
+    ];
+    draft.hsrTravelTimes = {
+      'А-Г': { speedKmh: '200' },
+    };
+    draft.finalIndicators = finalIndicators.reduce<Record<string, string>>((values, indicator) => {
+      if (indicator.id !== 'lineLength' && indicator.id !== 'annualFlow' && indicator.id !== 'travelTime') {
+        values[indicator.id] = indicator.id === 'riskNotes' ? 'Данные требуют проверки' : '1';
+      }
+      return values;
+    }, {});
+
+    expect(getComputedFinalIndicators(draft).annualFlow).toBe('');
+    expect(isFinalIndicatorsComplete(draft)).toBe(true);
+  });
+
+  it('fills final station count and annual flow from correspondence annual flow tables', () => {
+    const draft = createInitialPz1Draft();
+    draft.correspondenceTables['А-Г'].activeModes = ['hSR', 'airplane'];
+    draft.correspondenceDetails['А-Г'] = {
+      ...draft.correspondenceDetails['А-Г'],
+      frequency: {
+        ...draft.correspondenceDetails['А-Г'].frequency,
+        hSR: { existing: '0', forecast: '8' },
+        airplane: { existing: '3', forecast: '4' },
+      },
+      annualFlows: {
+        ...draft.correspondenceDetails['А-Г'].annualFlows,
+        hSR: {
+          ...draft.correspondenceDetails['А-Г'].annualFlows.hSR,
+          capacityForecast: '400',
+          occupancyForecast: '0,5',
+        },
+        airplane: {
+          ...draft.correspondenceDetails['А-Г'].annualFlows.airplane,
+          capacityForecast: '120',
+          occupancyForecast: '0,75',
+        },
+      },
+    };
+
+    const computed = getComputedFinalIndicators(draft);
+
+    expect(getPz1PassengerFlowForecast(draft)).toBeNull();
+    expect(computed.stationCount).toBe('2');
+    expect(computed.annualFlow).toBe(new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(715_400));
+    expect(createPz1Result(draft).finalIndicators?.annualFlow).toBe(computed.annualFlow);
+  });
+
   it('derives total demand growth inputs from the regional characteristics screen', () => {
     const draft = createInitialPz1Draft();
     draft.regionalCharacteristics = {
@@ -358,5 +421,83 @@ describe('pz1 model', () => {
 
     expect(scenario.annualFlows.airplane.existingAnnualFlow).toBe(18_250);
     expect(scenario.annualFlows.airplane.forecastAnnualFlow).toBe(73_000);
+  });
+
+  it('validates block 3 numeric cells with domain limits', () => {
+    expect(validateOtherParameterField('carOccupancy', '0')).toBe('Значение должно быть больше 0');
+    expect(validateOtherParameterField('cityFareOrigin', '-1')).toBe('Значение не может быть отрицательным');
+    expect(validateAnnualFlowField('occupancyForecast', '1,2')).toBe('Коэффициент должен быть в диапазоне 0…1');
+    expect(validateAnnualFlowField('capacityForecast', '200')).toBeNull();
+  });
+
+  it('uses regional salary, frequency and discomfort when building correspondence TTC', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], lat: '0', lng: '0' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], lat: '0', lng: '1' };
+    draft.routePointDrafts = [
+      { id: 'route-point-1', lat: '0', lng: '0', sagittaToNextKm: '0' },
+      { id: 'route-point-2', lat: '0', lng: '1', sagittaToNextKm: '0' },
+    ];
+    draft.hsrTravelTimes = {
+      'А-Г': { speedKmh: '200' },
+    };
+    draft.regionalCharacteristics = {
+      ...draft.regionalCharacteristics,
+      inducedDemandPct: '20',
+      regionParameters: {
+        [draft.stationDrafts[0].region]: {
+          grpExisting: '100',
+          grpForecast: '120',
+          populationExisting: '50',
+          populationForecast: '55',
+          averageSalary: '60000',
+          kGdpFlow: '1',
+        },
+        [draft.stationDrafts[3].region]: {
+          grpExisting: '120',
+          grpForecast: '144',
+          populationExisting: '60',
+          populationForecast: '66',
+          averageSalary: '80000',
+          kGdpFlow: '1',
+        },
+      },
+    };
+
+    const [detail] = getSyncedCorrespondenceDetails(draft);
+    for (const row of correspondenceTravelTimeRows) {
+      for (const column of transportColumns) {
+        detail.travelTime[row.id][column.id] = {
+          existing: row.id === 'cleanTravel' ? '02:00' : '00:10',
+          forecast: row.id === 'cleanTravel' ? '01:30' : '00:10',
+        };
+      }
+    }
+    for (const column of transportColumns) {
+      detail.frequency[column.id] = { existing: column.id === 'hSR' ? '0' : '2', forecast: column.id === 'car' ? '0' : '4' };
+      detail.fare[column.id] = { existing: column.id === 'hSR' ? '0' : '1000', forecast: column.id === 'car' ? '0' : '1200' };
+      detail.annualFlows[column.id] = {
+        capacity: '',
+        capacityExisting: '100',
+        capacityForecast: '120',
+        occupancyExisting: '0,5',
+        occupancyForecast: '0,5',
+      };
+    }
+    draft.correspondenceDetails[detail.pairKey] = detail;
+
+    const baseForecast = getPz1CorrespondencePassengerFlowForecast(draft, detail.pairKey);
+    expect(baseForecast).not.toBeNull();
+    const baseAirplaneTtc = Number(baseForecast?.inputs.modes.airplane.totalTransportCost);
+
+    for (const row of discomfortRows.slice(0, 8)) {
+      draft.correspondenceDetails[detail.pairKey].discomfortForecast.values[row.id].airplane = '1';
+    }
+
+    const highDiscomfortForecast = getPz1CorrespondencePassengerFlowForecast(draft, detail.pairKey);
+    const highAirplaneTtc = Number(highDiscomfortForecast?.inputs.modes.airplane.totalTransportCost);
+
+    expect(baseAirplaneTtc).toBeGreaterThan(1200);
+    expect(highAirplaneTtc).toBeGreaterThan(baseAirplaneTtc);
   });
 });
