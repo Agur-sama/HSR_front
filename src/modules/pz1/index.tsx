@@ -26,6 +26,8 @@ import { FieldWithHint } from '../../shared/ui/FieldWithHint';
 import { OsmStationMap } from './OsmStationMap';
 import {
   countFilledConsumerCells,
+  correspondenceOtherParameterRows,
+  correspondenceTravelTimeRows,
   consumerRows,
   createInitialPz1Draft,
   createPz1Bridge,
@@ -38,9 +40,12 @@ import {
   getEffectivePassengerFlowInputs,
   getHsrTravelTimeResult,
   getPz1PassengerFlowForecast,
+  getPz1CorrespondencePassengerFlowForecast,
+  getPz1CorrespondenceScenarios,
   getPz1RegionalCharacteristics,
   getRouteMetrics,
   getStationRouteDistances,
+  getSyncedCorrespondenceDetails,
   getSyncedCorrespondenceTables,
   isHsrTravelTimeComplete,
   isConsumerPropertiesComplete,
@@ -56,6 +61,7 @@ import {
   russianRegions,
   sanitizeFileName,
   syncCorrespondenceTables,
+  syncCorrespondenceDetails,
   transportColumns,
   updateCellValue,
   validateConsumerCell,
@@ -64,7 +70,7 @@ import {
   validateRegionalCharacteristicField,
   validateStationField,
 } from './model';
-import type { Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
+import type { Pz1CorrespondenceDetailDraft, Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
 import { getPz1VariantTitle, pz1Variants } from './variants';
 
 export function Pz1Module() {
@@ -78,6 +84,62 @@ export function Pz1Module() {
 function Pz1Workspace() {
   const { draft } = useModuleState<Pz1Draft>();
   const fileSlug = sanitizeFileName(draft.passport.lineTitle, 'pz1');
+  const correspondenceDetails = getSyncedCorrespondenceDetails(draft);
+  const correspondenceTaskSteps = correspondenceDetails.flatMap<ModuleTaskStep>((detail) => {
+    const title = getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel);
+
+    return [
+      {
+        id: `travel-time-${detail.pairKey}`,
+        title: `Время в пути: ${title}`,
+        goal: 'Заполните четыре составляющих реального времени в дороге для существующего и прогнозного состояния.',
+        content: <CorrespondenceTravelTimeStep pairKey={detail.pairKey} />,
+        isComplete: true,
+      },
+      {
+        id: `discomfort-${detail.pairKey}`,
+        title: `Дискомфорт: ${title}`,
+        goal: 'Проверьте коэффициенты дискомфорта по видам транспорта. Агрегат считается по строкам 1–8.',
+        content: <CorrespondenceDiscomfortStep pairKey={detail.pairKey} />,
+        isComplete: true,
+      },
+      {
+        id: `frequency-${detail.pairKey}`,
+        title: `Частота сообщения: ${title}`,
+        goal: 'Укажите частоту рейсов в сутки для существующего и планового состояния.',
+        content: <CorrespondenceFrequencyStep pairKey={detail.pairKey} />,
+        isComplete: true,
+      },
+      {
+        id: `fare-${detail.pairKey}`,
+        title: `Стоимость проезда: ${title}`,
+        goal: 'Укажите стоимость проезда в рублях на пассажира для каждого вида транспорта.',
+        content: <CorrespondenceFareStep pairKey={detail.pairKey} />,
+        isComplete: true,
+      },
+      {
+        id: `other-${detail.pairKey}`,
+        title: `Прочие параметры: ${title}`,
+        goal: 'Проверьте параметры городских поездок, автомобиля и рабочего времени, которые входят в TTC.',
+        content: <CorrespondenceOtherParametersStep pairKey={detail.pairKey} />,
+        isComplete: true,
+      },
+      {
+        id: `annual-flow-${detail.pairKey}`,
+        title: `Годовой пассажиропоток: ${title}`,
+        goal: 'Заполните вместимость и коэффициенты заполняемости, чтобы получить поток по формуле 365 × рейсы × вместимость × заполнение.',
+        content: <CorrespondenceAnnualFlowStep pairKey={detail.pairKey} />,
+        isComplete: true,
+      },
+      {
+        id: `model-${detail.pairKey}`,
+        title: `Модель прогноза: ${title}`,
+        goal: 'Проверьте результат гравитационной модели для этой корреспонденции.',
+        content: <CorrespondenceModelStep pairKey={detail.pairKey} />,
+        isComplete: true,
+      },
+    ];
+  });
   const taskSteps: ModuleTaskStep[] = [
     {
       id: 'stations',
@@ -106,6 +168,7 @@ function Pz1Workspace() {
       isComplete: isRegionalCharacteristicsComplete(draft),
       completionHint: 'Заполните параметры обоих регионов и индуцированный спрос',
     },
+    ...correspondenceTaskSteps,
     {
       id: 'consumer-properties',
       title: 'Потребительские свойства линии',
@@ -353,20 +416,24 @@ function StationsStep() {
   const selectedVariant = pz1Variants.find((variant) => variant.id === draft.selectedVariantId) ?? pz1Variants[0];
 
   function updateStation(label: Pz1StationDraft['label'], patch: Partial<Pz1StationDraft>) {
-    updateDraft((currentDraft) => ({
-      ...currentDraft,
-      stationDrafts: currentDraft.stationDrafts.map((stationDraft) =>
+    updateDraft((currentDraft) => {
+      const stationDrafts = currentDraft.stationDrafts.map((stationDraft) =>
         stationDraft.label === label ? { ...stationDraft, ...patch } : stationDraft,
-      ),
-      correspondenceTables: syncCorrespondenceTables(
-        {
-          stationDrafts: currentDraft.stationDrafts.map((stationDraft) =>
-            stationDraft.label === label ? { ...stationDraft, ...patch } : stationDraft,
-          ),
+      );
+
+      return {
+        ...currentDraft,
+        stationDrafts,
+        correspondenceTables: syncCorrespondenceTables({
+          stationDrafts,
           correspondenceTables: currentDraft.correspondenceTables,
-        },
-      ),
-    }));
+        }),
+        correspondenceDetails: syncCorrespondenceDetails({
+          stationDrafts,
+          correspondenceDetails: currentDraft.correspondenceDetails,
+        }),
+      };
+    });
   }
 
   function replaceRoutePointDrafts(routePointDrafts: Pz1Draft['routePointDrafts']) {
@@ -660,6 +727,342 @@ function RegionalCharacteristicsStep() {
         )}
       </section>
     </div>
+  );
+}
+
+function CorrespondenceTravelTimeStep({ pairKey }: { pairKey: string }) {
+  const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const detail = getDetailOrNull(draft, pairKey);
+  const scenario = getPz1CorrespondenceScenarios(draft)[pairKey];
+  const travelTime = scenario?.travelTime ?? detail?.travelTime;
+
+  if (!detail || !travelTime) {
+    return <MissingCorrespondence />;
+  }
+
+  function updateTravelTime(rowId: string, modeId: TransportModeId, side: 'existing' | 'forecast', value: string) {
+    updateDraft((currentDraft) =>
+      patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => ({
+        ...currentDetail,
+        travelTime: {
+          ...currentDetail.travelTime,
+          [rowId]: {
+            ...currentDetail.travelTime[rowId],
+            [modeId]: {
+              ...currentDetail.travelTime[rowId][modeId],
+              [side]: value,
+            },
+          },
+        },
+      })),
+    );
+  }
+
+  return (
+    <section className="form-section correspondence-detail">
+      <p className="eyebrow">Время в пути</p>
+      <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
+      <SplitModeTable
+        getReadOnly={(rowId, modeId, side) =>
+          (modeId === 'hSR' && side === 'existing') ||
+          (modeId === 'hSR' && rowId === 'cleanTravel' && side === 'forecast') ||
+          (modeId === 'car' && rowId !== 'cleanTravel')
+        }
+        onChange={updateTravelTime}
+        rows={correspondenceTravelTimeRows}
+        values={travelTime}
+      />
+      <p className="status-note">Формат времени: ЧЧ:ММ. Для личного автомобиля вводится только чистое время поездки.</p>
+    </section>
+  );
+}
+
+function CorrespondenceDiscomfortStep({ pairKey }: { pairKey: string }) {
+  const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const detail = getDetailOrNull(draft, pairKey);
+  const scenario = getPz1CorrespondenceScenarios(draft)[pairKey];
+
+  if (!detail) {
+    return <MissingCorrespondence />;
+  }
+
+  function updateDiscomfort(side: 'existing' | 'forecast', rowId: string, modeId: TransportModeId, value: string) {
+    updateDraft((currentDraft) =>
+      patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => {
+        const matrixKey = side === 'existing' ? 'discomfortExisting' : 'discomfortForecast';
+
+        return {
+          ...currentDetail,
+          [matrixKey]: {
+            values: updateCellValue(currentDetail[matrixKey].values, rowId, modeId, value) as Record<
+              string,
+              Record<TransportModeId, string>
+            >,
+          },
+        };
+      }),
+    );
+  }
+
+  return (
+    <div className="correspondence-split-page">
+      <DiscomfortEditTable
+        aggregates={scenario?.discomfortAggregates}
+        caption="Существующие коэффициенты дискомфорта"
+        matrix={detail.discomfortExisting}
+        onChange={(rowId, modeId, value) => updateDiscomfort('existing', rowId, modeId, value)}
+        side="existing"
+      />
+      <DiscomfortEditTable
+        aggregates={scenario?.discomfortAggregates}
+        caption="Прогнозные коэффициенты дискомфорта"
+        matrix={detail.discomfortForecast}
+        onChange={(rowId, modeId, value) => updateDiscomfort('forecast', rowId, modeId, value)}
+        side="forecast"
+      />
+    </div>
+  );
+}
+
+function CorrespondenceFrequencyStep({ pairKey }: { pairKey: string }) {
+  const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const detail = getDetailOrNull(draft, pairKey);
+
+  if (!detail) {
+    return <MissingCorrespondence />;
+  }
+
+  return (
+    <section className="form-section correspondence-detail">
+      <p className="eyebrow">Частота сообщения</p>
+      <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
+      <TransportSplitRows
+        getReadOnly={(modeId, side) => modeId === 'car' || (modeId === 'hSR' && side === 'existing')}
+        helper="рейсов/сутки"
+        onChange={(modeId, side, value) =>
+          updateDraft((currentDraft) =>
+            patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => ({
+              ...currentDetail,
+              frequency: {
+                ...currentDetail.frequency,
+                [modeId]: { ...currentDetail.frequency[modeId], [side]: value },
+              },
+            })),
+          )
+        }
+        values={detail.frequency}
+      />
+      <p className="status-note">Для ВСМ существующая частота равна 0. Для личного автомобиля частота заблокирована.</p>
+    </section>
+  );
+}
+
+function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
+  const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const detail = getDetailOrNull(draft, pairKey);
+
+  if (!detail) {
+    return <MissingCorrespondence />;
+  }
+
+  return (
+    <section className="form-section correspondence-detail">
+      <p className="eyebrow">Стоимость проезда</p>
+      <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
+      <TransportSplitRows
+        getReadOnly={(modeId, side) => modeId === 'hSR' && side === 'existing'}
+        helper="руб./пасс."
+        onChange={(modeId, side, value) =>
+          updateDraft((currentDraft) =>
+            patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => ({
+              ...currentDetail,
+              fare: {
+                ...currentDetail.fare,
+                [modeId]: { ...currentDetail.fare[modeId], [side]: value },
+              },
+            })),
+          )
+        }
+        values={detail.fare}
+      />
+    </section>
+  );
+}
+
+function CorrespondenceOtherParametersStep({ pairKey }: { pairKey: string }) {
+  const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const detail = getDetailOrNull(draft, pairKey);
+
+  if (!detail) {
+    return <MissingCorrespondence />;
+  }
+
+  return (
+    <section className="form-section correspondence-detail">
+      <p className="eyebrow">Прочие параметры</p>
+      <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
+      <div className="regional-fields">
+        {correspondenceOtherParameterRows.map((row) => (
+          <FieldWithHint
+            hint={row.helper ?? ''}
+            id={`${pairKey}-${row.id}`}
+            key={row.id}
+            label={row.label}
+            onChange={(value) =>
+              updateDraft((currentDraft) =>
+                patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => ({
+                  ...currentDetail,
+                  otherParameters: { ...currentDetail.otherParameters, [row.id]: value },
+                })),
+              )
+            }
+            value={detail.otherParameters[row.id] ?? ''}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
+  const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const detail = getDetailOrNull(draft, pairKey);
+  const scenario = getPz1CorrespondenceScenarios(draft)[pairKey];
+
+  if (!detail || !scenario) {
+    return <MissingCorrespondence />;
+  }
+
+  function updateAnnualFlow(modeId: TransportModeId, fieldId: keyof Pz1CorrespondenceDetailDraft['annualFlows'][TransportModeId], value: string) {
+    updateDraft((currentDraft) =>
+      patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => ({
+        ...currentDetail,
+        annualFlows: {
+          ...currentDetail.annualFlows,
+          [modeId]: { ...currentDetail.annualFlows[modeId], [fieldId]: value },
+        },
+      })),
+    );
+  }
+
+  return (
+    <section className="form-section correspondence-detail">
+      <p className="eyebrow">Пассажиропоток</p>
+      <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
+      <div className="table-scroll">
+        <table className="input-table">
+          <thead>
+            <tr>
+              <th>Вид транспорта</th>
+              <th>Вместимость ТС, пасс.</th>
+              <th>Заполняемость существующая</th>
+              <th>Заполняемость прогнозная</th>
+              <th>Рейсов/сутки существующие</th>
+              <th>Рейсов/сутки прогноз</th>
+              <th>Поток существующий, пасс./год</th>
+              <th>Поток прогнозный, пасс./год</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transportColumns.map((column) => (
+              <tr key={column.id}>
+                <th scope="row">{column.label}</th>
+                <td>
+                  <input
+                    inputMode="decimal"
+                    onChange={(event) => updateAnnualFlow(column.id, 'capacity', event.target.value)}
+                    value={detail.annualFlows[column.id].capacity}
+                  />
+                </td>
+                <td>
+                  <input
+                    inputMode="decimal"
+                    onChange={(event) => updateAnnualFlow(column.id, 'occupancyExisting', event.target.value)}
+                    value={detail.annualFlows[column.id].occupancyExisting}
+                  />
+                </td>
+                <td>
+                  <input
+                    inputMode="decimal"
+                    onChange={(event) => updateAnnualFlow(column.id, 'occupancyForecast', event.target.value)}
+                    value={detail.annualFlows[column.id].occupancyForecast}
+                  />
+                </td>
+                <td>{detail.frequency[column.id].existing || '—'}</td>
+                <td>{detail.frequency[column.id].forecast || '—'}</td>
+                <td>{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].existingAnnualFlow)}</td>
+                <td>{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].forecastAnnualFlow)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function CorrespondenceModelStep({ pairKey }: { pairKey: string }) {
+  const { draft } = useModuleState<Pz1Draft>();
+  const detail = getDetailOrNull(draft, pairKey);
+  const forecast = getPz1CorrespondencePassengerFlowForecast(draft, pairKey);
+  const chartData = forecast ? buildPassengerFlowChartData(forecast) : [];
+
+  if (!detail) {
+    return <MissingCorrespondence />;
+  }
+
+  return (
+    <section className="forecast-summary-panel">
+      <p className="eyebrow">Модель</p>
+      <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
+      {forecast ? (
+        <>
+          <dl className="forecast-summary-grid">
+            <div>
+              <dt>Существующий поток</dt>
+              <dd>{formatPassengerFlowValue(forecast.totalDemand.existingAnnualFlow)}</dd>
+            </div>
+            <div>
+              <dt>Базовый прогноз</dt>
+              <dd>{formatPassengerFlowValue(forecast.totalDemand.baseForecast)}</dd>
+            </div>
+            <div>
+              <dt>Индуцированный спрос</dt>
+              <dd>{formatPassengerFlowValue(forecast.totalDemand.inducedDemand)}</dd>
+            </div>
+            <div>
+              <dt>Итоговый прогноз</dt>
+              <dd>{formatPassengerFlowValue(forecast.totalDemand.totalForecast)}</dd>
+            </div>
+          </dl>
+          <div className="forecast-output-grid">
+            <div className="forecast-chart">
+              <ResponsiveContainer height={300} width="100%">
+                <BarChart data={chartData} margin={{ bottom: 8, left: 10, right: 10, top: 18 }}>
+                  <CartesianGrid stroke="#e4edfa" vertical={false} />
+                  <XAxis dataKey="name" />
+                  <YAxis tickFormatter={(value) => formatCompactPassengerFlowValue(Number(value))} />
+                  <Tooltip />
+                  <Legend />
+                  {transportColumns.map((column) => (
+                    <Bar
+                      dataKey={column.id}
+                      fill={passengerFlowChartColors[column.id]}
+                      key={column.id}
+                      name={column.label}
+                      stackId="flow"
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <ForecastResultTable forecast={forecast} />
+          </div>
+        </>
+      ) : (
+        <p className="status-note">Заполните региональные параметры, время, частоту, стоимость и годовой поток для этой корреспонденции.</p>
+      )}
+    </section>
   );
 }
 
@@ -1023,6 +1426,7 @@ function ResultStep() {
           filledConsumerCells,
           filledIndicatorCount,
           createdAt: draft.passport.createdAt,
+          correspondenceScenarios: result.correspondenceScenarios,
           consumerProperties: result.consumerProperties,
           discomfortMatrix: result.discomfortMatrix,
           finalIndicators: result.finalIndicators,
@@ -1092,6 +1496,187 @@ function ResultStep() {
         {exportStatus ? <p className="status-note">{exportStatus}</p> : null}
       </section>
     </div>
+  );
+}
+
+function SplitModeTable({
+  getReadOnly,
+  onChange,
+  rows,
+  values,
+}: {
+  getReadOnly?: (rowId: string, modeId: TransportModeId, side: 'existing' | 'forecast') => boolean;
+  onChange: (rowId: string, modeId: TransportModeId, side: 'existing' | 'forecast', value: string) => void;
+  rows: typeof correspondenceTravelTimeRows;
+  values: Pz1CorrespondenceDetailDraft['travelTime'];
+}) {
+  return (
+    <div className="table-scroll">
+      <table className="input-table split-mode-table">
+        <thead>
+          <tr>
+            <th>Показатель</th>
+            {transportColumns.map((column) => (
+              <th key={column.id}>{column.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <th scope="row">
+                {row.label}
+                {row.helper ? <small>{row.helper}</small> : null}
+              </th>
+              {transportColumns.map((column) => (
+                <td key={column.id}>
+                  <label className="split-input">
+                    <span>Сущ.</span>
+                    <input
+                      inputMode="numeric"
+                      onChange={(event) => onChange(row.id, column.id, 'existing', event.target.value)}
+                      readOnly={getReadOnly?.(row.id, column.id, 'existing')}
+                      value={values[row.id][column.id].existing}
+                    />
+                  </label>
+                  <label className="split-input">
+                    <span>Прогн.</span>
+                    <input
+                      inputMode="numeric"
+                      onChange={(event) => onChange(row.id, column.id, 'forecast', event.target.value)}
+                      readOnly={getReadOnly?.(row.id, column.id, 'forecast')}
+                      value={values[row.id][column.id].forecast}
+                    />
+                  </label>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DiscomfortEditTable({
+  aggregates,
+  caption,
+  matrix,
+  onChange,
+  side,
+}: {
+  aggregates?: Record<TransportModeId, { existing: number | null; forecast: number | null }>;
+  caption: string;
+  matrix: Pz1Draft['discomfortMatrix'];
+  onChange: (rowId: string, modeId: TransportModeId, value: string) => void;
+  side: 'existing' | 'forecast';
+}) {
+  return (
+    <section className="form-section correspondence-detail">
+      <DataEntryTable
+        caption={caption}
+        columns={transportColumns}
+        getCellMeta={(rowId, columnId) => getDiscomfortCellMeta(matrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
+        getError={(rowId, columnId) => validateDiscomfortCell(matrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
+        getInputClassName={() => 'discomfort-value'}
+        getInputStyle={(rowId, columnId) => getDiscomfortInputStyle(matrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
+        onChange={(rowId, columnId, value) => onChange(rowId, columnId as TransportModeId, value)}
+        rows={discomfortRows}
+        values={matrix.values}
+      />
+      <div className="aggregate-strip">
+        {transportColumns.map((column) => (
+          <span key={column.id}>
+            {column.label}: {formatNullableDecimal(aggregates?.[column.id]?.[side] ?? null)}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TransportSplitRows({
+  getReadOnly,
+  helper,
+  onChange,
+  values,
+}: {
+  getReadOnly?: (modeId: TransportModeId, side: 'existing' | 'forecast') => boolean;
+  helper: string;
+  onChange: (modeId: TransportModeId, side: 'existing' | 'forecast', value: string) => void;
+  values: Pz1CorrespondenceDetailDraft['frequency'];
+}) {
+  return (
+    <div className="table-scroll">
+      <table className="input-table">
+        <thead>
+          <tr>
+            <th>Вид транспорта</th>
+            <th>Существующее, {helper}</th>
+            <th>Прогнозное, {helper}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {transportColumns.map((column) => (
+            <tr key={column.id}>
+              <th scope="row">{column.label}</th>
+              <td>
+                <input
+                  inputMode="decimal"
+                  onChange={(event) => onChange(column.id, 'existing', event.target.value)}
+                  readOnly={getReadOnly?.(column.id, 'existing')}
+                  value={values[column.id].existing}
+                />
+              </td>
+              <td>
+                <input
+                  inputMode="decimal"
+                  onChange={(event) => onChange(column.id, 'forecast', event.target.value)}
+                  readOnly={getReadOnly?.(column.id, 'forecast')}
+                  value={values[column.id].forecast}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ForecastResultTable({ forecast }: { forecast: Pz1PassengerFlowResult }) {
+  return (
+    <div className="table-scroll">
+      <table className="forecast-result-table">
+        <thead>
+          <tr>
+            <th>Вид транспорта</th>
+            <th>Существующий, пасс./год</th>
+            <th>Прогноз, пасс./год</th>
+            <th>Доля</th>
+          </tr>
+        </thead>
+        <tbody>
+          {forecast.modes.map((mode) => (
+            <tr key={mode.modeId}>
+              <th scope="row">{getTransportModeLabel(mode.modeId)}</th>
+              <td>{formatPassengerFlowValue(mode.existingAnnualFlow)}</td>
+              <td>{formatPassengerFlowValue(mode.forecastAnnualFlow)}</td>
+              <td>{formatPercent(mode.forecastShare)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MissingCorrespondence() {
+  return (
+    <section className="empty-state">
+      <h3>Корреспонденция не найдена</h3>
+      <p>Вернитесь к карте и проверьте включённые станции.</p>
+    </section>
   );
 }
 
@@ -1245,6 +1830,39 @@ function validatePassengerFlowModeInput(fieldId: keyof Pz1PassengerFlowModeInput
   }
 
   return null;
+}
+
+function getDetailOrNull(draft: Pz1Draft, pairKey: string) {
+  return getSyncedCorrespondenceDetails(draft).find((detail) => detail.pairKey === pairKey) ?? null;
+}
+
+function patchCorrespondenceDetail(
+  draft: Pz1Draft,
+  pairKey: string,
+  updater: (detail: Pz1CorrespondenceDetailDraft) => Pz1CorrespondenceDetailDraft,
+) {
+  const syncedDetails = syncCorrespondenceDetails(draft);
+  const currentDetail = syncedDetails[pairKey];
+
+  if (!currentDetail) {
+    return draft;
+  }
+
+  return {
+    ...draft,
+    correspondenceDetails: {
+      ...syncedDetails,
+      [pairKey]: updater(currentDetail),
+    },
+  };
+}
+
+function formatOptionalPassengerFlowValue(value: number | undefined) {
+  return value === undefined ? '—' : formatPassengerFlowValue(value);
+}
+
+function formatNullableDecimal(value: number | null) {
+  return value === null ? '—' : new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 4 }).format(value);
 }
 
 function isFilled(value: string) {

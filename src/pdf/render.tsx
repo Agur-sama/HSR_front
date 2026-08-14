@@ -50,6 +50,7 @@ export interface Pz1PdfSummary {
   filledConsumerCells: number;
   filledIndicatorCount: number;
   createdAt: string;
+  correspondenceScenarios?: Pz1Result['correspondenceScenarios'];
   consumerProperties?: Pz1Result['consumerProperties'];
   discomfortMatrix?: Pz1Result['discomfortMatrix'];
   finalIndicators?: Pz1Result['finalIndicators'];
@@ -175,6 +176,7 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
         <Text style={styles.sectionTitle}>3. Матрица корреспонденций</Text>
         <KeyValueTable rows={sections[2].rows} />
         <RegionalCharacteristicsTable regionalCharacteristics={summary.regionalCharacteristics} />
+        <CorrespondenceScenariosTable scenarios={summary.correspondenceScenarios ?? {}} />
         <CorrespondenceTables tables={summary.consumerProperties ?? {}} />
         <Text style={styles.caption}>Таблица 1 — Потребительские свойства по корреспонденциям</Text>
         <DiscomfortMatrixTable matrix={summary.discomfortMatrix} />
@@ -440,6 +442,45 @@ function RegionalCharacteristicsTable({
           <Text style={styles.flowValueCell}>{formatRequiredValue(regionalCharacteristics.inducedDemandPct)}</Text>
         </View>
       </View>
+    </>
+  );
+}
+
+function CorrespondenceScenariosTable({ scenarios }: { scenarios: NonNullable<Pz1Result['correspondenceScenarios']> }) {
+  const scenarioList = Object.values(scenarios);
+
+  if (scenarioList.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <Text style={styles.caption}>Таблица 4 — Расчёты по корреспонденциям</Text>
+      {scenarioList.map((scenario) => (
+        <View key={scenario.pairKey} style={styles.compactTableBlock} wrap={false}>
+          <Text style={styles.compactTableTitle}>{scenario.title}</Text>
+          {scenario.passengerFlowForecast ? (
+            <View style={styles.compactTable}>
+              <View style={styles.compactHeaderRow}>
+                <Text style={styles.flowModeCell}>Вид транспорта</Text>
+                <Text style={styles.flowValueCell}>Существующий поток</Text>
+                <Text style={styles.flowValueCell}>Прогноз</Text>
+                <Text style={styles.flowShareCell}>Доля</Text>
+              </View>
+              {scenario.passengerFlowForecast.modes.map((mode) => (
+                <View key={mode.modeId} style={styles.tableRow}>
+                  <Text style={styles.flowModeCell}>{getTransportModeLabel(mode.modeId)}</Text>
+                  <Text style={styles.flowValueCell}>{formatInteger(mode.existingAnnualFlow)}</Text>
+                  <Text style={styles.flowValueCell}>{formatInteger(mode.forecastAnnualFlow)}</Text>
+                  <Text style={styles.flowShareCell}>{formatPercent(mode.forecastShare)}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.paragraph}>Модель по этой корреспонденции пока не рассчитана.</Text>
+          )}
+        </View>
+      ))}
     </>
   );
 }

@@ -130,6 +130,33 @@ export interface Pz1RegionalCharacteristicInputs {
   inducedDemandPct: string;
 }
 
+export interface SplitTransportValue {
+  existing: string;
+  forecast: string;
+}
+
+export interface Pz1AnnualFlowModeInputs {
+  capacity: string;
+  occupancyExisting: string;
+  occupancyForecast: string;
+  existingAnnualFlow?: number;
+  forecastAnnualFlow?: number;
+}
+
+export interface Pz1CorrespondenceScenario {
+  pairKey: string;
+  title: string;
+  travelTime: Record<string, Record<TransportModeId, SplitTransportValue>>;
+  discomfortExisting: Pz1DiscomfortMatrix;
+  discomfortForecast: Pz1DiscomfortMatrix;
+  discomfortAggregates: Record<TransportModeId, { existing: number | null; forecast: number | null }>;
+  frequency: Record<TransportModeId, SplitTransportValue>;
+  fare: Record<TransportModeId, SplitTransportValue>;
+  otherParameters: Record<string, string>;
+  annualFlows: Record<TransportModeId, Pz1AnnualFlowModeInputs>;
+  passengerFlowForecast?: Pz1PassengerFlowResult;
+}
+
 export interface Pz1Result {
   stations: Pz1Station[];
   routeLine: RouteLine;
@@ -138,6 +165,7 @@ export interface Pz1Result {
   variantId?: string;
   hsrTravelTime?: Pz1HsrTravelTimeResult;
   regionalCharacteristics?: Pz1RegionalCharacteristicInputs;
+  correspondenceScenarios?: Record<string, Pz1CorrespondenceScenario>;
   consumerProperties?: Record<string, CorrespondenceTable>;
   discomfortMatrix?: Pz1DiscomfortMatrix;
   passengerFlowForecast?: Pz1PassengerFlowResult;

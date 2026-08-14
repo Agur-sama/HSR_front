@@ -1204,6 +1204,56 @@ input.is-invalid {
   width: min(150px, 100%);
 }
 
+.split-mode-table td {
+  min-width: 150px;
+}
+
+.split-input {
+  display: grid;
+  grid-template-columns: 48px minmax(78px, 1fr);
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.split-input:last-child {
+  margin-bottom: 0;
+}
+
+.split-input input[readonly],
+.input-table input[readonly] {
+  background: var(--panel-alt);
+  color: var(--muted);
+}
+
+.correspondence-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.correspondence-split-page {
+  display: grid;
+  gap: 16px;
+}
+
+.aggregate-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.aggregate-strip span {
+  border-radius: 7px;
+  background: var(--bg-soft);
+  padding: 7px 9px;
+  color: var(--indigo);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .region-pair-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -3,6 +3,7 @@ import type {
   Pz1PassengerFlowRegionalInputs,
   Pz1DiscomfortMatrix,
   Pz1RegionalCharacteristicInputs,
+  SplitTransportValue,
   StationLabel,
   StationType,
   TransportModeId,
@@ -61,6 +62,25 @@ export interface Pz1HsrSpeedDraft {
   speedKmh: string;
 }
 
+export interface Pz1CorrespondenceAnnualFlowDraft {
+  capacity: string;
+  occupancyExisting: string;
+  occupancyForecast: string;
+}
+
+export interface Pz1CorrespondenceDetailDraft {
+  pairKey: string;
+  fromLabel: StationLabel;
+  toLabel: StationLabel;
+  travelTime: Record<string, Record<TransportModeId, SplitTransportValue>>;
+  discomfortExisting: Pz1DiscomfortMatrix;
+  discomfortForecast: Pz1DiscomfortMatrix;
+  frequency: Record<TransportModeId, SplitTransportValue>;
+  fare: Record<TransportModeId, SplitTransportValue>;
+  otherParameters: Record<string, string>;
+  annualFlows: Record<TransportModeId, Pz1CorrespondenceAnnualFlowDraft>;
+}
+
 export interface Pz1Draft {
   passport: Pz1PassportDraft;
   selectedVariantId: string;
@@ -71,6 +91,7 @@ export interface Pz1Draft {
   discomfortMatrix: Pz1DiscomfortMatrix;
   hsrTravelTimes: Record<string, Pz1HsrSpeedDraft>;
   regionalCharacteristics: Pz1RegionalCharacteristicInputs;
+  correspondenceDetails: Record<string, Pz1CorrespondenceDetailDraft>;
   passengerFlowForecast: Pz1PassengerFlowForecastDraft;
   finalIndicators: Record<string, string>;
   notes: string;

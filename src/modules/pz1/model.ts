@@ -21,7 +21,14 @@ import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../sha
 import { passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
 import { buildDisplayRoutePoints, computeRouteLineMetrics, haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import type { DataEntryColumn, DataEntryRow } from '../../shared/ui/DataEntryTable';
-import type { Pz1CorrespondenceTableDraft, Pz1Draft, Pz1HsrSpeedDraft, Pz1RoutePointDraft, Pz1StationDraft } from './types';
+import type {
+  Pz1CorrespondenceDetailDraft,
+  Pz1CorrespondenceTableDraft,
+  Pz1Draft,
+  Pz1HsrSpeedDraft,
+  Pz1RoutePointDraft,
+  Pz1StationDraft,
+} from './types';
 import { pz1Variants } from './variants';
 
 const STATION_LABELS: StationLabel[] = ['А', 'Б', 'В', 'Г'];
@@ -154,6 +161,60 @@ export const discomfortRows: DataEntryRow[] = [
   { id: 'comfortElasticity', label: 'Коэффициент эластичности к уровню комфорта' },
 ];
 
+export const correspondenceTravelTimeRows: DataEntryRow[] = [
+  { id: 'originAccess', label: 'Среднее время от центра города 1 до вокзала/автовокзала/аэропорта', helper: 'ЧЧ:ММ' },
+  { id: 'waiting', label: 'Среднее время ожидания отправления ТС', helper: 'ЧЧ:ММ' },
+  { id: 'cleanTravel', label: 'Чистое время поездки', helper: 'ЧЧ:ММ' },
+  { id: 'destinationAccess', label: 'Среднее время от вокзала/аэропорта до центра города 2', helper: 'ЧЧ:ММ' },
+];
+
+export const correspondenceOtherParameterRows: DataEntryRow[] = [
+  { id: 'cityFareOrigin', label: 'Стоимость проезда по городу 1', helper: 'руб.' },
+  { id: 'cityFareDestination', label: 'Стоимость проезда по городу 2', helper: 'руб.' },
+  { id: 'carOccupancy', label: 'Наполняемость автомобиля', helper: 'чел.' },
+  { id: 'annualWorkHours', label: 'Количество рабочих часов в году', helper: 'ч' },
+  { id: 'gasolinePrice', label: 'Стоимость бензина АИ-92', helper: 'руб./л' },
+  { id: 'gasolineConsumption', label: 'Расход бензина на 100 км', helper: 'л/100 км' },
+  { id: 'carMaintenanceCostKm', label: 'Стоимость ОСАГО и ТО за 1 км', helper: 'руб./км' },
+];
+
+const defaultOtherParameterValues: Record<string, string> = {
+  cityFareOrigin: '33',
+  cityFareDestination: '75',
+  carOccupancy: '1,3',
+  annualWorkHours: '1973',
+  gasolinePrice: '55',
+  gasolineConsumption: '11',
+  carMaintenanceCostKm: '1,75',
+};
+
+const defaultOccupancyByMode: Partial<Record<TransportModeId, string>> = {
+  hSR: '0,7',
+  airplane: '0,95',
+  suburbanTrain: '0,7',
+  longDistanceTrain: '0,9',
+  bus: '0,95',
+  car: '1',
+};
+
+const defaultExistingDiscomfortValues: Partial<Record<TransportModeId, string[]>> = {
+  hSR: ['0', '0', '0', '0', '0', '0', '0', '0', '1'],
+  airplane: ['0', '0,8', '0,1', '0,4', '0,3', '0,1', '0,7', '1', '1'],
+  suburbanTrain: ['0,6', '0,9', '0,5', '0,9', '0', '0,7', '0,3', '0,1', '1'],
+  longDistanceTrain: ['0', '0,2', '0,4', '0,2', '0', '0,1', '0,9', '1', '1'],
+  bus: ['0,5', '1', '0,8', '1', '0,6', '0,3', '0,7', '0', '1'],
+  car: ['0', '0,2', '0', '1', '0,7', '0', '0', '0', '1'],
+};
+
+const defaultForecastDiscomfortValues: Record<TransportModeId, string[]> = {
+  hSR: ['0', '0,1', '0,1', '0,1', '0', '0,1', '0,6', '0,3', '1'],
+  airplane: ['0', '0,8', '0,1', '0,4', '0,3', '0,1', '0,7', '1', '1'],
+  suburbanTrain: ['0,6', '0,9', '0,5', '0,9', '0', '0,7', '0,3', '0,1', '1'],
+  longDistanceTrain: ['0', '0,2', '0,4', '0,2', '0', '0,1', '0,9', '1', '1'],
+  bus: ['0,5', '1', '0,8', '1', '0,6', '0,3', '0,7', '0', '1'],
+  car: ['0', '0,2', '0', '1', '0,9', '0', '0', '0', '1'],
+};
+
 export interface StationRouteDistance {
   fromLabel: StationLabel;
   toLabel: StationLabel;
@@ -247,6 +308,13 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
     discomfortMatrix: mergeDiscomfortMatrix(importedPz1?.discomfortMatrix),
     hsrTravelTimes: mergeHsrTravelTimes(importedPz1?.hsrTravelTime),
     regionalCharacteristics: mergeRegionalCharacteristics(importedPz1?.regionalCharacteristics, stationDrafts, variant),
+    correspondenceDetails: syncCorrespondenceDetails(
+      {
+        stationDrafts,
+        correspondenceDetails: mergeCorrespondenceDetails(importedPz1?.correspondenceScenarios),
+      },
+      stationDrafts,
+    ),
     passengerFlowForecast: mergePassengerFlowForecast(importedPz1?.passengerFlowForecast?.inputs),
     finalIndicators: mergeFinalIndicators(importedPz1?.finalIndicators),
     notes: importedPz1?.notes ?? '',
@@ -291,6 +359,7 @@ export function createPz1Result(draft: Pz1Draft): Pz1Result {
     variantId: draft.selectedVariantId,
     hsrTravelTime: hsrTravelTime ?? undefined,
     regionalCharacteristics: getPz1RegionalCharacteristics(draft),
+    correspondenceScenarios: getPz1CorrespondenceScenarios(draft),
     consumerProperties: correspondenceTables.reduce<Record<string, CorrespondenceTable>>((tables, table) => {
       tables[table.pairKey] = {
         pairKey: table.pairKey,
@@ -410,6 +479,10 @@ export function getSyncedCorrespondenceTables(draft: Pick<Pz1Draft, 'stationDraf
   return Object.values(syncCorrespondenceTables(draft, draft.stationDrafts));
 }
 
+export function getSyncedCorrespondenceDetails(draft: Pick<Pz1Draft, 'stationDrafts' | 'correspondenceDetails'>) {
+  return Object.values(syncCorrespondenceDetails(draft, draft.stationDrafts));
+}
+
 export function syncCorrespondenceTables(
   draft: Pick<Pz1Draft, 'stationDrafts' | 'correspondenceTables'>,
   stationDrafts = draft.stationDrafts,
@@ -436,6 +509,25 @@ export function syncCorrespondenceTables(
   return tables;
 }
 
+export function syncCorrespondenceDetails(
+  draft: Pick<Pz1Draft, 'stationDrafts' | 'correspondenceDetails'>,
+  stationDrafts = draft.stationDrafts,
+) {
+  const enabledLabels = stationDrafts.filter((stationDraft) => stationDraft.enabled).map((stationDraft) => stationDraft.label);
+  const details: Record<string, Pz1CorrespondenceDetailDraft> = {};
+
+  for (let fromIndex = 0; fromIndex < enabledLabels.length; fromIndex += 1) {
+    for (let toIndex = fromIndex + 1; toIndex < enabledLabels.length; toIndex += 1) {
+      const fromLabel = enabledLabels[fromIndex];
+      const toLabel = enabledLabels[toIndex];
+      const pairKey = `${fromLabel}-${toLabel}`;
+      details[pairKey] = mergeCorrespondenceDetail(pairKey, fromLabel, toLabel, draft.correspondenceDetails[pairKey]);
+    }
+  }
+
+  return details;
+}
+
 export function countFilledConsumerCells(draft: Pz1Draft) {
   const correspondenceCellCount = getSyncedCorrespondenceTables(draft)
     .flatMap((table) => consumerRows.flatMap((row) => table.activeModes.map((modeId) => table.values[row.id]?.[modeId] ?? '')))
@@ -445,6 +537,12 @@ export function countFilledConsumerCells(draft: Pz1Draft) {
 }
 
 export function getPz1PassengerFlowForecast(draft: Pz1Draft): Pz1PassengerFlowResult | null {
+  const correspondenceForecast = getAggregateCorrespondencePassengerFlowForecast(draft);
+
+  if (correspondenceForecast) {
+    return correspondenceForecast;
+  }
+
   const effectiveInputs = getEffectivePassengerFlowInputs(draft);
   const regionalInput = parseRegionalPassengerFlowInput(effectiveInputs.regional);
   const modeInputs = passengerFlowModeIds.reduce<PassengerFlowModeInput[] | null>((modes, modeId) => {
@@ -565,6 +663,213 @@ export function getEffectivePassengerFlowInputs(draft: Pz1Draft): Pz1Draft['pass
 
   return {
     regional,
+    modes,
+  };
+}
+
+export function getPz1CorrespondenceScenarios(draft: Pz1Draft) {
+  return getSyncedCorrespondenceDetails(draft).reduce<NonNullable<Pz1Result['correspondenceScenarios']>>((scenarios, detail) => {
+    const annualFlows = transportColumns.reduce<NonNullable<Pz1Result['correspondenceScenarios']>[string]['annualFlows']>(
+      (flowMap, column) => {
+        const existingAnnualFlow = calculateAnnualFlow(
+          detail.annualFlows[column.id].capacity,
+          detail.annualFlows[column.id].occupancyExisting,
+          detail.frequency[column.id].existing,
+        );
+        const forecastAnnualFlow = calculateAnnualFlow(
+          detail.annualFlows[column.id].capacity,
+          detail.annualFlows[column.id].occupancyForecast,
+          detail.frequency[column.id].forecast,
+        );
+
+        flowMap[column.id] = {
+          ...detail.annualFlows[column.id],
+          existingAnnualFlow: existingAnnualFlow ?? undefined,
+          forecastAnnualFlow: forecastAnnualFlow ?? undefined,
+        };
+        return flowMap;
+      },
+      {} as NonNullable<Pz1Result['correspondenceScenarios']>[string]['annualFlows'],
+    );
+
+    scenarios[detail.pairKey] = {
+      pairKey: detail.pairKey,
+      title: getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel),
+      travelTime: getEffectiveTravelTimeValues(draft, detail),
+      discomfortExisting: cloneDiscomfortMatrix(detail.discomfortExisting),
+      discomfortForecast: cloneDiscomfortMatrix(detail.discomfortForecast),
+      discomfortAggregates: transportColumns.reduce<NonNullable<Pz1Result['correspondenceScenarios']>[string]['discomfortAggregates']>(
+        (aggregateMap, column) => {
+          aggregateMap[column.id] = {
+            existing: calculateDiscomfortAggregate(detail.discomfortExisting, column.id),
+            forecast: calculateDiscomfortAggregate(detail.discomfortForecast, column.id),
+          };
+          return aggregateMap;
+        },
+        {} as NonNullable<Pz1Result['correspondenceScenarios']>[string]['discomfortAggregates'],
+      ),
+      frequency: detail.frequency,
+      fare: detail.fare,
+      otherParameters: detail.otherParameters,
+      annualFlows,
+      passengerFlowForecast: getPz1CorrespondencePassengerFlowForecast(draft, detail.pairKey) ?? undefined,
+    };
+
+    return scenarios;
+  }, {});
+}
+
+export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairKey: string): Pz1PassengerFlowResult | null {
+  const detail = syncCorrespondenceDetails(draft)[pairKey];
+  const table = syncCorrespondenceTables(draft)[pairKey];
+  const regionalInput = parseRegionalPassengerFlowInput(getEffectivePassengerFlowInputs(draft).regional);
+
+  if (!detail || !table || !regionalInput) {
+    return null;
+  }
+
+  const effectiveTravelTime = getEffectiveTravelTimeValues(draft, detail);
+  const modeInputs = table.activeModes.reduce<PassengerFlowModeInput[] | null>((modes, modeId) => {
+    if (modes === null) {
+      return null;
+    }
+
+    const existingAnnualFlow =
+      modeId === HSR_MODE_ID
+        ? 0
+        : calculateAnnualFlow(detail.annualFlows[modeId].capacity, detail.annualFlows[modeId].occupancyExisting, detail.frequency[modeId].existing);
+    const forecastAnnualFlowInput = calculateAnnualFlow(
+      detail.annualFlows[modeId].capacity,
+      detail.annualFlows[modeId].occupancyForecast,
+      detail.frequency[modeId].forecast,
+    );
+    const existingTravelTimeHours = getTravelTimeTotalHours(effectiveTravelTime, modeId, 'existing');
+    const forecastTravelTimeHours = getTravelTimeTotalHours(effectiveTravelTime, modeId, 'forecast');
+    const totalTransportCost = getTotalTransportCost(detail, modeId);
+
+    if (
+      existingAnnualFlow === null ||
+      forecastAnnualFlowInput === null ||
+      existingTravelTimeHours === null ||
+      forecastTravelTimeHours === null ||
+      totalTransportCost === null ||
+      totalTransportCost <= 0
+    ) {
+      return null;
+    }
+
+    modes.push({
+      modeId,
+      existingAnnualFlow,
+      travelTimeHours: forecastTravelTimeHours,
+      waitingTimeHours: 0,
+      totalTransportCost,
+      existingTravelTimeHours,
+    });
+
+    return modes;
+  }, []);
+
+  if (!modeInputs) {
+    return null;
+  }
+
+  const existingAnnualFlow = modeInputs.reduce((sum, mode) => sum + mode.existingAnnualFlow, 0);
+  if (existingAnnualFlow <= 0) {
+    return null;
+  }
+
+  try {
+    const totalDemand = forecastTotalDemand({
+      existingAnnualFlow,
+      ...regionalInput,
+    });
+    const distribution = distributePassengerFlowByMode({
+      existingAnnualFlow,
+      baseForecast: totalDemand.baseForecast,
+      inducedDemand: totalDemand.inducedDemand,
+      modes: modeInputs,
+    });
+
+    return {
+      inputs: {
+        regional: getEffectivePassengerFlowInputs(draft).regional,
+        modes: passengerFlowModeIds.reduce<Record<TransportModeId, Pz1PassengerFlowModeInputs>>((modeMap, modeId) => {
+          const inputMode = modeInputs.find((mode) => mode.modeId === modeId);
+          modeMap[modeId] = {
+            existingAnnualFlow: inputMode ? String(inputMode.existingAnnualFlow) : '',
+            travelTimeHours: inputMode ? String(inputMode.travelTimeHours) : '',
+            waitingTimeHours: inputMode ? String(inputMode.waitingTimeHours) : '',
+            totalTransportCost: inputMode ? String(inputMode.totalTransportCost) : '',
+            existingTravelTimeHours: inputMode ? String(inputMode.existingTravelTimeHours) : '',
+          };
+          return modeMap;
+        }, {} as Record<TransportModeId, Pz1PassengerFlowModeInputs>),
+      },
+      totalDemand: {
+        existingAnnualFlow,
+        baseForecast: totalDemand.baseForecast,
+        inducedDemand: totalDemand.inducedDemand,
+        totalForecast: totalDemand.totalForecast,
+        grpDelta: totalDemand.grpDelta,
+        populationDelta: totalDemand.populationDelta,
+        weightedGdpPassengerFlowCoefficient: totalDemand.weightedGdpPassengerFlowCoefficient,
+      },
+      modes: distribution.modes.map((mode) => ({
+        modeId: mode.modeId,
+        existingAnnualFlow: mode.existingAnnualFlow,
+        forecastAnnualFlow: mode.forecastAnnualFlow,
+        forecastShare: mode.forecastShare,
+        directCapture: mode.directCapture,
+        gravityCapture: mode.gravityCapture,
+        inducedCapture: mode.inducedCapture,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getAggregateCorrespondencePassengerFlowForecast(draft: Pz1Draft): Pz1PassengerFlowResult | null {
+  const details = getSyncedCorrespondenceDetails(draft);
+  if (details.length === 0) {
+    return null;
+  }
+
+  const forecasts = details.map((detail) => getPz1CorrespondencePassengerFlowForecast(draft, detail.pairKey));
+  if (forecasts.some((forecast) => forecast === null)) {
+    return null;
+  }
+
+  const completedForecasts = forecasts.filter((forecast): forecast is Pz1PassengerFlowResult => forecast !== null);
+  const totalForecastAnnualFlow = completedForecasts.reduce((sum, forecast) => sum + forecast.totalDemand.totalForecast, 0);
+  const modes = passengerFlowModeIds.map((modeId) => {
+    const modeForecasts = completedForecasts.map((forecast) => forecast.modes.find((mode) => mode.modeId === modeId));
+    const existingAnnualFlow = modeForecasts.reduce((sum, mode) => sum + (mode?.existingAnnualFlow ?? 0), 0);
+    const forecastAnnualFlow = modeForecasts.reduce((sum, mode) => sum + (mode?.forecastAnnualFlow ?? 0), 0);
+
+    return {
+      modeId,
+      existingAnnualFlow,
+      forecastAnnualFlow,
+      forecastShare: totalForecastAnnualFlow > 0 ? forecastAnnualFlow / totalForecastAnnualFlow : 0,
+      directCapture: modeForecasts.reduce((sum, mode) => sum + (mode?.directCapture ?? 0), 0),
+      gravityCapture: modeForecasts.reduce((sum, mode) => sum + (mode?.gravityCapture ?? 0), 0),
+      inducedCapture: modeForecasts.reduce((sum, mode) => sum + (mode?.inducedCapture ?? 0), 0),
+    };
+  });
+
+  return {
+    inputs: getEffectivePassengerFlowInputs(draft),
+    totalDemand: {
+      existingAnnualFlow: completedForecasts.reduce((sum, forecast) => sum + forecast.totalDemand.existingAnnualFlow, 0),
+      baseForecast: completedForecasts.reduce((sum, forecast) => sum + forecast.totalDemand.baseForecast, 0),
+      inducedDemand: completedForecasts.reduce((sum, forecast) => sum + forecast.totalDemand.inducedDemand, 0),
+      totalForecast: totalForecastAnnualFlow,
+      grpDelta: averageForecastMetric(completedForecasts, 'grpDelta'),
+      populationDelta: averageForecastMetric(completedForecasts, 'populationDelta'),
+      weightedGdpPassengerFlowCoefficient: averageForecastMetric(completedForecasts, 'weightedGdpPassengerFlowCoefficient'),
+    },
     modes,
   };
 }
@@ -924,6 +1229,126 @@ function mergeCorrespondenceTables(importedValues: Pz1Result['consumerProperties
   }, {});
 }
 
+function mergeCorrespondenceDetails(importedValues: Pz1Result['correspondenceScenarios']) {
+  if (!importedValues) {
+    return {};
+  }
+
+  return Object.entries(importedValues).reduce<Record<string, Pz1CorrespondenceDetailDraft>>((details, [pairKey, scenario]) => {
+    const [fromLabel = 'А', toLabel = 'Г'] = pairKey.split('-') as StationLabel[];
+    details[pairKey] = mergeCorrespondenceDetail(pairKey, fromLabel, toLabel, {
+      pairKey,
+      fromLabel,
+      toLabel,
+      travelTime: scenario.travelTime,
+      discomfortExisting: scenario.discomfortExisting,
+      discomfortForecast: scenario.discomfortForecast,
+      frequency: scenario.frequency,
+      fare: scenario.fare,
+      otherParameters: scenario.otherParameters,
+      annualFlows: scenario.annualFlows,
+    });
+    return details;
+  }, {});
+}
+
+function mergeCorrespondenceDetail(
+  pairKey: string,
+  fromLabel: StationLabel,
+  toLabel: StationLabel,
+  importedDetail?: Partial<Pz1CorrespondenceDetailDraft>,
+): Pz1CorrespondenceDetailDraft {
+  return {
+    pairKey,
+    fromLabel,
+    toLabel,
+    travelTime: mergeSplitRowValues(correspondenceTravelTimeRows, importedDetail?.travelTime, getDefaultTravelTimeValue),
+    discomfortExisting: mergeDiscomfortMatrix(importedDetail?.discomfortExisting, defaultExistingDiscomfortValues),
+    discomfortForecast: mergeDiscomfortMatrix(importedDetail?.discomfortForecast, defaultForecastDiscomfortValues),
+    frequency: mergeSplitTransportValues(importedDetail?.frequency, getDefaultFrequencyValue),
+    fare: mergeSplitTransportValues(importedDetail?.fare, getDefaultFareValue),
+    otherParameters: correspondenceOtherParameterRows.reduce<Record<string, string>>((values, row) => {
+      values[row.id] = importedDetail?.otherParameters?.[row.id] ?? defaultOtherParameterValues[row.id] ?? '';
+      return values;
+    }, {}),
+    annualFlows: transportColumns.reduce<Pz1CorrespondenceDetailDraft['annualFlows']>((values, column) => {
+      values[column.id] = {
+        capacity: importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
+        occupancyExisting: importedDetail?.annualFlows?.[column.id]?.occupancyExisting ?? defaultOccupancyByMode[column.id] ?? '',
+        occupancyForecast: importedDetail?.annualFlows?.[column.id]?.occupancyForecast ?? defaultOccupancyByMode[column.id] ?? '',
+      };
+      return values;
+    }, {} as Pz1CorrespondenceDetailDraft['annualFlows']),
+  };
+}
+
+function mergeSplitRowValues(
+  rows: DataEntryRow[],
+  importedValues: Record<string, Record<TransportModeId, { existing: string; forecast: string }>> | undefined,
+  getDefaultValue: (rowId: string, modeId: TransportModeId) => { existing: string; forecast: string },
+) {
+  return rows.reduce<Record<string, Record<TransportModeId, { existing: string; forecast: string }>>>((rowMap, row) => {
+    rowMap[row.id] = transportColumns.reduce<Record<TransportModeId, { existing: string; forecast: string }>>(
+      (columnMap, column) => {
+        const defaultValue = getDefaultValue(row.id, column.id);
+        columnMap[column.id] = {
+          existing: importedValues?.[row.id]?.[column.id]?.existing ?? defaultValue.existing,
+          forecast: importedValues?.[row.id]?.[column.id]?.forecast ?? defaultValue.forecast,
+        };
+        return columnMap;
+      },
+      {} as Record<TransportModeId, { existing: string; forecast: string }>,
+    );
+    return rowMap;
+  }, {});
+}
+
+function mergeSplitTransportValues(
+  importedValues: Record<TransportModeId, { existing: string; forecast: string }> | undefined,
+  getDefaultValue: (modeId: TransportModeId) => { existing: string; forecast: string },
+) {
+  return transportColumns.reduce<Record<TransportModeId, { existing: string; forecast: string }>>((values, column) => {
+    const defaultValue = getDefaultValue(column.id);
+    values[column.id] = {
+      existing: importedValues?.[column.id]?.existing ?? defaultValue.existing,
+      forecast: importedValues?.[column.id]?.forecast ?? defaultValue.forecast,
+    };
+    return values;
+  }, {} as Record<TransportModeId, { existing: string; forecast: string }>);
+}
+
+function getDefaultTravelTimeValue(rowId: string, modeId: TransportModeId) {
+  if (modeId === CAR_MODE_ID && rowId !== 'cleanTravel') {
+    return { existing: '00:00', forecast: '00:00' };
+  }
+
+  if (modeId === HSR_MODE_ID) {
+    return { existing: '00:00', forecast: rowId === 'cleanTravel' ? '' : '' };
+  }
+
+  return { existing: '', forecast: '' };
+}
+
+function getDefaultFrequencyValue(modeId: TransportModeId) {
+  if (modeId === HSR_MODE_ID) {
+    return { existing: '0', forecast: '' };
+  }
+
+  if (modeId === CAR_MODE_ID) {
+    return { existing: '0', forecast: '0' };
+  }
+
+  return { existing: '', forecast: '' };
+}
+
+function getDefaultFareValue(modeId: TransportModeId) {
+  if (modeId === HSR_MODE_ID) {
+    return { existing: '0', forecast: '' };
+  }
+
+  return { existing: '', forecast: '' };
+}
+
 function mergeConsumerValues(importedValues?: Record<string, Record<string, string>>) {
   const values = createEmptyConsumerValues();
 
@@ -1090,6 +1515,97 @@ function getRouteBendKm(routePointDraft: Pz1RoutePointDraft) {
   return Math.max(0, parseCoordinate(routePointDraft.sagittaToNextKm) ?? 0);
 }
 
+function getEffectiveTravelTimeValues(draft: Pz1Draft, detail: Pz1CorrespondenceDetailDraft) {
+  const hsrTravelTime = getHsrTravelTimeResult(draft);
+  const hsrCleanTime = hsrTravelTime ? formatDuration(hsrTravelTime.totalMinutes) : detail.travelTime.cleanTravel.hSR.forecast;
+
+  return correspondenceTravelTimeRows.reduce<Pz1CorrespondenceDetailDraft['travelTime']>((rows, row) => {
+    rows[row.id] = transportColumns.reduce<Pz1CorrespondenceDetailDraft['travelTime'][string]>((values, column) => {
+      const currentValue = detail.travelTime[row.id][column.id];
+      values[column.id] = {
+        existing:
+          column.id === HSR_MODE_ID || (column.id === CAR_MODE_ID && row.id !== 'cleanTravel')
+            ? '00:00'
+            : currentValue.existing,
+        forecast:
+          column.id === HSR_MODE_ID && row.id === 'cleanTravel'
+            ? hsrCleanTime
+            : column.id === CAR_MODE_ID && row.id !== 'cleanTravel'
+              ? '00:00'
+              : currentValue.forecast,
+      };
+      return values;
+    }, {} as Pz1CorrespondenceDetailDraft['travelTime'][string]);
+    return rows;
+  }, {} as Pz1CorrespondenceDetailDraft['travelTime']);
+}
+
+function calculateAnnualFlow(capacityValue: string, occupancyValue: string, frequencyValue: string) {
+  const capacity = parseNumericInput(capacityValue);
+  const occupancy = parseNumericInput(occupancyValue);
+  const frequency = parseNumericInput(frequencyValue);
+
+  if (capacity === null || occupancy === null || frequency === null || capacity < 0 || occupancy < 0 || frequency < 0) {
+    return null;
+  }
+
+  return 365 * capacity * occupancy * frequency;
+}
+
+function calculateDiscomfortAggregate(matrix: Pz1DiscomfortMatrix, modeId: TransportModeId) {
+  const values = discomfortRows.slice(0, 8).map((row) => parseNumericInput(matrix.values[row.id]?.[modeId] ?? ''));
+
+  if (values.some((value) => value === null)) {
+    return null;
+  }
+
+  return (values as number[]).reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function getTravelTimeTotalHours(
+  travelTime: Pz1CorrespondenceDetailDraft['travelTime'],
+  modeId: TransportModeId,
+  side: 'existing' | 'forecast',
+) {
+  const totalMinutes = correspondenceTravelTimeRows.reduce<number | null>((sum, row) => {
+    if (sum === null) {
+      return null;
+    }
+
+    const minutes = parseDurationToMinutes(travelTime[row.id][modeId][side]);
+    return minutes === null ? null : sum + minutes;
+  }, 0);
+
+  return totalMinutes === null ? null : totalMinutes / 60;
+}
+
+function getTotalTransportCost(detail: Pz1CorrespondenceDetailDraft, modeId: TransportModeId) {
+  const fare = parseNumericInput(detail.fare[modeId].forecast);
+  const cityFareOrigin = parseNumericInput(detail.otherParameters.cityFareOrigin);
+  const cityFareDestination = parseNumericInput(detail.otherParameters.cityFareDestination);
+
+  if (modeId === CAR_MODE_ID) {
+    return fare;
+  }
+
+  if (fare === null || cityFareOrigin === null || cityFareDestination === null) {
+    return null;
+  }
+
+  return fare + cityFareOrigin + cityFareDestination;
+}
+
+function averageForecastMetric(
+  forecasts: Pz1PassengerFlowResult[],
+  metric: 'grpDelta' | 'populationDelta' | 'weightedGdpPassengerFlowCoefficient',
+) {
+  if (forecasts.length === 0) {
+    return 0;
+  }
+
+  return forecasts.reduce((sum, forecast) => sum + forecast.totalDemand[metric], 0) / forecasts.length;
+}
+
 function cloneDiscomfortMatrix(matrix: Pz1DiscomfortMatrix): Pz1DiscomfortMatrix {
   return {
     values: discomfortRows.reduce<Record<string, Record<TransportModeId, string>>>((rowMap, row) => {
@@ -1105,12 +1621,15 @@ function cloneDiscomfortMatrix(matrix: Pz1DiscomfortMatrix): Pz1DiscomfortMatrix
   };
 }
 
-function mergeDiscomfortMatrix(importedMatrix?: Pz1Result['discomfortMatrix']): Pz1DiscomfortMatrix {
+function mergeDiscomfortMatrix(
+  importedMatrix?: Pz1Result['discomfortMatrix'],
+  defaultValues?: Partial<Record<TransportModeId, string[]>>,
+): Pz1DiscomfortMatrix {
   return {
-    values: discomfortRows.reduce<Record<string, Record<TransportModeId, string>>>((rowMap, row) => {
+    values: discomfortRows.reduce<Record<string, Record<TransportModeId, string>>>((rowMap, row, rowIndex) => {
       rowMap[row.id] = transportColumns.reduce<Record<TransportModeId, string>>(
         (columnMap, column) => {
-          columnMap[column.id] = importedMatrix?.values?.[row.id]?.[column.id] ?? '';
+          columnMap[column.id] = importedMatrix?.values?.[row.id]?.[column.id] ?? defaultValues?.[column.id]?.[rowIndex] ?? '';
           return columnMap;
         },
         {} as Record<TransportModeId, string>,
@@ -1255,6 +1774,16 @@ function parseNumericInput(value: string) {
 
   const parsed = Number(value.replace(/\s/g, '').replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseDurationToMinutes(value: string) {
+  const match = /^(\d{1,2}):([0-5]\d)$/.exec(value.trim());
+
+  if (!match) {
+    return null;
+  }
+
+  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 function formatDecimal(value: number) {
