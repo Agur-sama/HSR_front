@@ -15,6 +15,7 @@ import type {
   Pz1PassengerFlowRegionalInputs,
   Pz1PassengerFlowResult,
   Pz1RegionalCharacteristicInputs,
+  Pz1RegionalParameterInputs,
   TransportModeId,
 } from '../../bridge/schema';
 import { ModuleStateProvider, useModuleState } from '../../bridge/context';
@@ -37,6 +38,7 @@ import {
   getCorrespondenceTitle,
   getComputedFinalIndicators,
   getDuplicateStationNames,
+  getEnabledStationRegions,
   getEffectivePassengerFlowInputs,
   getHsrTravelTimeResult,
   getPz1PassengerFlowForecast,
@@ -57,7 +59,7 @@ import {
   isTransportModeRemovable,
   passengerFlowModeRows,
   passengerFlowRegionalFields,
-  regionalCharacteristicFields,
+  regionalParameterFields,
   russianRegions,
   sanitizeFileName,
   syncCorrespondenceTables,
@@ -668,6 +670,7 @@ function HsrTravelTimeStep() {
 function RegionalCharacteristicsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const regional = getPz1RegionalCharacteristics(draft);
+  const stationRegions = getEnabledStationRegions(draft.stationDrafts);
 
   function updateRegionalField(fieldId: keyof Pz1RegionalCharacteristicInputs, value: string) {
     updateDraft((currentDraft) => ({
@@ -679,50 +682,82 @@ function RegionalCharacteristicsStep() {
     }));
   }
 
+  function updateRegionParameter(region: string, fieldId: keyof Pz1RegionalParameterInputs, value: string) {
+    updateDraft((currentDraft) => {
+      const currentRegional = getPz1RegionalCharacteristics(currentDraft);
+
+      return {
+        ...currentDraft,
+        regionalCharacteristics: {
+          ...currentRegional,
+          regionParameters: {
+            ...(currentRegional.regionParameters ?? {}),
+            [region]: {
+              ...(currentRegional.regionParameters?.[region] ?? {
+                grpExisting: '',
+                grpForecast: '',
+                populationExisting: '',
+                populationForecast: '',
+                averageSalary: '',
+                kGdpFlow: '',
+              }),
+              [fieldId]: value,
+            },
+          },
+        },
+      };
+    });
+  }
+
   return (
     <div className="regional-step">
       <section className="form-section">
         <p className="eyebrow">Регионы</p>
         <h3>Характеристики регионов</h3>
-        <dl className="region-pair-summary">
-          <div>
-            <dt>Регион 1</dt>
-            <dd>{regional.regionA || 'не выбран'}</dd>
-          </div>
-          <div>
-            <dt>Регион 2</dt>
-            <dd>{regional.regionB || 'не выбран'}</dd>
-          </div>
-        </dl>
-        <div className="regional-fields">
-          {regionalCharacteristicFields.map((field) => (
+        {stationRegions.length === 0 ? (
+          <p className="status-note">Вернитесь к карте и выберите регион для каждой включённой станции.</p>
+        ) : (
+          <div className="region-parameter-grid">
+            {stationRegions.map((region) => {
+              const parameters = regional.regionParameters?.[region];
+
+              return (
+                <section className="region-parameter-card" key={region}>
+                  <h4>{region}</h4>
+                  <div className="regional-fields">
+                    {regionalParameterFields.map((field) => (
+                      <FieldWithHint
+                        hint={field.helper}
+                        id={`regional-${region}-${field.id}`}
+                        key={field.id}
+                        label={field.label}
+                        onChange={(value) => updateRegionParameter(region, field.id, value)}
+                        value={parameters?.[field.id] ?? ''}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
             <FieldWithHint
-              hint={field.helper}
-              id={`regional-${field.id}`}
-              key={field.id}
-              label={field.label}
-              onChange={(value) => updateRegionalField(field.id, value)}
-              value={regional[field.id]}
+              hint="%"
+              id="regional-inducedDemandPct"
+              label="Прогнозируемый индуцированный спрос"
+              onChange={(value) => updateRegionalField('inducedDemandPct', value)}
+              value={regional.inducedDemandPct}
             />
-          ))}
-          <FieldWithHint
-            hint="%"
-            id="regional-inducedDemandPct"
-            label="Прогнозируемый индуцированный спрос"
-            onChange={(value) => updateRegionalField('inducedDemandPct', value)}
-            value={regional.inducedDemandPct}
-          />
-        </div>
+          </div>
+        )}
       </section>
       <section className="forecast-summary-panel">
         <p className="eyebrow">Проверка</p>
         <h3>Что пойдёт в прогноз</h3>
-        {validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct) ? (
+        {stationRegions.length === 0 || validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct) ? (
           <p className="status-note">Заполните параметры регионов, чтобы сформировать входы формулы роста рынка.</p>
         ) : (
           <p className="status-note">
-            ВРП и население преобразуются в темпы роста, коэффициент «ВВП → пассажиропоток» подставляется по каждому
-            региону отдельно.
+            Для каждой корреспонденции берётся пара регионов её станций. Если несколько станций находятся в одном
+            регионе, значения повторяются автоматически из одного блока.
           </p>
         )}
       </section>
@@ -742,19 +777,25 @@ function CorrespondenceTravelTimeStep({ pairKey }: { pairKey: string }) {
 
   function updateTravelTime(rowId: string, modeId: TransportModeId, side: 'existing' | 'forecast', value: string) {
     updateDraft((currentDraft) =>
-      patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => ({
-        ...currentDetail,
-        travelTime: {
-          ...currentDetail.travelTime,
-          [rowId]: {
-            ...currentDetail.travelTime[rowId],
-            [modeId]: {
-              ...currentDetail.travelTime[rowId][modeId],
-              [side]: value,
+      patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => {
+        const currentCell = currentDetail.travelTime[rowId][modeId];
+        const nextCell = {
+          ...currentCell,
+          [side]: value,
+          forecast: side === 'existing' && !currentCell.forecast.trim() ? value : side === 'forecast' ? value : currentCell.forecast,
+        };
+
+        return {
+          ...currentDetail,
+          travelTime: {
+            ...currentDetail.travelTime,
+            [rowId]: {
+              ...currentDetail.travelTime[rowId],
+              [modeId]: nextCell,
             },
           },
-        },
-      })),
+        };
+      }),
     );
   }
 
@@ -845,7 +886,7 @@ function CorrespondenceFrequencyStep({ pairKey }: { pairKey: string }) {
               ...currentDetail,
               frequency: {
                 ...currentDetail.frequency,
-                [modeId]: { ...currentDetail.frequency[modeId], [side]: value },
+                [modeId]: mergeSplitValueOnInput(currentDetail.frequency[modeId], side, value),
               },
             })),
           )
@@ -878,7 +919,7 @@ function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
               ...currentDetail,
               fare: {
                 ...currentDetail.fare,
-                [modeId]: { ...currentDetail.fare[modeId], [side]: value },
+                [modeId]: mergeSplitValueOnInput(currentDetail.fare[modeId], side, value),
               },
             })),
           )
@@ -935,13 +976,33 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
 
   function updateAnnualFlow(modeId: TransportModeId, fieldId: keyof Pz1CorrespondenceDetailDraft['annualFlows'][TransportModeId], value: string) {
     updateDraft((currentDraft) =>
-      patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => ({
-        ...currentDetail,
-        annualFlows: {
-          ...currentDetail.annualFlows,
-          [modeId]: { ...currentDetail.annualFlows[modeId], [fieldId]: value },
-        },
-      })),
+      patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => {
+        const currentFlow = currentDetail.annualFlows[modeId];
+        const nextFlow = {
+          ...currentFlow,
+          [fieldId]: value,
+          capacityForecast:
+            fieldId === 'capacityExisting' && !(currentFlow.capacityForecast ?? '').trim()
+              ? value
+              : fieldId === 'capacityForecast'
+                ? value
+                : currentFlow.capacityForecast,
+          occupancyForecast:
+            fieldId === 'occupancyExisting' && !currentFlow.occupancyForecast.trim()
+              ? value
+              : fieldId === 'occupancyForecast'
+                ? value
+                : currentFlow.occupancyForecast,
+        };
+
+        return {
+          ...currentDetail,
+          annualFlows: {
+            ...currentDetail.annualFlows,
+            [modeId]: nextFlow,
+          },
+        };
+      }),
     );
   }
 
@@ -954,7 +1015,8 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
           <thead>
             <tr>
               <th>Вид транспорта</th>
-              <th>Вместимость ТС, пасс.</th>
+              <th>Вместимость ТС существующая, пасс.</th>
+              <th>Вместимость ТС прогнозная, пасс.</th>
               <th>Заполняемость существующая</th>
               <th>Заполняемость прогнозная</th>
               <th>Рейсов/сутки существующие</th>
@@ -970,8 +1032,15 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
                 <td>
                   <input
                     inputMode="decimal"
-                    onChange={(event) => updateAnnualFlow(column.id, 'capacity', event.target.value)}
-                    value={detail.annualFlows[column.id].capacity}
+                    onChange={(event) => updateAnnualFlow(column.id, 'capacityExisting', event.target.value)}
+                    value={detail.annualFlows[column.id].capacityExisting ?? detail.annualFlows[column.id].capacity}
+                  />
+                </td>
+                <td>
+                  <input
+                    inputMode="decimal"
+                    onChange={(event) => updateAnnualFlow(column.id, 'capacityForecast', event.target.value)}
+                    value={detail.annualFlows[column.id].capacityForecast ?? detail.annualFlows[column.id].capacity}
                   />
                 </td>
                 <td>
@@ -1533,25 +1602,42 @@ function SplitModeTable({
                   <label className="split-input">
                     <span>Сущ.</span>
                     <input
+                      aria-invalid={isDurationInputInvalid(values[row.id][column.id].existing) ? true : undefined}
+                      className={isDurationInputInvalid(values[row.id][column.id].existing) ? 'is-invalid' : undefined}
                       inputMode="numeric"
                       onChange={(event) => onChange(row.id, column.id, 'existing', event.target.value)}
                       readOnly={getReadOnly?.(row.id, column.id, 'existing')}
                       value={values[row.id][column.id].existing}
                     />
+                    {isDurationInputInvalid(values[row.id][column.id].existing) ? <small className="field-error">ЧЧ:ММ</small> : null}
                   </label>
                   <label className="split-input">
                     <span>Прогн.</span>
                     <input
+                      aria-invalid={isDurationInputInvalid(values[row.id][column.id].forecast) ? true : undefined}
+                      className={isDurationInputInvalid(values[row.id][column.id].forecast) ? 'is-invalid' : undefined}
                       inputMode="numeric"
                       onChange={(event) => onChange(row.id, column.id, 'forecast', event.target.value)}
                       readOnly={getReadOnly?.(row.id, column.id, 'forecast')}
                       value={values[row.id][column.id].forecast}
                     />
+                    {isDurationInputInvalid(values[row.id][column.id].forecast) ? <small className="field-error">ЧЧ:ММ</small> : null}
                   </label>
                 </td>
               ))}
             </tr>
           ))}
+          <tr className="input-table__total-row">
+            <th scope="row">ИТОГО</th>
+            {transportColumns.map((column) => (
+              <td key={column.id}>
+                <div className="split-total">
+                  <span>Сущ. {formatDurationTotal(values, column.id, 'existing')}</span>
+                  <span>Прогн. {formatDurationTotal(values, column.id, 'forecast')}</span>
+                </div>
+              </td>
+            ))}
+          </tr>
         </tbody>
       </table>
     </div>
@@ -1622,19 +1708,25 @@ function TransportSplitRows({
               <th scope="row">{column.label}</th>
               <td>
                 <input
+                  aria-invalid={isNonNegativeNumberInputInvalid(values[column.id].existing) ? true : undefined}
+                  className={isNonNegativeNumberInputInvalid(values[column.id].existing) ? 'is-invalid' : undefined}
                   inputMode="decimal"
                   onChange={(event) => onChange(column.id, 'existing', event.target.value)}
                   readOnly={getReadOnly?.(column.id, 'existing')}
                   value={values[column.id].existing}
                 />
+                {isNonNegativeNumberInputInvalid(values[column.id].existing) ? <small className="field-error">Число ≥ 0</small> : null}
               </td>
               <td>
                 <input
+                  aria-invalid={isNonNegativeNumberInputInvalid(values[column.id].forecast) ? true : undefined}
+                  className={isNonNegativeNumberInputInvalid(values[column.id].forecast) ? 'is-invalid' : undefined}
                   inputMode="decimal"
                   onChange={(event) => onChange(column.id, 'forecast', event.target.value)}
                   readOnly={getReadOnly?.(column.id, 'forecast')}
                   value={values[column.id].forecast}
                 />
+                {isNonNegativeNumberInputInvalid(values[column.id].forecast) ? <small className="field-error">Число ≥ 0</small> : null}
               </td>
             </tr>
           ))}
@@ -1857,6 +1949,18 @@ function patchCorrespondenceDetail(
   };
 }
 
+function mergeSplitValueOnInput(
+  currentValue: Pz1CorrespondenceDetailDraft['frequency'][TransportModeId],
+  side: 'existing' | 'forecast',
+  value: string,
+) {
+  return {
+    ...currentValue,
+    [side]: value,
+    forecast: side === 'existing' && !currentValue.forecast.trim() ? value : side === 'forecast' ? value : currentValue.forecast,
+  };
+}
+
 function formatOptionalPassengerFlowValue(value: number | undefined) {
   return value === undefined ? '—' : formatPassengerFlowValue(value);
 }
@@ -1944,6 +2048,41 @@ function formatDuration(totalMinutes: number) {
   const minutes = roundedMinutes % 60;
 
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function formatDurationTotal(
+  values: Pz1CorrespondenceDetailDraft['travelTime'],
+  modeId: TransportModeId,
+  side: 'existing' | 'forecast',
+) {
+  const totalMinutes = correspondenceTravelTimeRows.reduce<number | null>((sum, row) => {
+    if (sum === null) {
+      return null;
+    }
+
+    const minutes = parseDurationInput(values[row.id][modeId][side]);
+    return minutes === null ? null : sum + minutes;
+  }, 0);
+
+  return totalMinutes === null ? '—' : formatDuration(totalMinutes);
+}
+
+function parseDurationInput(value: string) {
+  const match = /^(\d{1,2}):([0-5]\d)$/.exec(value.trim());
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+function isDurationInputInvalid(value: string) {
+  return value.trim().length > 0 && parseDurationInput(value) === null;
+}
+
+function isNonNegativeNumberInputInvalid(value: string) {
+  if (!value.trim()) {
+    return false;
+  }
+
+  const parsed = parseNumberInput(value);
+  return parsed === null || parsed < 0;
 }
 
 function parseNumberInput(value: string) {

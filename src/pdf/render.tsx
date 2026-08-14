@@ -401,6 +401,47 @@ function RegionalCharacteristicsTable({
     return <Text style={styles.paragraph}>Характеристики регионов пока не заполнены.</Text>;
   }
 
+  const regionEntries = Object.entries(regionalCharacteristics.regionParameters ?? {});
+
+  if (regionEntries.length > 0) {
+    return (
+      <>
+        <Text style={styles.caption}>Таблица 3 — Характеристики регионов для прогноза</Text>
+        <View style={styles.table}>
+          <View style={styles.tableHeaderRow}>
+            <Text style={styles.metricCell}>Регион</Text>
+            <Text style={styles.modeCell}>ВРП сущ.</Text>
+            <Text style={styles.modeCell}>ВРП прогноз</Text>
+            <Text style={styles.modeCell}>Население сущ.</Text>
+            <Text style={styles.modeCell}>Население прогноз</Text>
+            <Text style={styles.modeCell}>Зарплата</Text>
+            <Text style={styles.modeCell}>Коэфф. ВВП</Text>
+          </View>
+          {regionEntries.map(([region, parameters]) => (
+            <View key={region} style={styles.tableRow}>
+              <Text style={styles.metricCell}>{region}</Text>
+              <Text style={styles.modeCell}>{formatRequiredValue(parameters.grpExisting)}</Text>
+              <Text style={styles.modeCell}>{formatRequiredValue(parameters.grpForecast)}</Text>
+              <Text style={styles.modeCell}>{formatRequiredValue(parameters.populationExisting)}</Text>
+              <Text style={styles.modeCell}>{formatRequiredValue(parameters.populationForecast)}</Text>
+              <Text style={styles.modeCell}>{formatRequiredValue(parameters.averageSalary)}</Text>
+              <Text style={styles.modeCell}>{formatRequiredValue(parameters.kGdpFlow)}</Text>
+            </View>
+          ))}
+          <View style={styles.tableRow}>
+            <Text style={styles.metricCell}>Индуцированный спрос, %</Text>
+            <Text style={styles.modeCell}>{formatRequiredValue(regionalCharacteristics.inducedDemandPct)}</Text>
+            <Text style={styles.modeCell}>—</Text>
+            <Text style={styles.modeCell}>—</Text>
+            <Text style={styles.modeCell}>—</Text>
+            <Text style={styles.modeCell}>—</Text>
+            <Text style={styles.modeCell}>—</Text>
+          </View>
+        </View>
+      </>
+    );
+  }
+
   return (
     <>
       <Text style={styles.caption}>Таблица 3 — Характеристики регионов для прогноза</Text>

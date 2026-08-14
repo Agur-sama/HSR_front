@@ -1219,6 +1219,10 @@ input.is-invalid {
   font-weight: 800;
 }
 
+.split-input .field-error {
+  grid-column: 2;
+}
+
 .split-input:last-child {
   margin-bottom: 0;
 }
@@ -1254,6 +1258,20 @@ input.is-invalid {
   font-weight: 800;
 }
 
+.input-table__total-row th,
+.input-table__total-row td {
+  background: var(--teal-bg);
+  color: var(--teal-text-dark);
+  font-weight: 800;
+}
+
+.split-total {
+  display: grid;
+  gap: 4px;
+  color: var(--teal-text-dark);
+  font-size: 12px;
+}
+
 .region-pair-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1283,6 +1301,26 @@ input.is-invalid {
 .regional-fields {
   display: grid;
   gap: 2px;
+}
+
+.region-parameter-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.region-parameter-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.region-parameter-card h4 {
+  margin: 0;
+  color: var(--indigo);
+  font-size: 16px;
 }
 
 .passenger-flow-regions {

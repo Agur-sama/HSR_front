@@ -63,6 +63,17 @@ export function computeArcMetrics(chordKm: number, sagittaKm: number): Omit<Rout
   };
 }
 
+export function computeSagittaFromRadius(chordKm: number, radiusKm: number): number {
+  if (!Number.isFinite(chordKm) || !Number.isFinite(radiusKm) || chordKm <= EPS || radiusKm <= EPS) {
+    return 0;
+  }
+
+  const halfChordKm = chordKm / 2;
+  const effectiveRadiusKm = Math.max(radiusKm, halfChordKm);
+
+  return effectiveRadiusKm - Math.sqrt(Math.max(0, effectiveRadiusKm ** 2 - halfChordKm ** 2));
+}
+
 export function computeRouteLineMetrics(routeLine: RouteLine): RouteLineMetrics {
   const vertexById = new Map(routeLine.vertices.map((vertex) => [vertex.id, vertex]));
   const segments = routeLine.segments.map((segment) => {

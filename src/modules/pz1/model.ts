@@ -7,6 +7,7 @@ import type {
   Pz1PassengerFlowModeInputs,
   Pz1PassengerFlowRegionalInputs,
   Pz1RegionalCharacteristicInputs,
+  Pz1RegionalParameterInputs,
   Pz1PassengerFlowResult,
   Pz1Result,
   Pz1Station,
@@ -19,7 +20,7 @@ import { createBridge } from '../../bridge/io';
 import { distributePassengerFlowByMode, forecastTotalDemand } from '../../shared/lib/passengerFlow';
 import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../shared/lib/passengerFlow';
 import { passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
-import { buildDisplayRoutePoints, computeRouteLineMetrics, haversineDistanceKm } from '../../shared/lib/routeGeometry';
+import { buildDisplayRoutePoints, computeArcMetrics, computeRouteLineMetrics, computeSagittaFromRadius, haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import type { DataEntryColumn, DataEntryRow } from '../../shared/ui/DataEntryTable';
 import type {
   Pz1CorrespondenceDetailDraft,
@@ -221,6 +222,11 @@ export interface StationRouteDistance {
   distanceKm: number;
 }
 
+interface StationRouteMark {
+  label: StationLabel;
+  distanceFromStartKm: number;
+}
+
 export const finalIndicators = [
   { id: 'lineLength', label: 'Протяженность участка', hint: 'Справочный диапазон уточняется по методичке', unit: 'км' },
   { id: 'maxSpeed', label: 'Максимальная скорость', hint: 'Справочный диапазон уточняется по методичке', unit: 'км/ч' },
@@ -264,7 +270,7 @@ export const passengerFlowModeRows: Array<DataEntryRow & { id: keyof Pz1Passenge
 ];
 
 export const regionalCharacteristicFields: Array<{
-  id: Exclude<keyof Pz1RegionalCharacteristicInputs, 'regionA' | 'regionB' | 'inducedDemandPct'>;
+  id: Exclude<keyof Pz1RegionalCharacteristicInputs, 'regionA' | 'regionB' | 'inducedDemandPct' | 'regionParameters'>;
   label: string;
   helper: string;
 }> = [
@@ -280,6 +286,19 @@ export const regionalCharacteristicFields: Array<{
   { id: 'populationForecastRegionB', label: 'Численность населения региона 2, прогнозная', helper: 'тыс. чел.' },
   { id: 'averageSalaryRegionB', label: 'Средняя заработная плата региона 2', helper: 'руб./мес.' },
   { id: 'kGdpFlowRegionB', label: 'Коэффициент влияния ВВП на пассажиропоток региона 2', helper: 'безразм.' },
+];
+
+export const regionalParameterFields: Array<{
+  id: keyof Pz1RegionalParameterInputs;
+  label: string;
+  helper: string;
+}> = [
+  { id: 'grpExisting', label: 'ВРП, существующий', helper: 'млн руб.' },
+  { id: 'grpForecast', label: 'ВРП, прогнозный', helper: 'млн руб.' },
+  { id: 'populationExisting', label: 'Численность населения, существующая', helper: 'тыс. чел.' },
+  { id: 'populationForecast', label: 'Численность населения, прогнозная', helper: 'тыс. чел.' },
+  { id: 'averageSalary', label: 'Средняя заработная плата', helper: 'руб./мес.' },
+  { id: 'kGdpFlow', label: 'Коэффициент влияния ВВП на пассажиропоток', helper: 'безразм.' },
 ];
 
 export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1Draft {
@@ -403,12 +422,16 @@ export function createRouteLine(routePointDrafts: Pz1RoutePointDraft[]): RouteLi
 
   return {
     vertices,
-    segments: validRoutePoints.slice(0, -1).map(({ draft, vertex }, index) => ({
-      id: `${vertex.id}-${vertices[index + 1].id}`,
-      fromVertexId: vertex.id,
-      toVertexId: vertices[index + 1].id,
-      sagittaKm: getRouteBendKm(draft),
-    })),
+    segments: validRoutePoints.slice(0, -1).map(({ draft, vertex }, index) => {
+      const nextVertex = vertices[index + 1];
+
+      return {
+        id: `${vertex.id}-${nextVertex.id}`,
+        fromVertexId: vertex.id,
+        toVertexId: nextVertex.id,
+        sagittaKm: getRouteSagittaKm(draft, vertex, nextVertex),
+      };
+    }),
   };
 }
 
@@ -420,6 +443,10 @@ export function getStationNameByLabel(draft: Pick<Pz1Draft, 'stationDrafts'>, la
   return draft.stationDrafts.find((station) => station.label === label)?.name.trim() || label;
 }
 
+export function getEnabledStationRegions(stationDrafts: Pz1StationDraft[]) {
+  return [...new Set(stationDrafts.filter((station) => station.enabled).map((station) => station.region.trim()).filter(Boolean))];
+}
+
 export function getCorrespondenceTitle(draft: Pick<Pz1Draft, 'stationDrafts'>, fromLabel: StationLabel, toLabel: StationLabel) {
   return `${getStationNameByLabel(draft, fromLabel)} — ${getStationNameByLabel(draft, toLabel)}`;
 }
@@ -427,11 +454,15 @@ export function getCorrespondenceTitle(draft: Pick<Pz1Draft, 'stationDrafts'>, f
 export function getPz1RegionalCharacteristics(draft: Pick<Pz1Draft, 'regionalCharacteristics' | 'stationDrafts'>) {
   const initialStation = draft.stationDrafts.find((station) => station.label === 'А');
   const terminalStation = draft.stationDrafts.find((station) => station.label === 'Г');
-
-  return {
+  const baseRegional = {
     ...draft.regionalCharacteristics,
     regionA: initialStation?.region.trim() || draft.regionalCharacteristics.regionA,
     regionB: terminalStation?.region.trim() || draft.regionalCharacteristics.regionB,
+  };
+
+  return {
+    ...baseRegional,
+    regionParameters: mergeRegionParameters(baseRegional, getEnabledStationRegions(draft.stationDrafts)),
   };
 }
 
@@ -672,12 +703,12 @@ export function getPz1CorrespondenceScenarios(draft: Pz1Draft) {
     const annualFlows = transportColumns.reduce<NonNullable<Pz1Result['correspondenceScenarios']>[string]['annualFlows']>(
       (flowMap, column) => {
         const existingAnnualFlow = calculateAnnualFlow(
-          detail.annualFlows[column.id].capacity,
+          detail.annualFlows[column.id].capacityExisting ?? detail.annualFlows[column.id].capacity,
           detail.annualFlows[column.id].occupancyExisting,
           detail.frequency[column.id].existing,
         );
         const forecastAnnualFlow = calculateAnnualFlow(
-          detail.annualFlows[column.id].capacity,
+          detail.annualFlows[column.id].capacityForecast ?? detail.annualFlows[column.id].capacity,
           detail.annualFlows[column.id].occupancyForecast,
           detail.frequency[column.id].forecast,
         );
@@ -722,7 +753,7 @@ export function getPz1CorrespondenceScenarios(draft: Pz1Draft) {
 export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairKey: string): Pz1PassengerFlowResult | null {
   const detail = syncCorrespondenceDetails(draft)[pairKey];
   const table = syncCorrespondenceTables(draft)[pairKey];
-  const regionalInput = parseRegionalPassengerFlowInput(getEffectivePassengerFlowInputs(draft).regional);
+  const regionalInput = getRegionalPassengerFlowInputForCorrespondence(draft, detail?.fromLabel, detail?.toLabel);
 
   if (!detail || !table || !regionalInput) {
     return null;
@@ -737,15 +768,19 @@ export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairK
     const existingAnnualFlow =
       modeId === HSR_MODE_ID
         ? 0
-        : calculateAnnualFlow(detail.annualFlows[modeId].capacity, detail.annualFlows[modeId].occupancyExisting, detail.frequency[modeId].existing);
+        : calculateAnnualFlow(
+            detail.annualFlows[modeId].capacityExisting ?? detail.annualFlows[modeId].capacity,
+            detail.annualFlows[modeId].occupancyExisting,
+            detail.frequency[modeId].existing,
+          );
     const forecastAnnualFlowInput = calculateAnnualFlow(
-      detail.annualFlows[modeId].capacity,
+      detail.annualFlows[modeId].capacityForecast ?? detail.annualFlows[modeId].capacity,
       detail.annualFlows[modeId].occupancyForecast,
       detail.frequency[modeId].forecast,
     );
     const existingTravelTimeHours = getTravelTimeTotalHours(effectiveTravelTime, modeId, 'existing');
     const forecastTravelTimeHours = getTravelTimeTotalHours(effectiveTravelTime, modeId, 'forecast');
-    const totalTransportCost = getTotalTransportCost(detail, modeId);
+    const totalTransportCost = getTotalTransportCost(draft, detail, modeId);
 
     if (
       existingAnnualFlow === null ||
@@ -994,6 +1029,24 @@ export function validateRegionalCharacteristicField(fieldId: keyof Pz1RegionalCh
   return parsed > 0 ? null : 'Значение должно быть больше 0';
 }
 
+export function validateRegionParameterField(fieldId: keyof Pz1RegionalParameterInputs, value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Заполните поле';
+  }
+
+  const parsed = parseNumericInput(trimmed);
+  if (parsed === null) {
+    return 'Значение должно быть числом';
+  }
+
+  if (fieldId === 'kGdpFlow') {
+    return parsed > 0 ? null : 'Коэффициент должен быть больше 0';
+  }
+
+  return parsed > 0 ? null : 'Значение должно быть больше 0';
+}
+
 export function isConsumerPropertiesComplete(draft: Pz1Draft) {
   const correspondenceTablesComplete = getSyncedCorrespondenceTables(draft).every((table) =>
     consumerRows.every((row) =>
@@ -1038,11 +1091,14 @@ export function isHsrTravelTimeComplete(draft: Pz1Draft) {
 
 export function isRegionalCharacteristicsComplete(draft: Pz1Draft) {
   const regional = getPz1RegionalCharacteristics(draft);
+  const stationRegions = getEnabledStationRegions(draft.stationDrafts);
 
   return (
-    regional.regionA.trim().length > 0 &&
-    regional.regionB.trim().length > 0 &&
-    regionalCharacteristicFields.every((field) => validateRegionalCharacteristicField(field.id, regional[field.id]) === null) &&
+    stationRegions.length > 0 &&
+    stationRegions.every((region) => {
+      const parameters = regional.regionParameters?.[region];
+      return parameters && regionalParameterFields.every((field) => validateRegionParameterField(field.id, parameters[field.id]) === null);
+    }) &&
     validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct) === null
   );
 }
@@ -1123,6 +1179,16 @@ export function validateStationField(
 }
 
 export function getStationRouteDistances(draft: Pick<Pz1Draft, 'routePointDrafts' | 'stationDrafts'>): StationRouteDistance[] {
+  const stationsOnRoute = getStationRouteMarks(draft);
+
+  return stationsOnRoute.slice(0, -1).map((station, index) => ({
+    fromLabel: station.label,
+    toLabel: stationsOnRoute[index + 1].label,
+    distanceKm: Math.max(0, stationsOnRoute[index + 1].distanceFromStartKm - station.distanceFromStartKm),
+  }));
+}
+
+function getStationRouteMarks(draft: Pick<Pz1Draft, 'routePointDrafts' | 'stationDrafts'>): StationRouteMark[] {
   const routeLine = createRouteLine(draft.routePointDrafts);
   const routePoints = buildDisplayRoutePoints(routeLine, 48);
   if (routePoints.length < 2) {
@@ -1148,11 +1214,19 @@ export function getStationRouteDistances(draft: Pick<Pz1Draft, 'routePointDrafts
     }))
     .sort((left, right) => left.distanceFromStartKm - right.distanceFromStartKm);
 
-  return stationsOnRoute.slice(0, -1).map((station, index) => ({
-    fromLabel: station.label,
-    toLabel: stationsOnRoute[index + 1].label,
-    distanceKm: Math.max(0, stationsOnRoute[index + 1].distanceFromStartKm - station.distanceFromStartKm),
-  }));
+  return stationsOnRoute;
+}
+
+function getCorrespondenceDistanceKm(draft: Pz1Draft, fromLabel: StationLabel, toLabel: StationLabel) {
+  const marks = getStationRouteMarks(draft);
+  const fromMark = marks.find((mark) => mark.label === fromLabel);
+  const toMark = marks.find((mark) => mark.label === toLabel);
+
+  if (!fromMark || !toMark) {
+    return null;
+  }
+
+  return Math.abs(toMark.distanceFromStartKm - fromMark.distanceFromStartKm);
 }
 
 function createPassport(draft: Pz1Draft): Passport {
@@ -1201,13 +1275,14 @@ function createRoutePointDrafts(routeLine: Pz1Result['routeLine'] | Array<[numbe
   }
 
   const segmentByVertexId = new Map(routeLine.segments.map((segment) => [segment.fromVertexId, segment]));
+  const vertexById = new Map(routeLine.vertices.map((vertex) => [vertex.id, vertex]));
 
   return routeLine.vertices.map((vertex) => ({
     id: vertex.id,
     lat: String(vertex.lat),
     lng: String(vertex.lon),
     sagittaToNextKm: String(segmentByVertexId.get(vertex.id)?.sagittaKm ?? 0),
-    bendM: String((segmentByVertexId.get(vertex.id)?.sagittaKm ?? 0) * 1000),
+    bendM: getRouteRadiusMeters(vertex, segmentByVertexId, vertexById),
   }));
 }
 
@@ -1274,6 +1349,10 @@ function mergeCorrespondenceDetail(
     annualFlows: transportColumns.reduce<Pz1CorrespondenceDetailDraft['annualFlows']>((values, column) => {
       values[column.id] = {
         capacity: importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
+        capacityExisting:
+          importedDetail?.annualFlows?.[column.id]?.capacityExisting ?? importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
+        capacityForecast:
+          importedDetail?.annualFlows?.[column.id]?.capacityForecast ?? importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
         occupancyExisting: importedDetail?.annualFlows?.[column.id]?.occupancyExisting ?? defaultOccupancyByMode[column.id] ?? '',
         occupancyForecast: importedDetail?.annualFlows?.[column.id]?.occupancyForecast ?? defaultOccupancyByMode[column.id] ?? '',
       };
@@ -1399,12 +1478,16 @@ function mergeRegionalCharacteristics(
   const initialStation = stationDrafts.find((station) => station.label === 'А');
   const terminalStation = stationDrafts.find((station) => station.label === 'Г');
   const emptyValue = createEmptyRegionalCharacteristics(variant, initialStation?.region, terminalStation?.region);
-
-  return {
+  const mergedValue = {
     ...emptyValue,
     ...importedValue,
     regionA: importedValue?.regionA ?? initialStation?.region ?? emptyValue.regionA,
     regionB: importedValue?.regionB ?? terminalStation?.region ?? emptyValue.regionB,
+  };
+
+  return {
+    ...mergedValue,
+    regionParameters: mergeRegionParameters(mergedValue, getEnabledStationRegions(stationDrafts)),
   };
 }
 
@@ -1429,10 +1512,91 @@ function createEmptyRegionalCharacteristics(
     kGdpFlowRegionA: '',
     kGdpFlowRegionB: '',
     inducedDemandPct: '',
+    regionParameters: {
+      [regionA]: createEmptyRegionParameter(),
+      [regionB]: createEmptyRegionParameter(),
+    },
   };
 }
 
+function createEmptyRegionParameter(): Pz1RegionalParameterInputs {
+  return {
+    grpExisting: '',
+    grpForecast: '',
+    populationExisting: '',
+    populationForecast: '',
+    averageSalary: '',
+    kGdpFlow: '',
+  };
+}
+
+function mergeRegionParameters(input: Pz1RegionalCharacteristicInputs, stationRegions: string[]) {
+  const regionParameters: Record<string, Pz1RegionalParameterInputs> = {
+    ...(input.regionParameters ?? {}),
+  };
+
+  if (input.regionA) {
+    regionParameters[input.regionA] = mergeRegionParameter(regionParameters[input.regionA], {
+      grpExisting: input.grpExistingRegionA,
+      grpForecast: input.grpForecastRegionA,
+      populationExisting: input.populationExistingRegionA,
+      populationForecast: input.populationForecastRegionA,
+      averageSalary: input.averageSalaryRegionA,
+      kGdpFlow: input.kGdpFlowRegionA,
+    });
+  }
+
+  if (input.regionB) {
+    regionParameters[input.regionB] = mergeRegionParameter(regionParameters[input.regionB], {
+      grpExisting: input.grpExistingRegionB,
+      grpForecast: input.grpForecastRegionB,
+      populationExisting: input.populationExistingRegionB,
+      populationForecast: input.populationForecastRegionB,
+      averageSalary: input.averageSalaryRegionB,
+      kGdpFlow: input.kGdpFlowRegionB,
+    });
+  }
+
+  for (const region of stationRegions) {
+    regionParameters[region] = mergeRegionParameter(regionParameters[region]);
+  }
+
+  return regionParameters;
+}
+
+function mergeRegionParameter(
+  currentValue?: Pz1RegionalParameterInputs,
+  fallbackValue: Partial<Pz1RegionalParameterInputs> = {},
+): Pz1RegionalParameterInputs {
+  const emptyValue = createEmptyRegionParameter();
+
+  return regionalParameterFields.reduce<Pz1RegionalParameterInputs>((values, field) => {
+    const currentFieldValue = currentValue?.[field.id] ?? '';
+    values[field.id] = currentFieldValue.trim() ? currentFieldValue : fallbackValue[field.id] ?? emptyValue[field.id];
+    return values;
+  }, createEmptyRegionParameter());
+}
+
 function deriveRegionalPassengerFlowInput(input: Pz1RegionalCharacteristicInputs): Pz1PassengerFlowRegionalInputs {
+  const regionAParameters = input.regionParameters?.[input.regionA];
+  const regionBParameters = input.regionParameters?.[input.regionB];
+
+  if (regionAParameters && regionBParameters) {
+    return {
+      grpCurrentRegionA: regionAParameters.grpExisting,
+      grpCurrentRegionB: regionBParameters.grpExisting,
+      grpGrowthPctRegionA: deriveGrowthPct(regionAParameters.grpExisting, regionAParameters.grpForecast),
+      grpGrowthPctRegionB: deriveGrowthPct(regionBParameters.grpExisting, regionBParameters.grpForecast),
+      populationCurrentRegionA: regionAParameters.populationExisting,
+      populationCurrentRegionB: regionBParameters.populationExisting,
+      populationGrowthPctRegionA: deriveGrowthPct(regionAParameters.populationExisting, regionAParameters.populationForecast),
+      populationGrowthPctRegionB: deriveGrowthPct(regionBParameters.populationExisting, regionBParameters.populationForecast),
+      gdpPassengerFlowCoefficientRegionA: regionAParameters.kGdpFlow,
+      gdpPassengerFlowCoefficientRegionB: regionBParameters.kGdpFlow,
+      inducedDemandPct: formatDecimal((parseNumericInput(input.inducedDemandPct) ?? Number.NaN) / 100),
+    };
+  }
+
   return {
     grpCurrentRegionA: input.grpExistingRegionA,
     grpCurrentRegionB: input.grpExistingRegionB,
@@ -1446,6 +1610,40 @@ function deriveRegionalPassengerFlowInput(input: Pz1RegionalCharacteristicInputs
     gdpPassengerFlowCoefficientRegionB: input.kGdpFlowRegionB,
     inducedDemandPct: formatDecimal((parseNumericInput(input.inducedDemandPct) ?? Number.NaN) / 100),
   };
+}
+
+function getRegionalPassengerFlowInputForCorrespondence(
+  draft: Pz1Draft,
+  fromLabel: StationLabel | undefined,
+  toLabel: StationLabel | undefined,
+) {
+  if (!fromLabel || !toLabel) {
+    return null;
+  }
+
+  const fromRegion = draft.stationDrafts.find((station) => station.label === fromLabel)?.region.trim();
+  const toRegion = draft.stationDrafts.find((station) => station.label === toLabel)?.region.trim();
+  const regional = getPz1RegionalCharacteristics(draft);
+  const fromParameters = fromRegion ? regional.regionParameters?.[fromRegion] : undefined;
+  const toParameters = toRegion ? regional.regionParameters?.[toRegion] : undefined;
+
+  if (!fromParameters || !toParameters) {
+    return parseRegionalPassengerFlowInput(getEffectivePassengerFlowInputs(draft).regional);
+  }
+
+  return parseRegionalPassengerFlowInput({
+    grpCurrentRegionA: fromParameters.grpExisting,
+    grpCurrentRegionB: toParameters.grpExisting,
+    grpGrowthPctRegionA: deriveGrowthPct(fromParameters.grpExisting, fromParameters.grpForecast),
+    grpGrowthPctRegionB: deriveGrowthPct(toParameters.grpExisting, toParameters.grpForecast),
+    populationCurrentRegionA: fromParameters.populationExisting,
+    populationCurrentRegionB: toParameters.populationExisting,
+    populationGrowthPctRegionA: deriveGrowthPct(fromParameters.populationExisting, fromParameters.populationForecast),
+    populationGrowthPctRegionB: deriveGrowthPct(toParameters.populationExisting, toParameters.populationForecast),
+    gdpPassengerFlowCoefficientRegionA: fromParameters.kGdpFlow,
+    gdpPassengerFlowCoefficientRegionB: toParameters.kGdpFlow,
+    inducedDemandPct: formatDecimal((parseNumericInput(regional.inducedDemandPct) ?? Number.NaN) / 100),
+  });
 }
 
 function mergeRegionalPassengerFlowInputs(
@@ -1505,14 +1703,37 @@ function clonePassengerFlowInputs(input: Pz1Draft['passengerFlowForecast']): Pz1
   };
 }
 
-function getRouteBendKm(routePointDraft: Pz1RoutePointDraft) {
-  const bendMeters = parseNumericInput(routePointDraft.bendM ?? '');
+function getRouteSagittaKm(
+  routePointDraft: Pz1RoutePointDraft,
+  fromVertex: RouteLine['vertices'][number],
+  toVertex: RouteLine['vertices'][number],
+) {
+  const radiusMeters = parseNumericInput(routePointDraft.bendM ?? '');
 
-  if (bendMeters !== null) {
-    return Math.max(0, bendMeters / 1000);
+  if (radiusMeters !== null) {
+    const chordKm = haversineDistanceKm(fromVertex, toVertex);
+    return computeSagittaFromRadius(chordKm, radiusMeters / 1000);
   }
 
   return Math.max(0, parseCoordinate(routePointDraft.sagittaToNextKm) ?? 0);
+}
+
+function getRouteRadiusMeters(
+  vertex: RouteLine['vertices'][number],
+  segmentByVertexId: Map<string, RouteLine['segments'][number]>,
+  vertexById: Map<string, RouteLine['vertices'][number]>,
+) {
+  const segment = segmentByVertexId.get(vertex.id);
+  const targetVertex = segment ? vertexById.get(segment.toVertexId) : undefined;
+
+  if (!segment || !targetVertex) {
+    return '0';
+  }
+
+  const chordKm = haversineDistanceKm(vertex, targetVertex);
+  const radiusKm = computeArcMetrics(chordKm, segment.sagittaKm).radiusKm;
+
+  return radiusKm === null ? '0' : formatDecimal(radiusKm * 1000);
 }
 
 function getEffectiveTravelTimeValues(draft: Pz1Draft, detail: Pz1CorrespondenceDetailDraft) {
@@ -1579,12 +1800,29 @@ function getTravelTimeTotalHours(
   return totalMinutes === null ? null : totalMinutes / 60;
 }
 
-function getTotalTransportCost(detail: Pz1CorrespondenceDetailDraft, modeId: TransportModeId) {
+function getTotalTransportCost(draft: Pz1Draft, detail: Pz1CorrespondenceDetailDraft, modeId: TransportModeId) {
   const fare = parseNumericInput(detail.fare[modeId].forecast);
   const cityFareOrigin = parseNumericInput(detail.otherParameters.cityFareOrigin);
   const cityFareDestination = parseNumericInput(detail.otherParameters.cityFareDestination);
 
   if (modeId === CAR_MODE_ID) {
+    const routeDistanceKm = getCorrespondenceDistanceKm(draft, detail.fromLabel, detail.toLabel);
+    const carOccupancy = parseNumericInput(detail.otherParameters.carOccupancy);
+    const gasolinePrice = parseNumericInput(detail.otherParameters.gasolinePrice);
+    const gasolineConsumption = parseNumericInput(detail.otherParameters.gasolineConsumption);
+    const carMaintenanceCostKm = parseNumericInput(detail.otherParameters.carMaintenanceCostKm);
+
+    if (
+      routeDistanceKm !== null &&
+      carOccupancy !== null &&
+      gasolinePrice !== null &&
+      gasolineConsumption !== null &&
+      carMaintenanceCostKm !== null &&
+      carOccupancy > 0
+    ) {
+      return ((gasolinePrice * gasolineConsumption) / 100 + carMaintenanceCostKm) * routeDistanceKm / carOccupancy;
+    }
+
     return fare;
   }
 

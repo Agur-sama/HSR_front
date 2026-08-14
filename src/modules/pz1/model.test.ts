@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   createInitialPz1Draft,
   createPz1Result,
+  createRouteLine,
   getComputedFinalIndicators,
+  getEnabledStationRegions,
   getHsrTravelTimeResult,
   getPz1PassengerFlowForecast,
+  getPz1CorrespondenceScenarios,
+  getPz1RegionalCharacteristics,
   getStationRouteDistances,
+  getSyncedCorrespondenceDetails,
   getSyncedCorrespondenceTables,
   isStationsStepComplete,
   updateCellValue,
@@ -92,6 +97,16 @@ describe('pz1 model', () => {
     expect(distance.fromLabel).toBe('А');
     expect(distance.toLabel).toBe('Г');
     expect(distance.distanceKm).toBeGreaterThan(222);
+  });
+
+  it('treats route segment bend input as radius in meters', () => {
+    const routeLine = createRouteLine([
+      { id: 'route-point-1', lat: '0', lng: '0', sagittaToNextKm: '0', bendM: '100000' },
+      { id: 'route-point-2', lat: '0', lng: '1', sagittaToNextKm: '0', bendM: '0' },
+    ]);
+
+    expect(routeLine.segments[0].sagittaKm).toBeGreaterThan(10);
+    expect(routeLine.segments[0].sagittaKm).toBeLessThan(20);
   });
 
   it('calculates HSR travel time from route segments and speed inputs', () => {
@@ -282,5 +297,66 @@ describe('pz1 model', () => {
 
     expect(forecast?.totalDemand.baseForecast).toBeCloseTo(605, 1);
     expect(forecast?.totalDemand.inducedDemand).toBeCloseTo(211.75, 2);
+  });
+
+  it('keeps regional parameters by unique station region and repeats them for matching stations', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[1] = {
+      ...draft.stationDrafts[1],
+      enabled: true,
+      name: 'Промежуточная',
+      lat: '1',
+      lng: '1',
+      region: draft.stationDrafts[0].region,
+    };
+    draft.regionalCharacteristics = {
+      ...draft.regionalCharacteristics,
+      inducedDemandPct: '20',
+      regionParameters: {
+        [draft.stationDrafts[0].region]: {
+          grpExisting: '100',
+          grpForecast: '120',
+          populationExisting: '50',
+          populationForecast: '55',
+          averageSalary: '60000',
+          kGdpFlow: '1',
+        },
+        [draft.stationDrafts[3].region]: {
+          grpExisting: '200',
+          grpForecast: '220',
+          populationExisting: '80',
+          populationForecast: '84',
+          averageSalary: '65000',
+          kGdpFlow: '1,1',
+        },
+      },
+    };
+
+    const regional = getPz1RegionalCharacteristics(draft);
+
+    expect(getEnabledStationRegions(draft.stationDrafts)).toHaveLength(2);
+    expect(regional.regionParameters?.[draft.stationDrafts[1].region]?.grpExisting).toBe('100');
+  });
+
+  it('calculates annual flow with separate existing and forecast capacities', () => {
+    const draft = createInitialPz1Draft();
+    const [detail] = getSyncedCorrespondenceDetails(draft);
+    draft.correspondenceDetails[detail.pairKey] = detail;
+    draft.correspondenceDetails[detail.pairKey].annualFlows.airplane = {
+      capacity: '',
+      capacityExisting: '100',
+      capacityForecast: '200',
+      occupancyExisting: '0,5',
+      occupancyForecast: '0,5',
+    };
+    draft.correspondenceDetails[detail.pairKey].frequency.airplane = {
+      existing: '1',
+      forecast: '2',
+    };
+
+    const scenario = getPz1CorrespondenceScenarios(draft)[detail.pairKey];
+
+    expect(scenario.annualFlows.airplane.existingAnnualFlow).toBe(18_250);
+    expect(scenario.annualFlows.airplane.forecastAnnualFlow).toBe(73_000);
   });
 });

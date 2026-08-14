@@ -112,6 +112,15 @@ export interface Pz1HsrTravelTimeResult {
   segments: Pz1HsrTravelTimeSegment[];
 }
 
+export interface Pz1RegionalParameterInputs {
+  grpExisting: string;
+  grpForecast: string;
+  populationExisting: string;
+  populationForecast: string;
+  averageSalary: string;
+  kGdpFlow: string;
+}
+
 export interface Pz1RegionalCharacteristicInputs {
   regionA: string;
   regionB: string;
@@ -128,6 +137,7 @@ export interface Pz1RegionalCharacteristicInputs {
   kGdpFlowRegionA: string;
   kGdpFlowRegionB: string;
   inducedDemandPct: string;
+  regionParameters?: Record<string, Pz1RegionalParameterInputs>;
 }
 
 export interface SplitTransportValue {
@@ -137,6 +147,8 @@ export interface SplitTransportValue {
 
 export interface Pz1AnnualFlowModeInputs {
   capacity: string;
+  capacityExisting?: string;
+  capacityForecast?: string;
   occupancyExisting: string;
   occupancyForecast: string;
   existingAnnualFlow?: number;

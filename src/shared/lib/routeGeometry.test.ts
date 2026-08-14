@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDisplayRoutePoints, computeArcMetrics, computeRouteLineMetrics, haversineDistanceKm } from './routeGeometry';
+import { buildDisplayRoutePoints, computeArcMetrics, computeRouteLineMetrics, computeSagittaFromRadius, haversineDistanceKm } from './routeGeometry';
 import type { RouteLine } from '../../bridge/schema';
 
 describe('route geometry', () => {
@@ -15,6 +15,12 @@ describe('route geometry', () => {
 
     expect(metrics.radiusKm).toBeNull();
     expect(metrics.arcLengthKm).toBe(100);
+  });
+
+  it('derives sagitta from segment radius in kilometers', () => {
+    expect(computeSagittaFromRadius(100, 50)).toBeCloseTo(50, 5);
+    expect(computeSagittaFromRadius(100, 100)).toBeCloseTo(13.397, 3);
+    expect(computeSagittaFromRadius(100, 0)).toBe(0);
   });
 
   it('keeps invalid numeric input from leaking NaN into route metrics', () => {

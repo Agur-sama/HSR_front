@@ -64,6 +64,8 @@ export interface Pz1HsrSpeedDraft {
 
 export interface Pz1CorrespondenceAnnualFlowDraft {
   capacity: string;
+  capacityExisting?: string;
+  capacityForecast?: string;
   occupancyExisting: string;
   occupancyForecast: string;
 }
