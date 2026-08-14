@@ -455,6 +455,25 @@ button:focus-visible {
   line-height: 1.55;
 }
 
+.pz1-goal-card {
+  margin-top: 16px;
+  border: 1px solid #cdeee1;
+  border-radius: 10px;
+  background: var(--teal-bg);
+  padding: 14px;
+}
+
+.pz1-goal-card ol {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--teal-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .drop-zone {
   display: grid;
   place-items: center;
@@ -689,7 +708,7 @@ button:focus-visible {
   position: absolute;
   left: 12px;
   top: 88px;
-  z-index: 8;
+  z-index: 20;
   display: grid;
   overflow: hidden;
   border: 1px solid var(--border-strong);
@@ -1151,6 +1170,71 @@ input.is-invalid {
   gap: 16px;
 }
 
+.hsr-time-step,
+.regional-step {
+  display: grid;
+  gap: 16px;
+}
+
+.input-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.input-table th,
+.input-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.input-table thead th {
+  background: var(--panel-alt);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.input-table input {
+  width: min(150px, 100%);
+}
+
+.region-pair-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.region-pair-summary div {
+  border-radius: 8px;
+  background: var(--bg-soft);
+  padding: 12px;
+}
+
+.region-pair-summary dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.region-pair-summary dd {
+  margin: 5px 0 0;
+  color: var(--indigo);
+  font-weight: 800;
+}
+
+.regional-fields {
+  display: grid;
+  gap: 2px;
+}
+
 .passenger-flow-regions {
   display: grid;
   gap: 10px;
@@ -1175,6 +1259,10 @@ input.is-invalid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin: 0 0 16px;
+}
+
+.forecast-summary-grid--compact dd {
+  font-size: 20px;
 }
 
 .forecast-summary-grid div {

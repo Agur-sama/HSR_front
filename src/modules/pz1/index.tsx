@@ -14,6 +14,7 @@ import type {
   Pz1PassengerFlowModeInputs,
   Pz1PassengerFlowRegionalInputs,
   Pz1PassengerFlowResult,
+  Pz1RegionalCharacteristicInputs,
   TransportModeId,
 } from '../../bridge/schema';
 import { ModuleStateProvider, useModuleState } from '../../bridge/context';
@@ -31,27 +32,36 @@ import {
   createPz1Result,
   discomfortRows,
   finalIndicators,
+  getCorrespondenceTitle,
   getComputedFinalIndicators,
   getDuplicateStationNames,
-  getPz1TaskStepCount,
+  getEffectivePassengerFlowInputs,
+  getHsrTravelTimeResult,
   getPz1PassengerFlowForecast,
+  getPz1RegionalCharacteristics,
   getRouteMetrics,
   getStationRouteDistances,
   getSyncedCorrespondenceTables,
+  isHsrTravelTimeComplete,
   isConsumerPropertiesComplete,
   isFinalIndicatorsComplete,
   isPassengerFlowForecastComplete,
   isPassportComplete,
+  isRegionalCharacteristicsComplete,
   isStationsStepComplete,
   isTransportModeRemovable,
   passengerFlowModeRows,
   passengerFlowRegionalFields,
+  regionalCharacteristicFields,
+  russianRegions,
   sanitizeFileName,
   syncCorrespondenceTables,
   transportColumns,
   updateCellValue,
   validateConsumerCell,
   validateDiscomfortCell,
+  validateHsrSpeed,
+  validateRegionalCharacteristicField,
   validateStationField,
 } from './model';
 import type { Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
@@ -77,6 +87,24 @@ function Pz1Workspace() {
       content: <StationsStep />,
       isComplete: isStationsStepComplete(draft),
       completionHint: 'Проложите линию трассы — нужно минимум две точки',
+    },
+    {
+      id: 'hsr-travel-time',
+      title: 'Время хода ВСМ',
+      goal:
+        'Задайте среднюю скорость на каждом перегоне. Итоговое время ВСМ рассчитывается автоматически в формате ЧЧ:ММ.',
+      content: <HsrTravelTimeStep />,
+      isComplete: isHsrTravelTimeComplete(draft),
+      completionHint: 'Укажите среднюю скорость по каждому перегону между станциями',
+    },
+    {
+      id: 'regional-characteristics',
+      title: 'Характеристики регионов',
+      goal:
+        'Заполните ВРП, население, зарплату и коэффициент влияния ВВП на пассажиропоток для регионов начальной и конечной станции.',
+      content: <RegionalCharacteristicsStep />,
+      isComplete: isRegionalCharacteristicsComplete(draft),
+      completionHint: 'Заполните параметры обоих регионов и индуцированный спрос',
     },
     {
       id: 'consumer-properties',
@@ -197,10 +225,49 @@ function IntroStep() {
             <span>Вариант, который вам назначили</span>
             <select
               onChange={(event) =>
-                updateDraft((currentDraft) => ({
-                  ...currentDraft,
-                  selectedVariantId: event.target.value,
-                }))
+                updateDraft((currentDraft) => {
+                  const nextVariant = pz1Variants.find((variant) => variant.id === event.target.value) ?? selectedVariant;
+                  const previousVariant = pz1Variants.find((variant) => variant.id === currentDraft.selectedVariantId) ?? selectedVariant;
+
+                  return {
+                    ...currentDraft,
+                    selectedVariantId: event.target.value,
+                    stationDrafts: currentDraft.stationDrafts.map((station) => {
+                      if (station.label === 'А') {
+                        return {
+                          ...station,
+                          name: station.name.trim() && station.name !== previousVariant.fromCity ? station.name : nextVariant.fromCity,
+                          region:
+                            station.region.trim() && station.region !== previousVariant.fromRegion ? station.region : nextVariant.fromRegion,
+                        };
+                      }
+
+                      if (station.label === 'Г') {
+                        return {
+                          ...station,
+                          name: station.name.trim() && station.name !== previousVariant.toCity ? station.name : nextVariant.toCity,
+                          region:
+                            station.region.trim() && station.region !== previousVariant.toRegion ? station.region : nextVariant.toRegion,
+                        };
+                      }
+
+                      return station;
+                    }),
+                    regionalCharacteristics: {
+                      ...currentDraft.regionalCharacteristics,
+                      regionA:
+                        currentDraft.regionalCharacteristics.regionA &&
+                        currentDraft.regionalCharacteristics.regionA !== previousVariant.fromRegion
+                          ? currentDraft.regionalCharacteristics.regionA
+                          : nextVariant.fromRegion,
+                      regionB:
+                        currentDraft.regionalCharacteristics.regionB &&
+                        currentDraft.regionalCharacteristics.regionB !== previousVariant.toRegion
+                          ? currentDraft.regionalCharacteristics.regionB
+                          : nextVariant.toRegion,
+                    },
+                  };
+                })
               }
               value={draft.selectedVariantId}
             >
@@ -213,6 +280,18 @@ function IntroStep() {
           </label>
         </div>
         <p className="variant-note">{selectedVariant.description}</p>
+        <div className="pz1-goal-card">
+          <p className="eyebrow">Цель ПЗ1</p>
+          <ol>
+            <li>Наметить план трассы, определить место размещения начально-конечных и промежуточных станций.</li>
+            <li>Определить потребительские свойства перспективной линии ВСМ.</li>
+            <li>Рассчитать прогнозируемый пассажиропоток.</li>
+            <li>
+              Определить технико-экономические показатели: показатели, эффекты, риски, затраты на строительство,
+              билетная выручка.
+            </li>
+          </ol>
+        </div>
       </section>
 
       <section className="import-section">
@@ -269,10 +348,9 @@ function StationsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const [activeStationLabel, setActiveStationLabel] = useState<Pz1StationDraft['label']>('А');
   const routeMetrics = getRouteMetrics(draft);
-  const correspondenceCount = getSyncedCorrespondenceTables(draft).length;
-  const estimatedStepCount = getPz1TaskStepCount(draft);
   const duplicateStationNames = getDuplicateStationNames(draft);
   const stationRouteDistances = getStationRouteDistances(draft);
+  const selectedVariant = pz1Variants.find((variant) => variant.id === draft.selectedVariantId) ?? pz1Variants[0];
 
   function updateStation(label: Pz1StationDraft['label'], patch: Partial<Pz1StationDraft>) {
     updateDraft((currentDraft) => ({
@@ -302,6 +380,8 @@ function StationsStep() {
     <div className="stations-step">
       <OsmStationMap
         activeStationLabel={activeStationLabel}
+        mapCenter={selectedVariant.mapCenter}
+        mapZoom={selectedVariant.mapZoom}
         onActiveStationChange={setActiveStationLabel}
         onPreviewImageChange={(previewImage) =>
           updateDraft((currentDraft) =>
@@ -315,11 +395,17 @@ function StationsStep() {
         stations={draft.stationDrafts}
       />
       <div className="station-grid">
+        <datalist id="russian-regions">
+          {russianRegions.map((region) => (
+            <option key={region} value={region} />
+          ))}
+        </datalist>
         {draft.stationDrafts.map((stationDraft) => {
           const isTerminal = stationDraft.type === 'terminal';
           const nameError = validateStationField(stationDraft, 'name', duplicateStationNames);
           const latError = validateStationField(stationDraft, 'lat');
           const lngError = validateStationField(stationDraft, 'lng');
+          const regionError = validateStationField(stationDraft, 'region');
 
           return (
             <fieldset
@@ -338,7 +424,7 @@ function StationsStep() {
                   onChange={(event) => updateStation(stationDraft.label, { enabled: event.target.checked })}
                   type="checkbox"
                 />
-                <span>{isTerminal ? 'Обязательная' : 'Промежуточная'}</span>
+                <span>{isTerminal ? 'Конечная и начальная' : 'Промежуточная'}</span>
               </label>
               <label>
                 <span>Название</span>
@@ -374,15 +460,21 @@ function StationsStep() {
                   {lngError ? <small className="field-error">{lngError}</small> : null}
                 </label>
               </div>
+              <label>
+                <span>Регион станции</span>
+                <input
+                  aria-invalid={regionError ? true : undefined}
+                  className={regionError ? 'is-invalid' : undefined}
+                  list="russian-regions"
+                  onChange={(event) => updateStation(stationDraft.label, { region: event.target.value })}
+                  value={stationDraft.region}
+                />
+                {regionError ? <small className="field-error">{regionError}</small> : null}
+              </label>
             </fieldset>
           );
         })}
       </div>
-      <aside className="correspondence-estimate">
-        <p className="eyebrow">Объём ПЗ1</p>
-        <strong>{correspondenceCount} корреспонденций</strong>
-        <span>{estimatedStepCount} шагов в фазе задания при текущем наборе станций.</span>
-      </aside>
       {stationRouteDistances.length > 0 ? (
         <aside className="station-route-distances">
           <p className="eyebrow">Участки трассы</p>
@@ -399,6 +491,174 @@ function StationsStep() {
           </dl>
         </aside>
       ) : null}
+    </div>
+  );
+}
+
+function HsrTravelTimeStep() {
+  const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const stationRouteDistances = getStationRouteDistances(draft);
+  const hsrTravelTime = getHsrTravelTimeResult(draft);
+  let cumulativeKm = 0;
+
+  function updateSegmentSpeed(pairKey: string, speedKmh: string) {
+    updateDraft((currentDraft) => ({
+      ...currentDraft,
+      hsrTravelTimes: {
+        ...currentDraft.hsrTravelTimes,
+        [pairKey]: { speedKmh },
+      },
+    }));
+  }
+
+  if (stationRouteDistances.length === 0) {
+    return (
+      <section className="empty-state">
+        <h3>Перегоны пока не рассчитаны</h3>
+        <p>Вернитесь к карте, поставьте станции на трассу и добавьте минимум две точки линии.</p>
+      </section>
+    );
+  }
+
+  return (
+    <div className="hsr-time-step">
+      <section className="form-section">
+        <p className="eyebrow">Расчёт времени</p>
+        <h3>Время хода ВСМ по перегонам</h3>
+        <div className="table-scroll">
+          <table className="input-table">
+            <thead>
+              <tr>
+                <th>Перегон</th>
+                <th>Километровая отметка</th>
+                <th>Расстояние, км</th>
+                <th>Средняя скорость, км/ч</th>
+                <th>Время, ЧЧ:ММ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stationRouteDistances.map((distance) => {
+                const pairKey = `${distance.fromLabel}-${distance.toLabel}`;
+                const speedValue = draft.hsrTravelTimes[pairKey]?.speedKmh ?? '';
+                const speedError = validateHsrSpeed(speedValue);
+                const speed = parseNumberInput(speedValue);
+                const travelTimeMinutes =
+                  speed !== null && speed > 0 ? (distance.distanceKm / speed) * 60 + 3 : null;
+                cumulativeKm += distance.distanceKm;
+
+                return (
+                  <tr key={pairKey}>
+                    <th scope="row">{getCorrespondenceTitle(draft, distance.fromLabel, distance.toLabel)}</th>
+                    <td>{formatKm(cumulativeKm)}</td>
+                    <td>{formatPassengerFlowValue(distance.distanceKm)}</td>
+                    <td>
+                      <input
+                        aria-invalid={speedError ? true : undefined}
+                        className={speedError ? 'is-invalid' : undefined}
+                        inputMode="decimal"
+                        onChange={(event) => updateSegmentSpeed(pairKey, event.target.value)}
+                        value={speedValue}
+                      />
+                      {speedError ? <small className="field-error">{speedError}</small> : null}
+                    </td>
+                    <td>{travelTimeMinutes === null ? 'не рассчитано' : formatDuration(travelTimeMinutes)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section className="forecast-summary-panel">
+        <p className="eyebrow">Итог</p>
+        <h3>Итоговое время ВСМ</h3>
+        <dl className="forecast-summary-grid forecast-summary-grid--compact">
+          <div>
+            <dt>Разгон</dt>
+            <dd>00:02</dd>
+          </div>
+          <div>
+            <dt>Торможение</dt>
+            <dd>00:01</dd>
+          </div>
+          <div>
+            <dt>Перегонов</dt>
+            <dd>{stationRouteDistances.length}</dd>
+          </div>
+          <div>
+            <dt>Итого</dt>
+            <dd>{hsrTravelTime ? formatDuration(hsrTravelTime.totalMinutes) : '—'}</dd>
+          </div>
+        </dl>
+        <p className="status-note">
+          Чистое время ВСМ в прогнозе берётся отсюда. Существующее время ВСМ в модели остаётся 0, потому что линии ещё нет.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function RegionalCharacteristicsStep() {
+  const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const regional = getPz1RegionalCharacteristics(draft);
+
+  function updateRegionalField(fieldId: keyof Pz1RegionalCharacteristicInputs, value: string) {
+    updateDraft((currentDraft) => ({
+      ...currentDraft,
+      regionalCharacteristics: {
+        ...currentDraft.regionalCharacteristics,
+        [fieldId]: value,
+      },
+    }));
+  }
+
+  return (
+    <div className="regional-step">
+      <section className="form-section">
+        <p className="eyebrow">Регионы</p>
+        <h3>Характеристики регионов</h3>
+        <dl className="region-pair-summary">
+          <div>
+            <dt>Регион 1</dt>
+            <dd>{regional.regionA || 'не выбран'}</dd>
+          </div>
+          <div>
+            <dt>Регион 2</dt>
+            <dd>{regional.regionB || 'не выбран'}</dd>
+          </div>
+        </dl>
+        <div className="regional-fields">
+          {regionalCharacteristicFields.map((field) => (
+            <FieldWithHint
+              hint={field.helper}
+              id={`regional-${field.id}`}
+              key={field.id}
+              label={field.label}
+              onChange={(value) => updateRegionalField(field.id, value)}
+              value={regional[field.id]}
+            />
+          ))}
+          <FieldWithHint
+            hint="%"
+            id="regional-inducedDemandPct"
+            label="Прогнозируемый индуцированный спрос"
+            onChange={(value) => updateRegionalField('inducedDemandPct', value)}
+            value={regional.inducedDemandPct}
+          />
+        </div>
+      </section>
+      <section className="forecast-summary-panel">
+        <p className="eyebrow">Проверка</p>
+        <h3>Что пойдёт в прогноз</h3>
+        {validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct) ? (
+          <p className="status-note">Заполните параметры регионов, чтобы сформировать входы формулы роста рынка.</p>
+        ) : (
+          <p className="status-note">
+            ВРП и население преобразуются в темпы роста, коэффициент «ВВП → пассажиропоток» подставляется по каждому
+            региону отдельно.
+          </p>
+        )}
+      </section>
     </div>
   );
 }
@@ -422,7 +682,7 @@ function ConsumerPropertiesStep() {
         return (
           <section className="correspondence-table" key={table.pairKey}>
             <DataEntryTable
-              caption={`Корреспонденция ${table.pairKey}`}
+              caption={`Корреспонденция ${getCorrespondenceTitle(draft, table.fromLabel, table.toLabel)}`}
               columns={activeColumns}
               canRemoveColumn={(columnId) => isTransportModeRemovable(columnId as TransportModeId)}
               getCellMeta={(rowId, columnId) => getConsumerCellMeta(rowId, table.values[rowId]?.[columnId] ?? '')}
@@ -519,10 +779,11 @@ function ConsumerPropertiesStep() {
 function PassengerFlowForecastStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const forecast = getPz1PassengerFlowForecast(draft);
+  const effectiveInputs = getEffectivePassengerFlowInputs(draft);
   const chartData = forecast ? buildPassengerFlowChartData(forecast) : [];
   const modeTableValues = passengerFlowModeRows.reduce<Record<string, Record<string, string>>>((values, row) => {
     values[row.id] = transportColumns.reduce<Record<string, string>>((modeValues, column) => {
-      modeValues[column.id] = draft.passengerFlowForecast.modes[column.id]?.[row.id] ?? '';
+      modeValues[column.id] = effectiveInputs.modes[column.id]?.[row.id] ?? '';
       return modeValues;
     }, {});
     return values;
@@ -570,7 +831,7 @@ function PassengerFlowForecastStep() {
               key={field.id}
               label={field.label}
               onChange={(value) => updateRegionalField(field.id, value)}
-              value={draft.passengerFlowForecast.regional[field.id]}
+              value={effectiveInputs.regional[field.id]}
             />
           ))}
         </div>
@@ -582,7 +843,7 @@ function PassengerFlowForecastStep() {
         getError={(rowId, columnId) =>
           validatePassengerFlowModeInput(
             rowId as keyof Pz1PassengerFlowModeInputs,
-            draft.passengerFlowForecast.modes[columnId as TransportModeId]?.[
+            effectiveInputs.modes[columnId as TransportModeId]?.[
               rowId as keyof Pz1PassengerFlowModeInputs
             ] ?? '',
           )
@@ -681,7 +942,7 @@ function FinalIndicatorsStep() {
     <div className="indicator-step">
       <div className="indicator-grid">
         {finalIndicators.map((indicator) => {
-          const isComputed = indicator.id === 'lineLength' || indicator.id === 'annualFlow';
+          const isComputed = indicator.id === 'lineLength' || indicator.id === 'annualFlow' || indicator.id === 'travelTime';
 
           return (
             <FieldWithHint
@@ -702,6 +963,8 @@ function FinalIndicatorsStep() {
                   ? totalLengthText
                   : indicator.id === 'annualFlow'
                     ? computedFinalIndicators.annualFlow
+                    : indicator.id === 'travelTime'
+                      ? computedFinalIndicators.travelTime
                     : draft.finalIndicators[indicator.id] ?? ''
               }
             />
@@ -763,9 +1026,11 @@ function ResultStep() {
           consumerProperties: result.consumerProperties,
           discomfortMatrix: result.discomfortMatrix,
           finalIndicators: result.finalIndicators,
+          hsrTravelTime: result.hsrTravelTime,
           notes: result.notes,
           passengerFlowForecast: result.passengerFlowForecast,
           passengerFlowChartImage,
+          regionalCharacteristics: result.regionalCharacteristics,
           routeLine: result.routeLine,
           stationRouteDistances,
           previewImage: result.previewImage,
@@ -1053,6 +1318,14 @@ function formatPercent(value: number) {
     maximumFractionDigits: 1,
     style: 'percent',
   }).format(value);
+}
+
+function formatDuration(totalMinutes: number) {
+  const roundedMinutes = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
 function parseNumberInput(value: string) {

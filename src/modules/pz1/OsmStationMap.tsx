@@ -21,10 +21,12 @@ const STATION_LAYER_ID = 'vsm-station-layer';
 const ROUTE_POINT_SOURCE_ID = 'vsm-route-point-source';
 const ROUTE_POINT_LAYER_ID = 'vsm-route-point-layer';
 
-type MapMode = 'station' | 'route';
+type MapMode = 'view' | 'station' | 'route';
 
 interface OsmStationMapProps {
   activeStationLabel: Pz1StationDraft['label'];
+  mapCenter?: [number, number];
+  mapZoom?: number;
   onActiveStationChange: (label: Pz1StationDraft['label']) => void;
   onPreviewImageChange: (previewImage: string) => void;
   onRoutePointDraftsChange: (routePointDrafts: Pz1RoutePointDraft[]) => void;
@@ -41,6 +43,8 @@ interface ScreenPoint {
 
 export function OsmStationMap({
   activeStationLabel,
+  mapCenter = DEFAULT_CENTER,
+  mapZoom = DEFAULT_ZOOM,
   onActiveStationChange,
   onPreviewImageChange,
   onRoutePointDraftsChange,
@@ -123,7 +127,7 @@ export function OsmStationMap({
 
     const map = new maplibregl.Map({
       attributionControl: false,
-      center: DEFAULT_CENTER,
+      center: mapCenter,
       container: containerRef.current,
       maxZoom: MAX_ZOOM,
       minZoom: MIN_ZOOM,
@@ -143,7 +147,7 @@ export function OsmStationMap({
         },
         layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm' }],
       },
-      zoom: DEFAULT_ZOOM,
+      zoom: mapZoom,
     });
 
     mapRef.current = map;
@@ -167,6 +171,10 @@ export function OsmStationMap({
     map.on('zoom', syncCurrentRouteOverlay);
     map.on('resize', syncCurrentRouteOverlay);
     map.on('click', (event: MapMouseEvent) => {
+      if (modeRef.current === 'view') {
+        return;
+      }
+
       if (modeRef.current === 'station') {
         onStationChangeRef.current(activeStationLabelRef.current, {
           enabled: true,
@@ -183,6 +191,7 @@ export function OsmStationMap({
           lat: event.lngLat.lat.toFixed(5),
           lng: event.lngLat.lng.toFixed(5),
           sagittaToNextKm: '0',
+          bendM: '0',
         },
       ];
       const nextCoordinates = getRoutePointCoordinates(nextRoutePointDrafts);
@@ -225,6 +234,27 @@ export function OsmStationMap({
       map.remove();
       mapRef.current = null;
     };
+  }, [mapCenter, mapZoom]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isMapReady) {
+      return;
+    }
+
+    map.flyTo({ center: mapCenter, zoom: mapZoom });
+  }, [isMapReady, mapCenter, mapZoom]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMode('station');
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   useEffect(() => {
@@ -252,7 +282,7 @@ export function OsmStationMap({
       ...stations.flatMap((station) => createStationMarker(map, station)),
       ...routePointDrafts.flatMap((routePointDraft, index) => createRoutePointMarker(map, routePointDraft, index)),
     ];
-  }, [activeStationLabel, isMapReady, onActiveStationChange, onRoutePointDraftsChange, onStationChange, routePointDrafts, stations]);
+  }, [activeStationLabel, isMapReady, mode, onActiveStationChange, onRoutePointDraftsChange, onStationChange, routePointDrafts, stations]);
 
   function createStationMarker(map: MapLibreMap, station: Pz1StationDraft) {
     if (!station.enabled) {
@@ -274,7 +304,7 @@ export function OsmStationMap({
       onActiveStationChange(station.label);
     });
 
-    const marker = new maplibregl.Marker({ element, draggable: true })
+    const marker = new maplibregl.Marker({ element, draggable: mode !== 'view' })
       .setLngLat(coordinates)
       .addTo(map);
 
@@ -304,10 +334,13 @@ export function OsmStationMap({
     element.addEventListener('click', (event) => event.stopPropagation());
     element.addEventListener('dblclick', (event) => {
       event.stopPropagation();
+      if (modeRef.current === 'view') {
+        return;
+      }
       onRoutePointDraftsChange(routePointDrafts.filter((point) => point.id !== routePointDraft.id));
     });
 
-    const marker = new maplibregl.Marker({ element, draggable: true })
+    const marker = new maplibregl.Marker({ element, draggable: mode !== 'view' })
       .setLngLat(coordinates)
       .addTo(map);
 
@@ -325,9 +358,9 @@ export function OsmStationMap({
     return [marker];
   }
 
-  function updateSegmentSagitta(pointIndex: number, value: string) {
+  function updateSegmentBendMeters(pointIndex: number, value: string) {
     onRoutePointDraftsChange(
-      routePointDrafts.map((point, index) => (index === pointIndex ? { ...point, sagittaToNextKm: value } : point)),
+      routePointDrafts.map((point, index) => (index === pointIndex ? { ...point, bendM: value } : point)),
     );
   }
 
@@ -372,6 +405,9 @@ export function OsmStationMap({
         </div>
         <div className="osm-map-actions">
           <div className="segmented-control" aria-label="Режим редактирования карты">
+            <button className={mode === 'view' ? 'is-active' : ''} onClick={() => setMode('view')} type="button">
+              Просмотр
+            </button>
             <button className={mode === 'station' ? 'is-active' : ''} onClick={() => setMode('station')} type="button">
               Станция
             </button>
@@ -453,11 +489,11 @@ export function OsmStationMap({
             >
               <span>Сегмент {index + 1}</span>
               <label onClick={(event) => event.stopPropagation()}>
-                Стрела прогиба, км
+                Радиус между точками, м
                 <input
-                  inputMode="decimal"
-                  onChange={(event) => updateSegmentSagitta(index, event.target.value)}
-                  value={routePointDrafts[index]?.sagittaToNextKm ?? '0'}
+                  inputMode="numeric"
+                  onChange={(event) => updateSegmentBendMeters(index, event.target.value)}
+                  value={routePointDrafts[index]?.bendM ?? String(Number(routePointDrafts[index]?.sagittaToNextKm ?? 0) * 1000)}
                 />
               </label>
               <small>Радиус: {metrics?.radiusKm ? formatKm(metrics.radiusKm) : 'прямая'}</small>
@@ -479,9 +515,11 @@ export function OsmStationMap({
       </div>
 
       <p className="osm-map-hint">
-        {mode === 'station'
-          ? `Кликните по карте, чтобы поставить станцию. Перетащите поставленную, чтобы подвинуть. Активна станция ${activeStation?.label}.`
-          : 'Кликните, чтобы добавить точку линии. Ведите линию в обход водоёмов и возвышенностей.'}
+        {mode === 'view'
+          ? 'Режим просмотра: можно двигать и масштабировать карту, объекты не создаются и не перетаскиваются. Esc возвращает режим станции.'
+          : mode === 'station'
+            ? `Кликните по карте, чтобы поставить станцию. Перетащите поставленную, чтобы подвинуть. Активна станция ${activeStation?.label}.`
+            : 'Кликните, чтобы добавить точку линии. Ведите линию в обход водоёмов и возвышенностей.'}
       </p>
     </section>
   );

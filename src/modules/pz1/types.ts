@@ -2,6 +2,7 @@ import type {
   Pz1PassengerFlowModeInputs,
   Pz1PassengerFlowRegionalInputs,
   Pz1DiscomfortMatrix,
+  Pz1RegionalCharacteristicInputs,
   StationLabel,
   StationType,
   TransportModeId,
@@ -11,6 +12,12 @@ export interface Pz1Variant {
   id: string;
   title: string;
   description: string;
+  fromCity: string;
+  toCity: string;
+  fromRegion: string;
+  toRegion: string;
+  mapCenter: [number, number];
+  mapZoom: number;
 }
 
 export interface Pz1PassportDraft {
@@ -26,6 +33,7 @@ export interface Pz1StationDraft {
   lat: string;
   lng: string;
   type: StationType;
+  region: string;
 }
 
 export interface Pz1RoutePointDraft {
@@ -33,6 +41,7 @@ export interface Pz1RoutePointDraft {
   lat: string;
   lng: string;
   sagittaToNextKm: string;
+  bendM?: string;
 }
 
 export interface Pz1CorrespondenceTableDraft {
@@ -48,6 +57,10 @@ export interface Pz1PassengerFlowForecastDraft {
   modes: Record<TransportModeId, Pz1PassengerFlowModeInputs>;
 }
 
+export interface Pz1HsrSpeedDraft {
+  speedKmh: string;
+}
+
 export interface Pz1Draft {
   passport: Pz1PassportDraft;
   selectedVariantId: string;
@@ -56,6 +69,8 @@ export interface Pz1Draft {
   previewImage: string;
   correspondenceTables: Record<string, Pz1CorrespondenceTableDraft>;
   discomfortMatrix: Pz1DiscomfortMatrix;
+  hsrTravelTimes: Record<string, Pz1HsrSpeedDraft>;
+  regionalCharacteristics: Pz1RegionalCharacteristicInputs;
   passengerFlowForecast: Pz1PassengerFlowForecastDraft;
   finalIndicators: Record<string, string>;
   notes: string;

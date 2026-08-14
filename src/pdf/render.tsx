@@ -23,6 +23,7 @@ interface PdfStation {
   lat: number;
   lng: number;
   type: 'terminal' | 'intermediate';
+  region?: string;
 }
 
 interface PdfMapPoint {
@@ -52,8 +53,10 @@ export interface Pz1PdfSummary {
   consumerProperties?: Pz1Result['consumerProperties'];
   discomfortMatrix?: Pz1Result['discomfortMatrix'];
   finalIndicators?: Pz1Result['finalIndicators'];
+  hsrTravelTime?: Pz1Result['hsrTravelTime'];
   passengerFlowForecast?: Pz1PassengerFlowResult;
   passengerFlowChartImage?: string;
+  regionalCharacteristics?: Pz1Result['regionalCharacteristics'];
   notes?: string;
   stations?: PdfStation[];
   routeLine?: RouteLine;
@@ -164,12 +167,14 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
         <StationTable stations={summary.stations ?? []} />
         <RouteSegmentTable routeLine={summary.routeLine} />
         <StationRouteDistanceTable distances={summary.stationRouteDistances ?? []} />
+        <HsrTravelTimeTable hsrTravelTime={summary.hsrTravelTime} />
       </Page>
 
       <Page size={PAGE_SIZE} style={styles.page}>
         <RunningHeader pageNumber="3" summary={summary} />
         <Text style={styles.sectionTitle}>3. Матрица корреспонденций</Text>
         <KeyValueTable rows={sections[2].rows} />
+        <RegionalCharacteristicsTable regionalCharacteristics={summary.regionalCharacteristics} />
         <CorrespondenceTables tables={summary.consumerProperties ?? {}} />
         <Text style={styles.caption}>Таблица 1 — Потребительские свойства по корреспонденциям</Text>
         <DiscomfortMatrixTable matrix={summary.discomfortMatrix} />
@@ -278,6 +283,7 @@ function StationTable({ stations }: { stations: PdfStation[] }) {
         <Text style={styles.stationLabelCell}>Станция</Text>
         <Text style={styles.stationTypeCell}>Тип</Text>
         <Text style={styles.stationNameCell}>Название</Text>
+        <Text style={styles.stationNameCell}>Регион</Text>
         <Text style={styles.stationCoordCell}>Координаты</Text>
       </View>
       {stations.map((station) => (
@@ -285,6 +291,7 @@ function StationTable({ stations }: { stations: PdfStation[] }) {
           <Text style={styles.stationLabelCell}>{station.label}</Text>
           <Text style={styles.stationTypeCell}>{formatStationType(station.type)}</Text>
           <Text style={styles.stationNameCell}>{station.name}</Text>
+          <Text style={styles.stationNameCell}>{station.region ?? 'не выбран'}</Text>
           <Text style={styles.stationCoordCell}>
             {formatNumber(station.lat)}; {formatNumber(station.lng)}
           </Text>
@@ -305,14 +312,14 @@ function RouteSegmentTable({ routeLine }: { routeLine?: RouteLine }) {
     <View style={styles.table}>
       <View style={styles.tableHeaderRow}>
         <Text style={styles.stationLabelCell}>№</Text>
-        <Text style={styles.stationTypeCell}>Стрела прогиба</Text>
+        <Text style={styles.stationTypeCell}>Радиус между точками</Text>
         <Text style={styles.stationNameCell}>Радиус</Text>
         <Text style={styles.stationCoordCell}>Длина</Text>
       </View>
       {metrics.segments.map((segment, index) => (
         <View key={segment.segmentId} style={styles.tableRow}>
           <Text style={styles.stationLabelCell}>{index + 1}</Text>
-          <Text style={styles.stationTypeCell}>{formatKm(routeLine.segments[index].sagittaKm, '0 км')}</Text>
+          <Text style={styles.stationTypeCell}>{formatMeters(routeLine.segments[index].sagittaKm * 1000)}</Text>
           <Text style={styles.stationNameCell}>{segment.radiusKm ? formatKm(segment.radiusKm) : 'прямая вставка'}</Text>
           <Text style={styles.stationCoordCell}>{formatKm(segment.arcLengthKm)}</Text>
         </View>
@@ -342,6 +349,96 @@ function StationRouteDistanceTable({ distances }: { distances: StationRouteDista
             <Text style={styles.stationCoordCell}>{formatKm(distance.distanceKm)}</Text>
           </View>
         ))}
+      </View>
+    </>
+  );
+}
+
+function HsrTravelTimeTable({ hsrTravelTime }: { hsrTravelTime?: Pz1Result['hsrTravelTime'] }) {
+  if (!hsrTravelTime) {
+    return <Text style={styles.paragraph}>Время хода ВСМ пока не рассчитано.</Text>;
+  }
+
+  return (
+    <>
+      <Text style={styles.caption}>Таблица 2 — Время хода ВСМ по перегонам</Text>
+      <View style={styles.table}>
+        <View style={styles.tableHeaderRow}>
+          <Text style={styles.stationTypeCell}>Перегон</Text>
+          <Text style={styles.stationCoordCell}>Расстояние, км</Text>
+          <Text style={styles.stationCoordCell}>Скорость, км/ч</Text>
+          <Text style={styles.stationCoordCell}>Время</Text>
+        </View>
+        {hsrTravelTime.segments.map((segment) => (
+          <View key={`${segment.fromLabel}-${segment.toLabel}`} style={styles.tableRow}>
+            <Text style={styles.stationTypeCell}>
+              {segment.fromLabel} — {segment.toLabel}
+            </Text>
+            <Text style={styles.stationCoordCell}>{formatNumber(segment.distanceKm)}</Text>
+            <Text style={styles.stationCoordCell}>{formatNumber(segment.speedKmh)}</Text>
+            <Text style={styles.stationCoordCell}>{formatDuration(segment.travelTimeMinutes)}</Text>
+          </View>
+        ))}
+        <View style={styles.tableHeaderRow}>
+          <Text style={styles.stationTypeCell}>Итого</Text>
+          <Text style={styles.stationCoordCell}>—</Text>
+          <Text style={styles.stationCoordCell}>—</Text>
+          <Text style={styles.stationCoordCell}>{formatDuration(hsrTravelTime.totalMinutes)}</Text>
+        </View>
+      </View>
+    </>
+  );
+}
+
+function RegionalCharacteristicsTable({
+  regionalCharacteristics,
+}: {
+  regionalCharacteristics?: Pz1Result['regionalCharacteristics'];
+}) {
+  if (!regionalCharacteristics) {
+    return <Text style={styles.paragraph}>Характеристики регионов пока не заполнены.</Text>;
+  }
+
+  return (
+    <>
+      <Text style={styles.caption}>Таблица 3 — Характеристики регионов для прогноза</Text>
+      <View style={styles.table}>
+        <View style={styles.tableHeaderRow}>
+          <Text style={styles.metricCell}>Показатель</Text>
+          <Text style={styles.flowValueCell}>{regionalCharacteristics.regionA || 'Регион 1'}</Text>
+          <Text style={styles.flowValueCell}>{regionalCharacteristics.regionB || 'Регион 2'}</Text>
+        </View>
+        {[
+          ['ВРП, существующий, млн руб.', regionalCharacteristics.grpExistingRegionA, regionalCharacteristics.grpExistingRegionB],
+          ['ВРП, прогнозный, млн руб.', regionalCharacteristics.grpForecastRegionA, regionalCharacteristics.grpForecastRegionB],
+          [
+            'Численность населения, тыс. чел.',
+            regionalCharacteristics.populationExistingRegionA,
+            regionalCharacteristics.populationExistingRegionB,
+          ],
+          [
+            'Численность населения, прогноз, тыс. чел.',
+            regionalCharacteristics.populationForecastRegionA,
+            regionalCharacteristics.populationForecastRegionB,
+          ],
+          ['Средняя заработная плата, руб./мес.', regionalCharacteristics.averageSalaryRegionA, regionalCharacteristics.averageSalaryRegionB],
+          [
+            'Коэффициент влияния ВВП на пассажиропоток',
+            regionalCharacteristics.kGdpFlowRegionA,
+            regionalCharacteristics.kGdpFlowRegionB,
+          ],
+        ].map(([label, valueA, valueB]) => (
+          <View key={label} style={styles.tableRow}>
+            <Text style={styles.metricCell}>{label}</Text>
+            <Text style={styles.flowValueCell}>{formatRequiredValue(valueA)}</Text>
+            <Text style={styles.flowValueCell}>{formatRequiredValue(valueB)}</Text>
+          </View>
+        ))}
+        <View style={styles.tableRow}>
+          <Text style={styles.metricCell}>Прогнозируемый индуцированный спрос, %</Text>
+          <Text style={styles.flowValueCell}>{formatRequiredValue(regionalCharacteristics.inducedDemandPct)}</Text>
+          <Text style={styles.flowValueCell}>{formatRequiredValue(regionalCharacteristics.inducedDemandPct)}</Text>
+        </View>
       </View>
     </>
   );
@@ -610,6 +707,18 @@ function formatKm(value: number, zeroText = 'не рассчитано') {
   return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)} км`;
 }
 
+function formatMeters(value: number) {
+  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Math.max(0, value))} м`;
+}
+
+function formatDuration(totalMinutes: number) {
+  const roundedMinutes = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
 function formatStationType(type: PdfStation['type']) {
   return type === 'terminal' ? 'начально-конечная' : 'промежуточная';
 }
@@ -742,25 +851,25 @@ const styles = StyleSheet.create({
     borderBottom: '1 solid #111111',
     borderRight: '1 solid #111111',
     padding: 4,
-    width: '14%',
+    width: '12%',
   },
   stationTypeCell: {
     borderBottom: '1 solid #111111',
     borderRight: '1 solid #111111',
     padding: 4,
-    width: '25%',
+    width: '21%',
   },
   stationNameCell: {
     borderBottom: '1 solid #111111',
     borderRight: '1 solid #111111',
     padding: 4,
-    width: '31%',
+    width: '22%',
   },
   stationCoordCell: {
     borderBottom: '1 solid #111111',
     borderRight: '1 solid #111111',
     padding: 4,
-    width: '30%',
+    width: '23%',
   },
   compactTableBlock: {
     marginBottom: 10,

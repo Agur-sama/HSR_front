@@ -3,6 +3,8 @@ import {
   createInitialPz1Draft,
   createPz1Result,
   getComputedFinalIndicators,
+  getHsrTravelTimeResult,
+  getPz1PassengerFlowForecast,
   getStationRouteDistances,
   getSyncedCorrespondenceTables,
   isStationsStepComplete,
@@ -90,6 +92,25 @@ describe('pz1 model', () => {
     expect(distance.fromLabel).toBe('А');
     expect(distance.toLabel).toBe('Г');
     expect(distance.distanceKm).toBeGreaterThan(222);
+  });
+
+  it('calculates HSR travel time from route segments and speed inputs', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], name: 'A', lat: '0', lng: '0' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], name: 'B', lat: '0', lng: '1' };
+    draft.routePointDrafts = [
+      { id: 'route-point-1', lat: '0', lng: '0', sagittaToNextKm: '0' },
+      { id: 'route-point-2', lat: '0', lng: '1', sagittaToNextKm: '0' },
+    ];
+    draft.hsrTravelTimes = {
+      'А-Г': { speedKmh: '120' },
+    };
+
+    const hsrTravelTime = getHsrTravelTimeResult(draft);
+
+    expect(hsrTravelTime).not.toBeNull();
+    expect(hsrTravelTime?.segments).toHaveLength(1);
+    expect(hsrTravelTime?.totalMinutes).toBeGreaterThan(58);
   });
 
   it('updates nested table cells without mutating sibling rows', () => {
@@ -192,5 +213,74 @@ describe('pz1 model', () => {
 
     expect(getComputedFinalIndicators(draft).annualFlow).toBe(expectedAnnualFlow);
     expect(createPz1Result(draft).finalIndicators?.annualFlow).toBe(expectedAnnualFlow);
+  });
+
+  it('derives total demand growth inputs from the regional characteristics screen', () => {
+    const draft = createInitialPz1Draft();
+    draft.regionalCharacteristics = {
+      ...draft.regionalCharacteristics,
+      grpExistingRegionA: '100',
+      grpExistingRegionB: '100',
+      grpForecastRegionA: '110',
+      grpForecastRegionB: '110',
+      populationExistingRegionA: '50',
+      populationExistingRegionB: '50',
+      populationForecastRegionA: '55',
+      populationForecastRegionB: '55',
+      averageSalaryRegionA: '60000',
+      averageSalaryRegionB: '65000',
+      kGdpFlowRegionA: '1',
+      kGdpFlowRegionB: '1',
+      inducedDemandPct: '35',
+    };
+    draft.passengerFlowForecast.modes = {
+      hSR: {
+        existingAnnualFlow: '0',
+        travelTimeHours: '2',
+        waitingTimeHours: '0',
+        totalTransportCost: '1000',
+        existingTravelTimeHours: '0',
+      },
+      airplane: {
+        existingAnnualFlow: '100',
+        travelTimeHours: '3',
+        waitingTimeHours: '1',
+        totalTransportCost: '2000',
+        existingTravelTimeHours: '3',
+      },
+      bus: {
+        existingAnnualFlow: '100',
+        travelTimeHours: '5',
+        waitingTimeHours: '0.5',
+        totalTransportCost: '800',
+        existingTravelTimeHours: '5',
+      },
+      suburbanTrain: {
+        existingAnnualFlow: '100',
+        travelTimeHours: '4',
+        waitingTimeHours: '0.5',
+        totalTransportCost: '700',
+        existingTravelTimeHours: '4',
+      },
+      longDistanceTrain: {
+        existingAnnualFlow: '100',
+        travelTimeHours: '4',
+        waitingTimeHours: '0.5',
+        totalTransportCost: '900',
+        existingTravelTimeHours: '4',
+      },
+      car: {
+        existingAnnualFlow: '100',
+        travelTimeHours: '5',
+        waitingTimeHours: '0',
+        totalTransportCost: '1100',
+        existingTravelTimeHours: '5',
+      },
+    };
+
+    const forecast = getPz1PassengerFlowForecast(draft);
+
+    expect(forecast?.totalDemand.baseForecast).toBeCloseTo(605, 1);
+    expect(forecast?.totalDemand.inducedDemand).toBeCloseTo(211.75, 2);
   });
 });

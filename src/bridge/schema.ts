@@ -7,6 +7,7 @@ export interface Pz1Station {
   lat: number;
   lng: number;
   type: StationType;
+  region?: string;
 }
 
 export interface GeoPoint {
@@ -96,12 +97,47 @@ export interface Pz1PassengerFlowResult {
   modes: Pz1PassengerFlowModeResult[];
 }
 
+export interface Pz1HsrTravelTimeSegment {
+  fromLabel: StationLabel;
+  toLabel: StationLabel;
+  distanceKm: number;
+  speedKmh: number;
+  travelTimeMinutes: number;
+}
+
+export interface Pz1HsrTravelTimeResult {
+  accelerationMinutes: number;
+  brakingMinutes: number;
+  totalMinutes: number;
+  segments: Pz1HsrTravelTimeSegment[];
+}
+
+export interface Pz1RegionalCharacteristicInputs {
+  regionA: string;
+  regionB: string;
+  grpExistingRegionA: string;
+  grpExistingRegionB: string;
+  grpForecastRegionA: string;
+  grpForecastRegionB: string;
+  populationExistingRegionA: string;
+  populationExistingRegionB: string;
+  populationForecastRegionA: string;
+  populationForecastRegionB: string;
+  averageSalaryRegionA: string;
+  averageSalaryRegionB: string;
+  kGdpFlowRegionA: string;
+  kGdpFlowRegionB: string;
+  inducedDemandPct: string;
+}
+
 export interface Pz1Result {
   stations: Pz1Station[];
   routeLine: RouteLine;
   totalLengthKm: number;
   previewImage?: string;
   variantId?: string;
+  hsrTravelTime?: Pz1HsrTravelTimeResult;
+  regionalCharacteristics?: Pz1RegionalCharacteristicInputs;
   consumerProperties?: Record<string, CorrespondenceTable>;
   discomfortMatrix?: Pz1DiscomfortMatrix;
   passengerFlowForecast?: Pz1PassengerFlowResult;

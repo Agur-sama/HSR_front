@@ -6,6 +6,7 @@ import type {
   Pz1PassengerFlowInputs,
   Pz1PassengerFlowModeInputs,
   Pz1PassengerFlowRegionalInputs,
+  Pz1RegionalCharacteristicInputs,
   Pz1PassengerFlowResult,
   Pz1Result,
   Pz1Station,
@@ -20,15 +21,107 @@ import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../sha
 import { passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
 import { buildDisplayRoutePoints, computeRouteLineMetrics, haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import type { DataEntryColumn, DataEntryRow } from '../../shared/ui/DataEntryTable';
-import type { Pz1CorrespondenceTableDraft, Pz1Draft, Pz1RoutePointDraft, Pz1StationDraft } from './types';
+import type { Pz1CorrespondenceTableDraft, Pz1Draft, Pz1HsrSpeedDraft, Pz1RoutePointDraft, Pz1StationDraft } from './types';
+import { pz1Variants } from './variants';
 
 const STATION_LABELS: StationLabel[] = ['А', 'Б', 'В', 'Г'];
 const TERMINAL_LABELS: StationLabel[] = ['А', 'Г'];
 const HSR_MODE_ID: TransportModeId = 'hSR';
+const CAR_MODE_ID: TransportModeId = 'car';
+const HSR_ACCELERATION_MINUTES = 2;
+const HSR_BRAKING_MINUTES = 1;
 const PASSPORT_LIMITS = {
   team: { min: 2, max: 40 },
   lineTitle: { min: 3, max: 80 },
 };
+
+export const russianRegions = [
+  'Алтайский край',
+  'Амурская область',
+  'Архангельская область',
+  'Астраханская область',
+  'Белгородская область',
+  'Брянская область',
+  'Владимирская область',
+  'Волгоградская область',
+  'Вологодская область',
+  'Воронежская область',
+  'Еврейская автономная область',
+  'Забайкальский край',
+  'Ивановская область',
+  'Иркутская область',
+  'Кабардино-Балкарская Республика',
+  'Калининградская область',
+  'Калужская область',
+  'Камчатский край',
+  'Карачаево-Черкесская Республика',
+  'Кемеровская область',
+  'Кировская область',
+  'Костромская область',
+  'Краснодарский край',
+  'Красноярский край',
+  'Курганская область',
+  'Курская область',
+  'Ленинградская область',
+  'Липецкая область',
+  'Магаданская область',
+  'Москва',
+  'Московская область',
+  'Мурманская область',
+  'Ненецкий автономный округ',
+  'Нижегородская область',
+  'Новгородская область',
+  'Новосибирская область',
+  'Омская область',
+  'Оренбургская область',
+  'Орловская область',
+  'Пензенская область',
+  'Пермский край',
+  'Приморский край',
+  'Псковская область',
+  'Республика Адыгея',
+  'Республика Алтай',
+  'Республика Башкортостан',
+  'Республика Бурятия',
+  'Республика Дагестан',
+  'Республика Ингушетия',
+  'Республика Калмыкия',
+  'Республика Карелия',
+  'Республика Коми',
+  'Республика Крым',
+  'Республика Марий Эл',
+  'Республика Мордовия',
+  'Республика Саха (Якутия)',
+  'Республика Северная Осетия — Алания',
+  'Республика Татарстан',
+  'Республика Тыва',
+  'Республика Хакасия',
+  'Ростовская область',
+  'Рязанская область',
+  'Самарская область',
+  'Санкт-Петербург',
+  'Саратовская область',
+  'Сахалинская область',
+  'Свердловская область',
+  'Севастополь',
+  'Смоленская область',
+  'Ставропольский край',
+  'Тамбовская область',
+  'Тверская область',
+  'Томская область',
+  'Тульская область',
+  'Тюменская область',
+  'Удмуртская Республика',
+  'Ульяновская область',
+  'Хабаровский край',
+  'Ханты-Мансийский автономный округ — Югра',
+  'Челябинская область',
+  'Чеченская Республика',
+  'Чувашская Республика',
+  'Чукотский автономный округ',
+  'Ямало-Ненецкий автономный округ',
+  'Ярославская область',
+];
 
 export const transportColumns: Array<DataEntryColumn & { id: TransportModeId }> = [
   { id: 'hSR', label: 'ВСМ' },
@@ -109,10 +202,30 @@ export const passengerFlowModeRows: Array<DataEntryRow & { id: keyof Pz1Passenge
   { id: 'existingTravelTimeHours', label: 'Существующее время в пути', helper: 'ч' },
 ];
 
+export const regionalCharacteristicFields: Array<{
+  id: Exclude<keyof Pz1RegionalCharacteristicInputs, 'regionA' | 'regionB' | 'inducedDemandPct'>;
+  label: string;
+  helper: string;
+}> = [
+  { id: 'grpExistingRegionA', label: 'ВРП региона 1, существующий', helper: 'млн руб.' },
+  { id: 'grpForecastRegionA', label: 'ВРП региона 1, прогнозный', helper: 'млн руб.' },
+  { id: 'populationExistingRegionA', label: 'Численность населения региона 1, существующая', helper: 'тыс. чел.' },
+  { id: 'populationForecastRegionA', label: 'Численность населения региона 1, прогнозная', helper: 'тыс. чел.' },
+  { id: 'averageSalaryRegionA', label: 'Средняя заработная плата региона 1', helper: 'руб./мес.' },
+  { id: 'kGdpFlowRegionA', label: 'Коэффициент влияния ВВП на пассажиропоток региона 1', helper: 'безразм.' },
+  { id: 'grpExistingRegionB', label: 'ВРП региона 2, существующий', helper: 'млн руб.' },
+  { id: 'grpForecastRegionB', label: 'ВРП региона 2, прогнозный', helper: 'млн руб.' },
+  { id: 'populationExistingRegionB', label: 'Численность населения региона 2, существующая', helper: 'тыс. чел.' },
+  { id: 'populationForecastRegionB', label: 'Численность населения региона 2, прогнозная', helper: 'тыс. чел.' },
+  { id: 'averageSalaryRegionB', label: 'Средняя заработная плата региона 2', helper: 'руб./мес.' },
+  { id: 'kGdpFlowRegionB', label: 'Коэффициент влияния ВВП на пассажиропоток региона 2', helper: 'безразм.' },
+];
+
 export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1Draft {
   const importedPz1 = importedBridge?.completed.pz1;
   const selectedVariantId = String(importedBridge?.passport.defaultVariant ?? importedPz1?.variantId ?? '1');
-  const stationDrafts = createStationDrafts(importedPz1?.stations ?? []);
+  const variant = getVariantById(selectedVariantId);
+  const stationDrafts = createStationDrafts(importedPz1?.stations ?? [], variant);
 
   return {
     passport: {
@@ -132,6 +245,8 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
       stationDrafts,
     ),
     discomfortMatrix: mergeDiscomfortMatrix(importedPz1?.discomfortMatrix),
+    hsrTravelTimes: mergeHsrTravelTimes(importedPz1?.hsrTravelTime),
+    regionalCharacteristics: mergeRegionalCharacteristics(importedPz1?.regionalCharacteristics, stationDrafts, variant),
     passengerFlowForecast: mergePassengerFlowForecast(importedPz1?.passengerFlowForecast?.inputs),
     finalIndicators: mergeFinalIndicators(importedPz1?.finalIndicators),
     notes: importedPz1?.notes ?? '',
@@ -147,6 +262,8 @@ export function createPz1Bridge(draft: Pz1Draft): BridgeSchema {
     {
       pz1: {
         stations: isStationsStepComplete(draft),
+        hsrTravelTime: isHsrTravelTimeComplete(draft),
+        regionalCharacteristics: isRegionalCharacteristicsComplete(draft),
         consumerProperties: isConsumerPropertiesComplete(draft),
         passengerFlowForecast: isPassengerFlowForecastComplete(draft),
         finalIndicators: isFinalIndicatorsComplete(draft),
@@ -163,6 +280,7 @@ export function createPz1Result(draft: Pz1Draft): Pz1Result {
   const routeLine = createRouteLine(draft.routePointDrafts);
   const metrics = computeRouteLineMetrics(routeLine);
   const correspondenceTables = getSyncedCorrespondenceTables(draft);
+  const hsrTravelTime = getHsrTravelTimeResult(draft);
   const passengerFlowForecast = getPz1PassengerFlowForecast(draft);
 
   return {
@@ -171,6 +289,8 @@ export function createPz1Result(draft: Pz1Draft): Pz1Result {
     totalLengthKm: metrics.totalLengthKm,
     previewImage: draft.previewImage || undefined,
     variantId: draft.selectedVariantId,
+    hsrTravelTime: hsrTravelTime ?? undefined,
+    regionalCharacteristics: getPz1RegionalCharacteristics(draft),
     consumerProperties: correspondenceTables.reduce<Record<string, CorrespondenceTable>>((tables, table) => {
       tables[table.pairKey] = {
         pairKey: table.pairKey,
@@ -218,13 +338,72 @@ export function createRouteLine(routePointDrafts: Pz1RoutePointDraft[]): RouteLi
       id: `${vertex.id}-${vertices[index + 1].id}`,
       fromVertexId: vertex.id,
       toVertexId: vertices[index + 1].id,
-      sagittaKm: parseCoordinate(draft.sagittaToNextKm) ?? 0,
+      sagittaKm: getRouteBendKm(draft),
     })),
   };
 }
 
 export function getRouteMetrics(draft: Pz1Draft) {
   return computeRouteLineMetrics(createRouteLine(draft.routePointDrafts));
+}
+
+export function getStationNameByLabel(draft: Pick<Pz1Draft, 'stationDrafts'>, label: StationLabel) {
+  return draft.stationDrafts.find((station) => station.label === label)?.name.trim() || label;
+}
+
+export function getCorrespondenceTitle(draft: Pick<Pz1Draft, 'stationDrafts'>, fromLabel: StationLabel, toLabel: StationLabel) {
+  return `${getStationNameByLabel(draft, fromLabel)} — ${getStationNameByLabel(draft, toLabel)}`;
+}
+
+export function getPz1RegionalCharacteristics(draft: Pick<Pz1Draft, 'regionalCharacteristics' | 'stationDrafts'>) {
+  const initialStation = draft.stationDrafts.find((station) => station.label === 'А');
+  const terminalStation = draft.stationDrafts.find((station) => station.label === 'Г');
+
+  return {
+    ...draft.regionalCharacteristics,
+    regionA: initialStation?.region.trim() || draft.regionalCharacteristics.regionA,
+    regionB: terminalStation?.region.trim() || draft.regionalCharacteristics.regionB,
+  };
+}
+
+export function getHsrTravelTimeResult(draft: Pick<Pz1Draft, 'hsrTravelTimes' | 'routePointDrafts' | 'stationDrafts'>) {
+  const distances = getStationRouteDistances(draft);
+
+  if (distances.length === 0) {
+    return null;
+  }
+
+  const segments = distances.reduce<NonNullable<Pz1Result['hsrTravelTime']>['segments'] | null>((items, distance) => {
+    if (items === null) {
+      return null;
+    }
+
+    const speedKmh = parseNumericInput(draft.hsrTravelTimes[getDistanceKey(distance.fromLabel, distance.toLabel)]?.speedKmh ?? '');
+    if (speedKmh === null || speedKmh <= 0) {
+      return null;
+    }
+
+    items.push({
+      fromLabel: distance.fromLabel,
+      toLabel: distance.toLabel,
+      distanceKm: distance.distanceKm,
+      speedKmh,
+      travelTimeMinutes: (distance.distanceKm / speedKmh) * 60 + HSR_ACCELERATION_MINUTES + HSR_BRAKING_MINUTES,
+    });
+
+    return items;
+  }, []);
+
+  if (!segments) {
+    return null;
+  }
+
+  return {
+    accelerationMinutes: HSR_ACCELERATION_MINUTES,
+    brakingMinutes: HSR_BRAKING_MINUTES,
+    totalMinutes: segments.reduce((sum, segment) => sum + segment.travelTimeMinutes, 0),
+    segments,
+  };
 }
 
 export function getSyncedCorrespondenceTables(draft: Pick<Pz1Draft, 'stationDrafts' | 'correspondenceTables'>) {
@@ -266,13 +445,14 @@ export function countFilledConsumerCells(draft: Pz1Draft) {
 }
 
 export function getPz1PassengerFlowForecast(draft: Pz1Draft): Pz1PassengerFlowResult | null {
-  const regionalInput = parseRegionalPassengerFlowInput(draft.passengerFlowForecast.regional);
+  const effectiveInputs = getEffectivePassengerFlowInputs(draft);
+  const regionalInput = parseRegionalPassengerFlowInput(effectiveInputs.regional);
   const modeInputs = passengerFlowModeIds.reduce<PassengerFlowModeInput[] | null>((modes, modeId) => {
     if (modes === null) {
       return null;
     }
 
-    const mode = draft.passengerFlowForecast.modes[modeId];
+    const mode = effectiveInputs.modes[modeId];
     const existingAnnualFlow = parseNumericInput(mode.existingAnnualFlow);
     const travelTimeHours = parseNumericInput(mode.travelTimeHours);
     const waitingTimeHours = parseNumericInput(mode.waitingTimeHours);
@@ -324,7 +504,7 @@ export function getPz1PassengerFlowForecast(draft: Pz1Draft): Pz1PassengerFlowRe
     });
 
     return {
-      inputs: clonePassengerFlowInputs(draft.passengerFlowForecast),
+      inputs: clonePassengerFlowInputs(effectiveInputs),
       totalDemand: {
         existingAnnualFlow,
         baseForecast: totalDemand.baseForecast,
@@ -349,18 +529,60 @@ export function getPz1PassengerFlowForecast(draft: Pz1Draft): Pz1PassengerFlowRe
   }
 }
 
+export function getEffectivePassengerFlowInputs(draft: Pz1Draft): Pz1Draft['passengerFlowForecast'] {
+  const hsrTravelTime = getHsrTravelTimeResult(draft);
+  const firstCorrespondenceTable = getSyncedCorrespondenceTables(draft)[0];
+  const regional = mergeRegionalPassengerFlowInputs(
+    deriveRegionalPassengerFlowInput(getPz1RegionalCharacteristics(draft)),
+    draft.passengerFlowForecast.regional,
+  );
+
+  const modes = passengerFlowModeIds.reduce<Record<TransportModeId, Pz1PassengerFlowModeInputs>>((modeMap, modeId) => {
+    const currentMode = draft.passengerFlowForecast.modes[modeId];
+    const consumerTravelTime = firstCorrespondenceTable?.values.travelTime?.[modeId] ?? '';
+    const consumerFrequency = firstCorrespondenceTable?.values.dailyFrequency?.[modeId] ?? '';
+    const consumerFare = firstCorrespondenceTable?.values.fare?.[modeId] ?? '';
+    const parsedFrequency = parseNumericInput(consumerFrequency);
+    const fallbackWaitingTimeHours = parsedFrequency !== null && parsedFrequency > 0 ? formatDecimal(1 / parsedFrequency) : '';
+    const hsrTravelTimeHours = hsrTravelTime ? formatDecimal(hsrTravelTime.totalMinutes / 60) : '';
+
+    modeMap[modeId] = {
+      existingAnnualFlow: currentMode.existingAnnualFlow,
+      travelTimeHours:
+        currentMode.travelTimeHours ||
+        (modeId === HSR_MODE_ID ? hsrTravelTimeHours : consumerTravelTime),
+      waitingTimeHours:
+        currentMode.waitingTimeHours ||
+        (modeId === CAR_MODE_ID ? '0' : fallbackWaitingTimeHours),
+      totalTransportCost: currentMode.totalTransportCost || consumerFare,
+      existingTravelTimeHours:
+        currentMode.existingTravelTimeHours ||
+        (modeId === HSR_MODE_ID ? '0' : consumerTravelTime),
+    };
+
+    return modeMap;
+  }, {} as Record<TransportModeId, Pz1PassengerFlowModeInputs>);
+
+  return {
+    regional,
+    modes,
+  };
+}
+
 export function getComputedFinalIndicators(draft: Pz1Draft): Record<string, string> {
   const passengerFlowForecast = getPz1PassengerFlowForecast(draft);
+  const hsrTravelTime = getHsrTravelTimeResult(draft);
 
   return {
     ...draft.finalIndicators,
+    travelTime: hsrTravelTime ? formatDuration(hsrTravelTime.totalMinutes) : draft.finalIndicators.travelTime,
     annualFlow: passengerFlowForecast ? formatInteger(passengerFlowForecast.totalDemand.totalForecast) : '',
   };
 }
 
 export function getPz1TaskStepCount(draft: Pz1Draft) {
   const correspondenceCount = getSyncedCorrespondenceTables(draft).length;
-  return 3 + 2 * correspondenceCount;
+  return 5 + 7 * correspondenceCount;
 }
 
 export function isPassportComplete(draft: Pz1Draft) {
@@ -419,6 +641,54 @@ export function validateDiscomfortCell(value: string) {
   return null;
 }
 
+export function validateHsrSpeed(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Укажите среднюю скорость перегона';
+  }
+
+  const parsed = parseNumericInput(trimmed);
+  if (parsed === null) {
+    return 'Скорость должна быть числом';
+  }
+
+  if (parsed <= 0) {
+    return 'Скорость должна быть больше 0';
+  }
+
+  return null;
+}
+
+export function validateRegionalCharacteristicField(fieldId: keyof Pz1RegionalCharacteristicInputs, value: string) {
+  if (fieldId === 'regionA' || fieldId === 'regionB') {
+    return value.trim() ? null : 'Выберите регион';
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Заполните поле';
+  }
+
+  const parsed = parseNumericInput(trimmed);
+  if (parsed === null) {
+    return 'Значение должно быть числом';
+  }
+
+  if (fieldId === 'inducedDemandPct') {
+    return parsed >= 0 && parsed <= 100 ? null : 'Индуцированный спрос должен быть в диапазоне 0…100 %';
+  }
+
+  if (fieldId === 'kGdpFlowRegionA' || fieldId === 'kGdpFlowRegionB') {
+    if (parsed <= 0) {
+      return 'Коэффициент должен быть больше 0';
+    }
+
+    return null;
+  }
+
+  return parsed > 0 ? null : 'Значение должно быть больше 0';
+}
+
 export function isConsumerPropertiesComplete(draft: Pz1Draft) {
   const correspondenceTablesComplete = getSyncedCorrespondenceTables(draft).every((table) =>
     consumerRows.every((row) =>
@@ -439,6 +709,10 @@ export function isFinalIndicatorsComplete(draft: Pz1Draft) {
       return getPz1PassengerFlowForecast(draft) !== null;
     }
 
+    if (indicator.id === 'travelTime') {
+      return getHsrTravelTimeResult(draft) !== null;
+    }
+
     const value = draft.finalIndicators[indicator.id] ?? '';
     if (indicator.id === 'riskNotes') {
       return value.trim().length > 0;
@@ -451,6 +725,21 @@ export function isFinalIndicatorsComplete(draft: Pz1Draft) {
 
 export function isPassengerFlowForecastComplete(draft: Pz1Draft) {
   return getPz1PassengerFlowForecast(draft) !== null;
+}
+
+export function isHsrTravelTimeComplete(draft: Pz1Draft) {
+  return getHsrTravelTimeResult(draft) !== null;
+}
+
+export function isRegionalCharacteristicsComplete(draft: Pz1Draft) {
+  const regional = getPz1RegionalCharacteristics(draft);
+
+  return (
+    regional.regionA.trim().length > 0 &&
+    regional.regionB.trim().length > 0 &&
+    regionalCharacteristicFields.every((field) => validateRegionalCharacteristicField(field.id, regional[field.id]) === null) &&
+    validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct) === null
+  );
 }
 
 export function isStationsStepComplete(draft: Pz1Draft) {
@@ -490,7 +779,7 @@ export function getDuplicateStationNames(draft: Pick<Pz1Draft, 'stationDrafts'>)
 
 export function validateStationField(
   stationDraft: Pz1StationDraft,
-  field: 'name' | 'lat' | 'lng',
+  field: 'name' | 'lat' | 'lng' | 'region',
   duplicateStationNames = new Set<string>(),
 ) {
   if (!stationDraft.enabled) {
@@ -509,6 +798,18 @@ export function validateStationField(
     return null;
   }
 
+  if (field === 'region') {
+    if (!stationDraft.region.trim()) {
+      return 'Выберите регион станции';
+    }
+
+    if (!russianRegions.includes(stationDraft.region.trim())) {
+      return 'Выберите регион из списка субъектов РФ';
+    }
+
+    return null;
+  }
+
   if (field === 'lat') {
     return validateCoordinateField(stationDraft.lat, -90, 90, 'Широта');
   }
@@ -516,7 +817,7 @@ export function validateStationField(
   return validateCoordinateField(stationDraft.lng, -180, 180, 'Долгота');
 }
 
-export function getStationRouteDistances(draft: Pz1Draft): StationRouteDistance[] {
+export function getStationRouteDistances(draft: Pick<Pz1Draft, 'routePointDrafts' | 'stationDrafts'>): StationRouteDistance[] {
   const routeLine = createRouteLine(draft.routePointDrafts);
   const routePoints = buildDisplayRoutePoints(routeLine, 48);
   if (routePoints.length < 2) {
@@ -560,18 +861,21 @@ function createPassport(draft: Pz1Draft): Passport {
   };
 }
 
-function createStationDrafts(stations: Pz1Station[]): Pz1StationDraft[] {
+function createStationDrafts(stations: Pz1Station[], variant = getVariantById('1')): Pz1StationDraft[] {
   return STATION_LABELS.map((label) => {
     const importedStation = stations.find((station) => station.label === label);
     const type = getStationType(label);
+    const defaultName = label === 'А' ? variant.fromCity : label === 'Г' ? variant.toCity : '';
+    const defaultRegion = label === 'А' ? variant.fromRegion : label === 'Г' ? variant.toRegion : '';
 
     return {
       label,
       enabled: TERMINAL_LABELS.includes(label) || importedStation !== undefined,
-      name: importedStation?.name ?? '',
+      name: importedStation?.name ?? defaultName,
       lat: importedStation ? String(importedStation.lat) : '',
       lng: importedStation ? String(importedStation.lng) : '',
       type,
+      region: importedStation?.region ?? defaultRegion,
     };
   });
 }
@@ -587,6 +891,7 @@ function createRoutePointDrafts(routeLine: Pz1Result['routeLine'] | Array<[numbe
       lat: String(lat),
       lng: String(lng),
       sagittaToNextKm: '0',
+      bendM: '0',
     }));
   }
 
@@ -597,6 +902,7 @@ function createRoutePointDrafts(routeLine: Pz1Result['routeLine'] | Array<[numbe
     lat: String(vertex.lat),
     lng: String(vertex.lon),
     sagittaToNextKm: String(segmentByVertexId.get(vertex.id)?.sagittaKm ?? 0),
+    bendM: String((segmentByVertexId.get(vertex.id)?.sagittaKm ?? 0) * 1000),
   }));
 }
 
@@ -651,6 +957,93 @@ function mergePassengerFlowForecast(importedValues?: Pz1PassengerFlowInputs) {
   };
 }
 
+function mergeHsrTravelTimes(importedValue?: Pz1Result['hsrTravelTime']) {
+  return (
+    importedValue?.segments.reduce<Record<string, Pz1HsrSpeedDraft>>((speedMap, segment) => {
+      speedMap[getDistanceKey(segment.fromLabel, segment.toLabel)] = { speedKmh: String(segment.speedKmh) };
+      return speedMap;
+    }, {}) ?? {}
+  );
+}
+
+function mergeRegionalCharacteristics(
+  importedValue: Pz1Result['regionalCharacteristics'],
+  stationDrafts: Pz1StationDraft[],
+  variant = getVariantById('1'),
+): Pz1RegionalCharacteristicInputs {
+  const initialStation = stationDrafts.find((station) => station.label === 'А');
+  const terminalStation = stationDrafts.find((station) => station.label === 'Г');
+  const emptyValue = createEmptyRegionalCharacteristics(variant, initialStation?.region, terminalStation?.region);
+
+  return {
+    ...emptyValue,
+    ...importedValue,
+    regionA: importedValue?.regionA ?? initialStation?.region ?? emptyValue.regionA,
+    regionB: importedValue?.regionB ?? terminalStation?.region ?? emptyValue.regionB,
+  };
+}
+
+function createEmptyRegionalCharacteristics(
+  variant = getVariantById('1'),
+  regionA = variant.fromRegion,
+  regionB = variant.toRegion,
+): Pz1RegionalCharacteristicInputs {
+  return {
+    regionA,
+    regionB,
+    grpExistingRegionA: '',
+    grpExistingRegionB: '',
+    grpForecastRegionA: '',
+    grpForecastRegionB: '',
+    populationExistingRegionA: '',
+    populationExistingRegionB: '',
+    populationForecastRegionA: '',
+    populationForecastRegionB: '',
+    averageSalaryRegionA: '',
+    averageSalaryRegionB: '',
+    kGdpFlowRegionA: '',
+    kGdpFlowRegionB: '',
+    inducedDemandPct: '',
+  };
+}
+
+function deriveRegionalPassengerFlowInput(input: Pz1RegionalCharacteristicInputs): Pz1PassengerFlowRegionalInputs {
+  return {
+    grpCurrentRegionA: input.grpExistingRegionA,
+    grpCurrentRegionB: input.grpExistingRegionB,
+    grpGrowthPctRegionA: deriveGrowthPct(input.grpExistingRegionA, input.grpForecastRegionA),
+    grpGrowthPctRegionB: deriveGrowthPct(input.grpExistingRegionB, input.grpForecastRegionB),
+    populationCurrentRegionA: input.populationExistingRegionA,
+    populationCurrentRegionB: input.populationExistingRegionB,
+    populationGrowthPctRegionA: deriveGrowthPct(input.populationExistingRegionA, input.populationForecastRegionA),
+    populationGrowthPctRegionB: deriveGrowthPct(input.populationExistingRegionB, input.populationForecastRegionB),
+    gdpPassengerFlowCoefficientRegionA: input.kGdpFlowRegionA,
+    gdpPassengerFlowCoefficientRegionB: input.kGdpFlowRegionB,
+    inducedDemandPct: formatDecimal((parseNumericInput(input.inducedDemandPct) ?? Number.NaN) / 100),
+  };
+}
+
+function mergeRegionalPassengerFlowInputs(
+  derivedInput: Pz1PassengerFlowRegionalInputs,
+  manualInput: Pz1PassengerFlowRegionalInputs,
+): Pz1PassengerFlowRegionalInputs {
+  return passengerFlowRegionalFields.reduce<Pz1PassengerFlowRegionalInputs>((values, field) => {
+    values[field.id] = manualInput[field.id].trim() ? manualInput[field.id] : derivedInput[field.id];
+    return values;
+  }, createEmptyRegionalPassengerFlowInputs());
+}
+
+function deriveGrowthPct(existingValue: string, forecastValue: string) {
+  const existing = parseNumericInput(existingValue);
+  const forecast = parseNumericInput(forecastValue);
+
+  if (existing === null || forecast === null || existing <= 0) {
+    return '';
+  }
+
+  return formatDecimal(forecast / existing - 1);
+}
+
 function createEmptyRegionalPassengerFlowInputs(): Pz1PassengerFlowRegionalInputs {
   return {
     grpCurrentRegionA: '',
@@ -685,6 +1078,16 @@ function clonePassengerFlowInputs(input: Pz1Draft['passengerFlowForecast']): Pz1
       return modeMap;
     }, {} as Record<TransportModeId, Pz1PassengerFlowModeInputs>),
   };
+}
+
+function getRouteBendKm(routePointDraft: Pz1RoutePointDraft) {
+  const bendMeters = parseNumericInput(routePointDraft.bendM ?? '');
+
+  if (bendMeters !== null) {
+    return Math.max(0, bendMeters / 1000);
+  }
+
+  return Math.max(0, parseCoordinate(routePointDraft.sagittaToNextKm) ?? 0);
 }
 
 function cloneDiscomfortMatrix(matrix: Pz1DiscomfortMatrix): Pz1DiscomfortMatrix {
@@ -807,6 +1210,7 @@ function toStation(stationDraft: Pz1StationDraft): Pz1Station | null {
     lat,
     lng,
     type: stationDraft.type,
+    region: stationDraft.region.trim() || undefined,
   };
 }
 
@@ -853,8 +1257,28 @@ function parseNumericInput(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function formatDecimal(value: number) {
+  return Number.isFinite(value) ? value.toFixed(6).replace(/0+$/g, '').replace(/\.$/, '') : '';
+}
+
 function formatInteger(value: number) {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatDuration(totalMinutes: number) {
+  const roundedMinutes = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function getDistanceKey(fromLabel: StationLabel, toLabel: StationLabel) {
+  return `${fromLabel}-${toLabel}`;
+}
+
+function getVariantById(variantId: string) {
+  return pz1Variants.find((variant) => variant.id === variantId) ?? pz1Variants[0];
 }
 
 function getStationType(label: StationLabel): StationType {
@@ -865,7 +1289,8 @@ function isStationDraftComplete(stationDraft: Pz1StationDraft, duplicateStationN
   return (
     validateStationField(stationDraft, 'name', duplicateStationNames) === null &&
     validateStationField(stationDraft, 'lat') === null &&
-    validateStationField(stationDraft, 'lng') === null
+    validateStationField(stationDraft, 'lng') === null &&
+    validateStationField(stationDraft, 'region') === null
   );
 }
 
