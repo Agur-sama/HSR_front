@@ -404,7 +404,7 @@ export function OsmStationMap({
           <h3>Трасса и станции</h3>
         </div>
         <div className="osm-map-actions">
-          <div className="segmented-control" aria-label="Режим редактирования карты">
+          <div className="segmented-control segmented-control--map-tools" aria-label="Режим редактирования карты">
             <button className={mode === 'view' ? 'is-active' : ''} onClick={() => setMode('view')} type="button">
               Просмотр
             </button>
@@ -414,10 +414,10 @@ export function OsmStationMap({
             <button className={mode === 'route' ? 'is-active' : ''} onClick={() => setMode('route')} type="button">
               Линия трассы
             </button>
+            <button onClick={focusRoute} type="button">
+              Центр
+            </button>
           </div>
-          <button className="button button--ghost" onClick={focusRoute} type="button">
-            Центр
-          </button>
         </div>
       </div>
 

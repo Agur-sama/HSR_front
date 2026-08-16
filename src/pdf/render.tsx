@@ -365,6 +365,8 @@ function HsrTravelTimeTable({ hsrTravelTime }: { hsrTravelTime?: Pz1Result['hsrT
           <Text style={styles.stationTypeCell}>Перегон</Text>
           <Text style={styles.stationCoordCell}>Расстояние, км</Text>
           <Text style={styles.stationCoordCell}>Скорость, км/ч</Text>
+          <Text style={styles.stationCoordCell}>Разгон, мин</Text>
+          <Text style={styles.stationCoordCell}>Торможение, мин</Text>
           <Text style={styles.stationCoordCell}>Время</Text>
         </View>
         {hsrTravelTime.segments.map((segment) => (
@@ -374,6 +376,8 @@ function HsrTravelTimeTable({ hsrTravelTime }: { hsrTravelTime?: Pz1Result['hsrT
             </Text>
             <Text style={styles.stationCoordCell}>{formatNumber(segment.distanceKm)}</Text>
             <Text style={styles.stationCoordCell}>{formatNumber(segment.speedKmh)}</Text>
+            <Text style={styles.stationCoordCell}>{formatNumber(hsrTravelTime.accelerationMinutes)}</Text>
+            <Text style={styles.stationCoordCell}>{formatNumber(hsrTravelTime.brakingMinutes)}</Text>
             <Text style={styles.stationCoordCell}>{formatDuration(segment.travelTimeMinutes)}</Text>
           </View>
         ))}
@@ -381,6 +385,8 @@ function HsrTravelTimeTable({ hsrTravelTime }: { hsrTravelTime?: Pz1Result['hsrT
           <Text style={styles.stationTypeCell}>Итого</Text>
           <Text style={styles.stationCoordCell}>—</Text>
           <Text style={styles.stationCoordCell}>—</Text>
+          <Text style={styles.stationCoordCell}>{formatDuration(hsrTravelTime.accelerationMinutes * hsrTravelTime.segments.length)}</Text>
+          <Text style={styles.stationCoordCell}>{formatDuration(hsrTravelTime.brakingMinutes * hsrTravelTime.segments.length)}</Text>
           <Text style={styles.stationCoordCell}>{formatDuration(hsrTravelTime.totalMinutes)}</Text>
         </View>
       </View>

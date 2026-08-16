@@ -179,6 +179,15 @@ export const correspondenceOtherParameterRows: DataEntryRow[] = [
   { id: 'carMaintenanceCostKm', label: 'Стоимость ОСАГО и ТО за 1 км', helper: 'руб./км' },
 ];
 
+export const stationOtherParameterRows: DataEntryRow[] = [
+  { id: 'cityFare', label: 'Стоимость проезда по городу', helper: 'руб.' },
+  { id: 'carOccupancy', label: 'Наполняемость автомобиля', helper: 'чел.' },
+  { id: 'annualWorkHours', label: 'Количество рабочих часов в году', helper: 'ч' },
+  { id: 'gasolinePrice', label: 'Стоимость бензина АИ-92', helper: 'руб./л' },
+  { id: 'gasolineConsumption', label: 'Расход бензина на 100 км', helper: 'л/100 км' },
+  { id: 'carMaintenanceCostKm', label: 'Стоимость ОСАГО и ТО за 1 км', helper: 'руб./км' },
+];
+
 const defaultOtherParameterValues: Record<string, string> = {
   cityFareOrigin: '33',
   cityFareDestination: '75',
@@ -187,6 +196,15 @@ const defaultOtherParameterValues: Record<string, string> = {
   gasolinePrice: '55',
   gasolineConsumption: '11',
   carMaintenanceCostKm: '1,75',
+};
+
+const defaultStationOtherParameterValues: Record<string, string> = {
+  cityFare: '33',
+  carOccupancy: defaultOtherParameterValues.carOccupancy,
+  annualWorkHours: defaultOtherParameterValues.annualWorkHours,
+  gasolinePrice: defaultOtherParameterValues.gasolinePrice,
+  gasolineConsumption: defaultOtherParameterValues.gasolineConsumption,
+  carMaintenanceCostKm: defaultOtherParameterValues.carMaintenanceCostKm,
 };
 
 const defaultOccupancyByMode: Partial<Record<TransportModeId, string>> = {
@@ -327,6 +345,7 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
     discomfortMatrix: mergeDiscomfortMatrix(importedPz1?.discomfortMatrix),
     hsrTravelTimes: mergeHsrTravelTimes(importedPz1?.hsrTravelTime),
     regionalCharacteristics: mergeRegionalCharacteristics(importedPz1?.regionalCharacteristics, stationDrafts, variant),
+    stationOtherParameters: mergeStationOtherParameters(importedPz1?.stationOtherParameters),
     correspondenceDetails: syncCorrespondenceDetails(
       {
         stationDrafts,
@@ -378,6 +397,7 @@ export function createPz1Result(draft: Pz1Draft): Pz1Result {
     variantId: draft.selectedVariantId,
     hsrTravelTime: hsrTravelTime ?? undefined,
     regionalCharacteristics: getPz1RegionalCharacteristics(draft),
+    stationOtherParameters: cloneStationOtherParameters(draft.stationOtherParameters),
     correspondenceScenarios: getPz1CorrespondenceScenarios(draft),
     consumerProperties: correspondenceTables.reduce<Record<string, CorrespondenceTable>>((tables, table) => {
       tables[table.pairKey] = {
@@ -741,7 +761,7 @@ export function getPz1CorrespondenceScenarios(draft: Pz1Draft) {
       ),
       frequency: detail.frequency,
       fare: detail.fare,
-      otherParameters: detail.otherParameters,
+      otherParameters: getLegacyOtherParametersForCorrespondence(draft, detail),
       annualFlows,
       passengerFlowForecast: getPz1CorrespondencePassengerFlowForecast(draft, detail.pairKey) ?? undefined,
     };
@@ -954,8 +974,8 @@ function getAnnualFlowForecastFromCorrespondenceTables(draft: Pz1Draft) {
 }
 
 export function getPz1TaskStepCount(draft: Pz1Draft) {
-  const correspondenceCount = getSyncedCorrespondenceTables(draft).length;
-  return 5 + 7 * correspondenceCount;
+  void draft;
+  return 10;
 }
 
 export function isPassportComplete(draft: Pz1Draft) {
@@ -1091,7 +1111,7 @@ export function validateOtherParameterField(fieldId: string, value: string) {
     return 'Значение должно быть числом';
   }
 
-  if (fieldId === 'cityFareOrigin' || fieldId === 'cityFareDestination' || fieldId === 'carMaintenanceCostKm') {
+  if (fieldId === 'cityFare' || fieldId === 'cityFareOrigin' || fieldId === 'cityFareDestination' || fieldId === 'carMaintenanceCostKm') {
     return parsed >= 0 ? null : 'Значение не может быть отрицательным';
   }
 
@@ -1431,6 +1451,24 @@ function mergeCorrespondenceDetail(
       };
       return values;
     }, {} as Pz1CorrespondenceDetailDraft['annualFlows']),
+  };
+}
+
+function mergeStationOtherParameters(importedValues?: Pz1Result['stationOtherParameters']) {
+  return STATION_LABELS.reduce<Pz1Draft['stationOtherParameters']>((stationMap, label) => {
+    const defaultValues = getDefaultStationOtherParameterValues(label);
+    stationMap[label] = stationOtherParameterRows.reduce<Record<string, string>>((values, row) => {
+      values[row.id] = importedValues?.[label]?.[row.id] ?? defaultValues[row.id] ?? '';
+      return values;
+    }, {});
+    return stationMap;
+  }, {} as Pz1Draft['stationOtherParameters']);
+}
+
+function getDefaultStationOtherParameterValues(label: StationLabel): Record<string, string> {
+  return {
+    ...defaultStationOtherParameterValues,
+    cityFare: label === 'Г' ? defaultOtherParameterValues.cityFareDestination : defaultOtherParameterValues.cityFareOrigin,
   };
 }
 
@@ -1776,6 +1814,16 @@ function clonePassengerFlowInputs(input: Pz1Draft['passengerFlowForecast']): Pz1
   };
 }
 
+function cloneStationOtherParameters(input: Pz1Draft['stationOtherParameters']): Pz1Draft['stationOtherParameters'] {
+  return STATION_LABELS.reduce<Pz1Draft['stationOtherParameters']>((stationMap, label) => {
+    stationMap[label] = stationOtherParameterRows.reduce<Record<string, string>>((values, row) => {
+      values[row.id] = input[label]?.[row.id] ?? '';
+      return values;
+    }, {});
+    return stationMap;
+  }, {} as Pz1Draft['stationOtherParameters']);
+}
+
 function getRouteSagittaKm(
   routePointDraft: Pz1RoutePointDraft,
   fromVertex: RouteLine['vertices'][number],
@@ -1881,8 +1929,8 @@ function getTotalTransportCost(
   discomfortAggregate: number | null,
 ) {
   const fare = parseNumericInput(detail.fare[modeId].forecast);
-  const cityFareOrigin = parseNumericInput(detail.otherParameters.cityFareOrigin);
-  const cityFareDestination = parseNumericInput(detail.otherParameters.cityFareDestination);
+  const cityFareOrigin = getStationOtherParameterNumber(draft, detail.fromLabel, 'cityFare', detail.otherParameters.cityFareOrigin);
+  const cityFareDestination = getStationOtherParameterNumber(draft, detail.toLabel, 'cityFare', detail.otherParameters.cityFareDestination);
   const timeCost = getTravelTimeMonetaryCost(draft, detail, modeId, travelTimeHours, discomfortAggregate);
 
   if (timeCost === null) {
@@ -1891,10 +1939,15 @@ function getTotalTransportCost(
 
   if (modeId === CAR_MODE_ID) {
     const routeDistanceKm = getCorrespondenceDistanceKm(draft, detail.fromLabel, detail.toLabel);
-    const carOccupancy = parseNumericInput(detail.otherParameters.carOccupancy);
-    const gasolinePrice = parseNumericInput(detail.otherParameters.gasolinePrice);
-    const gasolineConsumption = parseNumericInput(detail.otherParameters.gasolineConsumption);
-    const carMaintenanceCostKm = parseNumericInput(detail.otherParameters.carMaintenanceCostKm);
+    const carOccupancy = getAverageStationOtherParameterNumber(draft, detail, 'carOccupancy', detail.otherParameters.carOccupancy);
+    const gasolinePrice = getAverageStationOtherParameterNumber(draft, detail, 'gasolinePrice', detail.otherParameters.gasolinePrice);
+    const gasolineConsumption = getAverageStationOtherParameterNumber(draft, detail, 'gasolineConsumption', detail.otherParameters.gasolineConsumption);
+    const carMaintenanceCostKm = getAverageStationOtherParameterNumber(
+      draft,
+      detail,
+      'carMaintenanceCostKm',
+      detail.otherParameters.carMaintenanceCostKm,
+    );
 
     if (
       routeDistanceKm !== null &&
@@ -1935,7 +1988,7 @@ function getTravelTimeMonetaryCost(
 }
 
 function getAverageHourlyWageForCorrespondence(draft: Pz1Draft, detail: Pz1CorrespondenceDetailDraft) {
-  const annualWorkHours = parseNumericInput(detail.otherParameters.annualWorkHours);
+  const annualWorkHours = getAverageStationOtherParameterNumber(draft, detail, 'annualWorkHours', detail.otherParameters.annualWorkHours);
   const regional = getPz1RegionalCharacteristics(draft);
   const endpointRegions = [detail.fromLabel, detail.toLabel]
     .map((label) => draft.stationDrafts.find((station) => station.label === label)?.region.trim())
@@ -1949,6 +2002,57 @@ function getAverageHourlyWageForCorrespondence(draft: Pz1Draft, detail: Pz1Corre
 
   const averageMonthlySalary = (salaries as number[]).reduce((sum, salary) => sum + salary, 0) / salaries.length;
   return (averageMonthlySalary * 12) / annualWorkHours;
+}
+
+function getLegacyOtherParametersForCorrespondence(draft: Pz1Draft, detail: Pz1CorrespondenceDetailDraft) {
+  return {
+    cityFareOrigin: getStationOtherParameterValue(draft, detail.fromLabel, 'cityFare', detail.otherParameters.cityFareOrigin),
+    cityFareDestination: getStationOtherParameterValue(draft, detail.toLabel, 'cityFare', detail.otherParameters.cityFareDestination),
+    carOccupancy: getAverageStationOtherParameterValue(draft, detail, 'carOccupancy', detail.otherParameters.carOccupancy),
+    annualWorkHours: getAverageStationOtherParameterValue(draft, detail, 'annualWorkHours', detail.otherParameters.annualWorkHours),
+    gasolinePrice: getAverageStationOtherParameterValue(draft, detail, 'gasolinePrice', detail.otherParameters.gasolinePrice),
+    gasolineConsumption: getAverageStationOtherParameterValue(draft, detail, 'gasolineConsumption', detail.otherParameters.gasolineConsumption),
+    carMaintenanceCostKm: getAverageStationOtherParameterValue(
+      draft,
+      detail,
+      'carMaintenanceCostKm',
+      detail.otherParameters.carMaintenanceCostKm,
+    ),
+  };
+}
+
+function getStationOtherParameterValue(draft: Pz1Draft, label: StationLabel, fieldId: string, fallback = '') {
+  return draft.stationOtherParameters[label]?.[fieldId] ?? fallback;
+}
+
+function getStationOtherParameterNumber(draft: Pz1Draft, label: StationLabel, fieldId: string, fallback = '') {
+  return parseNumericInput(getStationOtherParameterValue(draft, label, fieldId, fallback));
+}
+
+function getAverageStationOtherParameterValue(
+  draft: Pz1Draft,
+  detail: Pz1CorrespondenceDetailDraft,
+  fieldId: string,
+  fallback = '',
+) {
+  const values = [detail.fromLabel, detail.toLabel]
+    .map((label) => getStationOtherParameterNumber(draft, label, fieldId))
+    .filter((value): value is number => value !== null);
+
+  if (values.length === 0) {
+    return fallback;
+  }
+
+  return formatDecimal(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+function getAverageStationOtherParameterNumber(
+  draft: Pz1Draft,
+  detail: Pz1CorrespondenceDetailDraft,
+  fieldId: string,
+  fallback = '',
+) {
+  return parseNumericInput(getAverageStationOtherParameterValue(draft, detail, fieldId, fallback));
 }
 
 function getFrequencyFactor(detail: Pz1CorrespondenceDetailDraft, modeId: TransportModeId) {

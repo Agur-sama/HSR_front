@@ -70,6 +70,8 @@ export interface Pz1CorrespondenceAnnualFlowDraft {
   occupancyForecast: string;
 }
 
+export type Pz1StationOtherParametersDraft = Record<string, string>;
+
 export interface Pz1CorrespondenceDetailDraft {
   pairKey: string;
   fromLabel: StationLabel;
@@ -93,6 +95,7 @@ export interface Pz1Draft {
   discomfortMatrix: Pz1DiscomfortMatrix;
   hsrTravelTimes: Record<string, Pz1HsrSpeedDraft>;
   regionalCharacteristics: Pz1RegionalCharacteristicInputs;
+  stationOtherParameters: Record<StationLabel, Pz1StationOtherParametersDraft>;
   correspondenceDetails: Record<string, Pz1CorrespondenceDetailDraft>;
   passengerFlowForecast: Pz1PassengerFlowForecastDraft;
   finalIndicators: Record<string, string>;

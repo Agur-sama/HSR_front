@@ -169,6 +169,8 @@ export interface Pz1CorrespondenceScenario {
   passengerFlowForecast?: Pz1PassengerFlowResult;
 }
 
+export type Pz1StationOtherParameters = Record<StationLabel, Record<string, string>>;
+
 export interface Pz1Result {
   stations: Pz1Station[];
   routeLine: RouteLine;
@@ -177,6 +179,7 @@ export interface Pz1Result {
   variantId?: string;
   hsrTravelTime?: Pz1HsrTravelTimeResult;
   regionalCharacteristics?: Pz1RegionalCharacteristicInputs;
+  stationOtherParameters?: Pz1StationOtherParameters;
   correspondenceScenarios?: Record<string, Pz1CorrespondenceScenario>;
   consumerProperties?: Record<string, CorrespondenceTable>;
   discomfortMatrix?: Pz1DiscomfortMatrix;

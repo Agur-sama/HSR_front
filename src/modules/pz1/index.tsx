@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CSSProperties, ChangeEvent, DragEvent } from 'react';
+import type { CSSProperties, ChangeEvent, DragEvent, ReactNode } from 'react';
 import {
   Bar,
   BarChart,
@@ -27,7 +27,6 @@ import { FieldWithHint } from '../../shared/ui/FieldWithHint';
 import { OsmStationMap } from './OsmStationMap';
 import {
   countFilledConsumerCells,
-  correspondenceOtherParameterRows,
   correspondenceTravelTimeRows,
   consumerRows,
   createInitialPz1Draft,
@@ -44,6 +43,7 @@ import {
   getPz1PassengerFlowForecast,
   getPz1CorrespondencePassengerFlowForecast,
   getPz1CorrespondenceScenarios,
+  getPz1TaskStepCount,
   getPz1RegionalCharacteristics,
   getRouteMetrics,
   getStationRouteDistances,
@@ -60,6 +60,7 @@ import {
   regionalParameterFields,
   russianRegions,
   sanitizeFileName,
+  stationOtherParameterRows,
   syncCorrespondenceTables,
   syncCorrespondenceDetails,
   transportColumns,
@@ -88,61 +89,7 @@ function Pz1Workspace() {
   const { draft } = useModuleState<Pz1Draft>();
   const fileSlug = sanitizeFileName(draft.passport.lineTitle, 'pz1');
   const correspondenceDetails = getSyncedCorrespondenceDetails(draft);
-  const correspondenceTaskSteps = correspondenceDetails.flatMap<ModuleTaskStep>((detail) => {
-    const title = getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel);
-
-    return [
-      {
-        id: `travel-time-${detail.pairKey}`,
-        title: `Время в пути: ${title}`,
-        goal: 'Заполните четыре составляющих реального времени в дороге для существующего и прогнозного состояния.',
-        content: <CorrespondenceTravelTimeStep pairKey={detail.pairKey} />,
-        isComplete: true,
-      },
-      {
-        id: `discomfort-${detail.pairKey}`,
-        title: `Дискомфорт: ${title}`,
-        goal: 'Проверьте коэффициенты дискомфорта по видам транспорта. Агрегат считается по строкам 1–8.',
-        content: <CorrespondenceDiscomfortStep pairKey={detail.pairKey} />,
-        isComplete: true,
-      },
-      {
-        id: `frequency-${detail.pairKey}`,
-        title: `Частота сообщения: ${title}`,
-        goal: 'Укажите частоту рейсов в сутки для существующего и планового состояния.',
-        content: <CorrespondenceFrequencyStep pairKey={detail.pairKey} />,
-        isComplete: true,
-      },
-      {
-        id: `fare-${detail.pairKey}`,
-        title: `Стоимость проезда: ${title}`,
-        goal: 'Укажите стоимость проезда в рублях на пассажира для каждого вида транспорта.',
-        content: <CorrespondenceFareStep pairKey={detail.pairKey} />,
-        isComplete: true,
-      },
-      {
-        id: `other-${detail.pairKey}`,
-        title: `Прочие параметры: ${title}`,
-        goal: 'Проверьте параметры городских поездок, автомобиля и рабочего времени, которые входят в TTC.',
-        content: <CorrespondenceOtherParametersStep pairKey={detail.pairKey} />,
-        isComplete: true,
-      },
-      {
-        id: `annual-flow-${detail.pairKey}`,
-        title: `Годовой пассажиропоток: ${title}`,
-        goal: 'Заполните вместимость и коэффициенты заполняемости, чтобы получить поток по формуле 365 × рейсы × вместимость × заполнение.',
-        content: <CorrespondenceAnnualFlowStep pairKey={detail.pairKey} />,
-        isComplete: true,
-      },
-      {
-        id: `model-${detail.pairKey}`,
-        title: `Модель прогноза: ${title}`,
-        goal: 'Проверьте результат гравитационной модели для этой корреспонденции.',
-        content: <CorrespondenceModelStep pairKey={detail.pairKey} />,
-        isComplete: true,
-      },
-    ];
-  });
+  const hasCorrespondences = correspondenceDetails.length > 0;
   const taskSteps: ModuleTaskStep[] = [
     {
       id: 'stations',
@@ -171,7 +118,54 @@ function Pz1Workspace() {
       isComplete: isRegionalCharacteristicsComplete(draft),
       completionHint: 'Заполните параметры обоих регионов и индуцированный спрос',
     },
-    ...correspondenceTaskSteps,
+    {
+      id: 'correspondence-travel-time',
+      title: 'Время в пути',
+      goal: 'Заполните четыре составляющих реального времени в дороге для всех корреспонденций на одной странице.',
+      content: <AllCorrespondenceTravelTimesStep />,
+      isComplete: hasCorrespondences,
+      completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+    },
+    {
+      id: 'correspondence-discomfort',
+      title: 'Коэффициент дискомфорта',
+      goal: 'Проверьте существующие и прогнозные коэффициенты дискомфорта по всем корреспонденциям.',
+      content: <AllCorrespondenceDiscomfortStep />,
+      isComplete: hasCorrespondences,
+      completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+    },
+    {
+      id: 'correspondence-frequency-fare',
+      title: 'Частота сообщений и стоимость проезда',
+      goal: 'Укажите частоту рейсов и стоимость проезда для всех корреспонденций.',
+      content: <AllCorrespondenceFrequencyFareStep />,
+      isComplete: hasCorrespondences,
+      completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+    },
+    {
+      id: 'station-other-parameters',
+      title: 'Прочие параметры',
+      goal: 'Проверьте городские, автомобильные и трудовые параметры по каждой станции линии.',
+      content: <StationOtherParametersStep />,
+      isComplete: hasCorrespondences,
+      completionHint: 'Назначьте минимум две станции, чтобы появились станционные таблицы',
+    },
+    {
+      id: 'annual-flow',
+      title: 'Годовой пассажиропоток',
+      goal: 'Заполните вместимость и коэффициенты заполняемости для всех корреспонденций.',
+      content: <AllCorrespondenceAnnualFlowStep />,
+      isComplete: hasCorrespondences,
+      completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+    },
+    {
+      id: 'model',
+      title: 'Модель прогноза',
+      goal: 'Проверьте результат имитационной модели по всем корреспонденциям.',
+      content: <AllCorrespondenceModelStep />,
+      isComplete: hasCorrespondences,
+      completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+    },
     {
       id: 'final-indicators',
       title: 'Технико-экономические показатели',
@@ -430,22 +424,6 @@ function StationsStep() {
 
   return (
     <div className="stations-step">
-      <OsmStationMap
-        activeStationLabel={activeStationLabel}
-        mapCenter={selectedVariant.mapCenter}
-        mapZoom={selectedVariant.mapZoom}
-        onActiveStationChange={setActiveStationLabel}
-        onPreviewImageChange={(previewImage) =>
-          updateDraft((currentDraft) =>
-            currentDraft.previewImage === previewImage ? currentDraft : { ...currentDraft, previewImage },
-          )
-        }
-        onRoutePointDraftsChange={replaceRoutePointDrafts}
-        onStationChange={updateStation}
-        routeMetrics={routeMetrics}
-        routePointDrafts={draft.routePointDrafts}
-        stations={draft.stationDrafts}
-      />
       <div className="station-grid">
         <datalist id="russian-regions">
           {russianRegions.map((region) => (
@@ -543,6 +521,22 @@ function StationsStep() {
           </dl>
         </aside>
       ) : null}
+      <OsmStationMap
+        activeStationLabel={activeStationLabel}
+        mapCenter={selectedVariant.mapCenter}
+        mapZoom={selectedVariant.mapZoom}
+        onActiveStationChange={setActiveStationLabel}
+        onPreviewImageChange={(previewImage) =>
+          updateDraft((currentDraft) =>
+            currentDraft.previewImage === previewImage ? currentDraft : { ...currentDraft, previewImage },
+          )
+        }
+        onRoutePointDraftsChange={replaceRoutePointDrafts}
+        onStationChange={updateStation}
+        routeMetrics={routeMetrics}
+        routePointDrafts={draft.routePointDrafts}
+        stations={draft.stationDrafts}
+      />
     </div>
   );
 }
@@ -585,6 +579,8 @@ function HsrTravelTimeStep() {
                 <th>Километровая отметка</th>
                 <th>Расстояние, км</th>
                 <th>Средняя скорость, км/ч</th>
+                <th>Разгон, мин</th>
+                <th>Торможение, мин</th>
                 <th>Время, ЧЧ:ММ</th>
               </tr>
             </thead>
@@ -613,6 +609,8 @@ function HsrTravelTimeStep() {
                       />
                       {speedError ? <small className="field-error">{speedError}</small> : null}
                     </td>
+                    <td>2</td>
+                    <td>1</td>
                     <td>{travelTimeMinutes === null ? 'не рассчитано' : formatDuration(travelTimeMinutes)}</td>
                   </tr>
                 );
@@ -626,12 +624,12 @@ function HsrTravelTimeStep() {
         <h3>Итоговое время ВСМ</h3>
         <dl className="forecast-summary-grid forecast-summary-grid--compact">
           <div>
-            <dt>Разгон</dt>
-            <dd>00:02</dd>
+            <dt>Разгон всего</dt>
+            <dd>{formatDuration(stationRouteDistances.length * 2)}</dd>
           </div>
           <div>
-            <dt>Торможение</dt>
-            <dd>00:01</dd>
+            <dt>Торможение всего</dt>
+            <dd>{formatDuration(stationRouteDistances.length)}</dd>
           </div>
           <div>
             <dt>Перегонов</dt>
@@ -783,6 +781,92 @@ function RegionalCharacteristicsStep() {
   );
 }
 
+function AllCorrespondenceTravelTimesStep() {
+  const { draft } = useModuleState<Pz1Draft>();
+  const details = getSyncedCorrespondenceDetails(draft);
+
+  return (
+    <TopicCorrespondencePage emptyText="Назначьте станции на карте, чтобы появились пары для времени в пути.">
+      {details.map((detail) => (
+        <CorrespondenceTravelTimeStep key={detail.pairKey} pairKey={detail.pairKey} />
+      ))}
+    </TopicCorrespondencePage>
+  );
+}
+
+function AllCorrespondenceDiscomfortStep() {
+  const { draft } = useModuleState<Pz1Draft>();
+  const details = getSyncedCorrespondenceDetails(draft);
+
+  return (
+    <TopicCorrespondencePage emptyText="Назначьте станции на карте, чтобы появились пары для коэффициента дискомфорта.">
+      {details.map((detail) => (
+        <CorrespondenceDiscomfortStep key={detail.pairKey} pairKey={detail.pairKey} />
+      ))}
+    </TopicCorrespondencePage>
+  );
+}
+
+function AllCorrespondenceFrequencyFareStep() {
+  const { draft } = useModuleState<Pz1Draft>();
+  const details = getSyncedCorrespondenceDetails(draft);
+
+  return (
+    <TopicCorrespondencePage emptyText="Назначьте станции на карте, чтобы появились пары для частоты и стоимости.">
+      {details.map((detail) => (
+        <section className="correspondence-topic-block" key={detail.pairKey}>
+          <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
+          <div className="correspondence-split-page">
+            <CorrespondenceFrequencyStep pairKey={detail.pairKey} />
+            <CorrespondenceFareStep pairKey={detail.pairKey} />
+          </div>
+        </section>
+      ))}
+    </TopicCorrespondencePage>
+  );
+}
+
+function AllCorrespondenceAnnualFlowStep() {
+  const { draft } = useModuleState<Pz1Draft>();
+  const details = getSyncedCorrespondenceDetails(draft);
+
+  return (
+    <TopicCorrespondencePage emptyText="Назначьте станции на карте, чтобы появились пары для годового пассажиропотока.">
+      {details.map((detail) => (
+        <CorrespondenceAnnualFlowStep key={detail.pairKey} pairKey={detail.pairKey} />
+      ))}
+    </TopicCorrespondencePage>
+  );
+}
+
+function AllCorrespondenceModelStep() {
+  const { draft } = useModuleState<Pz1Draft>();
+  const details = getSyncedCorrespondenceDetails(draft);
+
+  return (
+    <TopicCorrespondencePage emptyText="Назначьте станции на карте, чтобы появились пары для модели прогноза.">
+      {details.map((detail) => (
+        <CorrespondenceModelStep key={detail.pairKey} pairKey={detail.pairKey} />
+      ))}
+    </TopicCorrespondencePage>
+  );
+}
+
+function TopicCorrespondencePage({ children, emptyText }: { children: ReactNode; emptyText: string }) {
+  const hasContent = Array.isArray(children) ? children.length > 0 : Boolean(children);
+
+  if (!hasContent) {
+    return (
+      <section className="empty-state">
+        <h3>Корреспонденции пока не сформированы</h3>
+        <p>{emptyText}</p>
+      </section>
+    );
+  }
+
+  return <div className="topic-correspondence-page">{children}</div>;
+}
+
 function CorrespondenceTravelTimeStep({ pairKey }: { pairKey: string }) {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const detail = getDetailOrNull(draft, pairKey);
@@ -869,22 +953,16 @@ function CorrespondenceDiscomfortStep({ pairKey }: { pairKey: string }) {
   }
 
   return (
-    <div className="correspondence-split-page">
-      <DiscomfortEditTable
+    <section className="form-section correspondence-detail">
+      <p className="eyebrow">Коэффициент дискомфорта</p>
+      <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
+      <SplitDiscomfortEditTable
         aggregates={scenario?.discomfortAggregates}
-        caption="Существующие коэффициенты дискомфорта"
-        matrix={detail.discomfortExisting}
-        onChange={(rowId, modeId, value) => updateDiscomfort('existing', rowId, modeId, value)}
-        side="existing"
+        existingMatrix={detail.discomfortExisting}
+        forecastMatrix={detail.discomfortForecast}
+        onChange={updateDiscomfort}
       />
-      <DiscomfortEditTable
-        aggregates={scenario?.discomfortAggregates}
-        caption="Прогнозные коэффициенты дискомфорта"
-        matrix={detail.discomfortForecast}
-        onChange={(rowId, modeId, value) => updateDiscomfort('forecast', rowId, modeId, value)}
-        side="forecast"
-      />
-    </div>
+    </section>
   );
 }
 
@@ -953,40 +1031,59 @@ function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
   );
 }
 
-function CorrespondenceOtherParametersStep({ pairKey }: { pairKey: string }) {
+function StationOtherParametersStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
-  const detail = getDetailOrNull(draft, pairKey);
+  const enabledStations = draft.stationDrafts.filter((station) => station.enabled);
 
-  if (!detail) {
-    return <MissingCorrespondence />;
+  function updateStationOtherParameter(stationLabel: Pz1StationDraft['label'], fieldId: string, value: string) {
+    updateDraft((currentDraft) => ({
+      ...currentDraft,
+      stationOtherParameters: {
+        ...currentDraft.stationOtherParameters,
+        [stationLabel]: {
+          ...(currentDraft.stationOtherParameters[stationLabel] ?? {}),
+          [fieldId]: value,
+        },
+      },
+    }));
+  }
+
+  if (enabledStations.length === 0) {
+    return (
+      <section className="empty-state">
+        <h3>Станции пока не выбраны</h3>
+        <p>Вернитесь к карте и включите станции, чтобы появились таблицы прочих параметров.</p>
+      </section>
+    );
   }
 
   return (
-    <section className="form-section correspondence-detail">
-      <p className="eyebrow">Прочие параметры</p>
-      <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
-      <div className="regional-fields">
-        {correspondenceOtherParameterRows.map((row) => (
-          <FieldWithHint
-            error={validateOtherParameterField(row.id, detail.otherParameters[row.id] ?? '')}
-            hint={row.helper ?? ''}
-            id={`${pairKey}-${row.id}`}
-            inputMode="decimal"
-            key={row.id}
-            label={row.label}
-            onChange={(value) =>
-              updateDraft((currentDraft) =>
-                patchCorrespondenceDetail(currentDraft, pairKey, (currentDetail) => ({
-                  ...currentDetail,
-                  otherParameters: { ...currentDetail.otherParameters, [row.id]: value },
-                })),
-              )
-            }
-            value={detail.otherParameters[row.id] ?? ''}
-          />
-        ))}
-      </div>
-    </section>
+    <div className="station-parameters-grid">
+      {enabledStations.map((station) => (
+        <section className="form-section correspondence-detail" key={station.label}>
+          <p className="eyebrow">Станция {station.label}</p>
+          <h3>{station.name || station.label}</h3>
+          <div className="regional-fields">
+            {stationOtherParameterRows.map((row) => {
+              const value = draft.stationOtherParameters[station.label]?.[row.id] ?? '';
+
+              return (
+                <FieldWithHint
+                  error={validateOtherParameterField(row.id, value)}
+                  hint={row.helper ?? ''}
+                  id={`${station.label}-${row.id}`}
+                  inputMode="decimal"
+                  key={row.id}
+                  label={row.label}
+                  onChange={(nextValue) => updateStationOtherParameter(station.label, row.id, nextValue)}
+                  value={value}
+                />
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -1122,6 +1219,7 @@ function CorrespondenceModelStep({ pairKey }: { pairKey: string }) {
   const { draft } = useModuleState<Pz1Draft>();
   const detail = getDetailOrNull(draft, pairKey);
   const forecast = getPz1CorrespondencePassengerFlowForecast(draft, pairKey);
+  const missingFields = forecast ? [] : getForecastMissingFields(draft, pairKey);
   const chartData = forecast ? buildPassengerFlowChartData(forecast) : [];
 
   if (!detail) {
@@ -1177,7 +1275,7 @@ function CorrespondenceModelStep({ pairKey }: { pairKey: string }) {
           </div>
         </>
       ) : (
-        <p className="status-note">Заполните региональные параметры, время, частоту, стоимость и годовой поток для этой корреспонденции.</p>
+        <ForecastMissingState missingFields={missingFields} />
       )}
     </section>
   );
@@ -1514,7 +1612,7 @@ function FinalIndicatorsStep() {
 }
 
 function ResultStep() {
-  const { draft } = useModuleState<Pz1Draft>();
+  const { draft, setCurrentStepIndex, setPhase } = useModuleState<Pz1Draft>();
   const [exportStatus, setExportStatus] = useState('');
   const bridge = createPz1Bridge(draft);
   const result = createPz1Result(draft);
@@ -1526,6 +1624,11 @@ function ResultStep() {
   ).length;
   const totalLengthText = formatKm(result.totalLengthKm);
   const stationRouteDistances = getStationRouteDistances(draft);
+
+  function returnToFinalIndicators() {
+    setCurrentStepIndex(Math.max(0, getPz1TaskStepCount(draft) - 1));
+    setPhase('task');
+  }
 
   function downloadJson() {
     jsonFileDraftStorage.save(bridge, `${fileSlug}-bridge.json`);
@@ -1595,11 +1698,11 @@ function ResultStep() {
             <dd>{computedFinalIndicators.annualFlow || 'не рассчитано'}</dd>
           </div>
           <div>
-            <dt>Прогноз</dt>
-            <dd>{computedFinalIndicators.ticketRevenue || 'не рассчитано'}</dd>
+            <dt>Билетная выручка</dt>
+            <dd>{computedFinalIndicators.ticketRevenue || 'не заполнено'}</dd>
           </div>
           <div>
-            <dt>Точки трассы</dt>
+            <dt>Точки линии трассы</dt>
             <dd>{result.routeLine.vertices.length}</dd>
           </div>
         </dl>
@@ -1610,6 +1713,9 @@ function ResultStep() {
         <p className="eyebrow">Экспорт</p>
         <h2>Скачать файлы</h2>
         <p className="status-note">PDF нужен для сдачи преподавателю. JSON можно загрузить позже, чтобы продолжить работу с теми же данными.</p>
+        <button className="button button--ghost" onClick={returnToFinalIndicators} type="button">
+          ← Назад к показателям
+        </button>
         <button className="button button--primary" onClick={() => void downloadPdf()} type="button">
           Скачать PDF
         </button>
@@ -1688,6 +1794,87 @@ function SplitModeTable({
                 <div className="split-total">
                   <span>Сущ. {formatDurationTotal(values, column.id, 'existing')}</span>
                   <span>Прогн. {formatDurationTotal(values, column.id, 'forecast')}</span>
+                </div>
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SplitDiscomfortEditTable({
+  aggregates,
+  existingMatrix,
+  forecastMatrix,
+  onChange,
+}: {
+  aggregates?: Record<TransportModeId, { existing: number | null; forecast: number | null }>;
+  existingMatrix: Pz1Draft['discomfortMatrix'];
+  forecastMatrix: Pz1Draft['discomfortMatrix'];
+  onChange: (side: 'existing' | 'forecast', rowId: string, modeId: TransportModeId, value: string) => void;
+}) {
+  return (
+    <div className="table-scroll">
+      <table className="input-table split-discomfort-table">
+        <thead>
+          <tr>
+            <th>Показатель</th>
+            {transportColumns.map((column) => (
+              <th key={column.id}>{column.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {discomfortRows.map((row) => (
+            <tr key={row.id}>
+              <th scope="row">{row.label}</th>
+              {transportColumns.map((column) => {
+                const existingValue = existingMatrix.values[row.id]?.[column.id] ?? '';
+                const forecastValue = forecastMatrix.values[row.id]?.[column.id] ?? '';
+                const existingError = validateDiscomfortCell(existingValue);
+                const forecastError = validateDiscomfortCell(forecastValue);
+
+                return (
+                  <td key={column.id}>
+                    <label className="split-input">
+                      <span>Сущ.</span>
+                      <input
+                        aria-invalid={existingError ? true : undefined}
+                        className={existingError ? 'is-invalid discomfort-value' : 'discomfort-value'}
+                        inputMode="decimal"
+                        onChange={(event) => onChange('existing', row.id, column.id, event.target.value)}
+                        readOnly={column.id === 'hSR'}
+                        style={getDiscomfortInputStyle(existingValue)}
+                        value={existingValue}
+                      />
+                      {existingError ? <small className="field-error">{existingError}</small> : null}
+                    </label>
+                    <label className="split-input">
+                      <span>Прогн.</span>
+                      <input
+                        aria-invalid={forecastError ? true : undefined}
+                        className={forecastError ? 'is-invalid discomfort-value' : 'discomfort-value'}
+                        inputMode="decimal"
+                        onChange={(event) => onChange('forecast', row.id, column.id, event.target.value)}
+                        style={getDiscomfortInputStyle(forecastValue)}
+                        value={forecastValue}
+                      />
+                      {forecastError ? <small className="field-error">{forecastError}</small> : null}
+                    </label>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+          <tr className="input-table__total-row">
+            <th scope="row">ИТОГО</th>
+            {transportColumns.map((column) => (
+              <td key={column.id}>
+                <div className="split-total">
+                  <span>Сущ. {formatNullableDecimal(aggregates?.[column.id]?.existing ?? null)}</span>
+                  <span>Прогн. {formatNullableDecimal(aggregates?.[column.id]?.forecast ?? null)}</span>
                 </div>
               </td>
             ))}
@@ -1826,6 +2013,27 @@ function MissingCorrespondence() {
   );
 }
 
+function ForecastMissingState({ missingFields }: { missingFields: string[] }) {
+  if (missingFields.length === 0) {
+    return (
+      <p className="status-note">
+        Модель пока не рассчитана. Проверьте, чтобы существующий поток был больше 0, а время и TTC были положительными.
+      </p>
+    );
+  }
+
+  return (
+    <div className="forecast-missing-state">
+      <p className="status-note">Чтобы построить график имитационной модели, заполните недостающие поля:</p>
+      <ul className="missing-field-list">
+        {missingFields.map((field) => (
+          <li key={field}>{field}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 const passengerFlowChartColors: Record<TransportModeId, string> = {
   hSR: '#e0182d',
   airplane: '#003d84',
@@ -1958,6 +2166,106 @@ function getPassengerFlowModeValue(
   field: 'existingAnnualFlow' | 'forecastAnnualFlow',
 ) {
   return forecast.modes.find((mode) => mode.modeId === modeId)?.[field] ?? 0;
+}
+
+function getForecastMissingFields(draft: Pz1Draft, pairKey: string) {
+  const detail = getDetailOrNull(draft, pairKey);
+  const table = getSyncedCorrespondenceTables(draft).find((item) => item.pairKey === pairKey);
+  const scenario = getPz1CorrespondenceScenarios(draft)[pairKey];
+  const missingFields = new Set<string>();
+
+  if (!detail || !table) {
+    return ['Карта: корреспонденция не найдена'];
+  }
+
+  const regional = getPz1RegionalCharacteristics(draft);
+  const endpoints = [
+    { label: detail.fromLabel, title: 'станции отправления' },
+    { label: detail.toLabel, title: 'станции назначения' },
+  ];
+
+  for (const endpoint of endpoints) {
+    const station = draft.stationDrafts.find((item) => item.label === endpoint.label);
+    const region = station?.region.trim() ?? '';
+    if (!region) {
+      missingFields.add(`Размещение станций: регион ${endpoint.title}`);
+      continue;
+    }
+
+    const parameters = regional.regionParameters?.[region];
+    if (!parameters) {
+      missingFields.add(`Характеристики регионов: блок региона ${region}`);
+      continue;
+    }
+
+    for (const field of regionalParameterFields) {
+      if (validateRegionParameterField(field.id, parameters[field.id]) !== null) {
+        missingFields.add(`Характеристики регионов: ${field.label} (${region})`);
+      }
+    }
+  }
+
+  if (validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct) !== null) {
+    missingFields.add('Характеристики регионов: прогнозируемый индуцированный спрос');
+  }
+
+  const travelTime = scenario?.travelTime ?? detail.travelTime;
+  for (const modeId of table.activeModes) {
+    for (const row of correspondenceTravelTimeRows) {
+      if (parseDurationInput(travelTime[row.id][modeId].existing) === null) {
+        missingFields.add(`Время в пути: ${row.label}, ${getTransportModeLabel(modeId)}, существующее`);
+      }
+      if (parseDurationInput(travelTime[row.id][modeId].forecast) === null) {
+        missingFields.add(`Время в пути: ${row.label}, ${getTransportModeLabel(modeId)}, прогноз`);
+      }
+    }
+
+    for (const side of ['existing', 'forecast'] as const) {
+      if (parseNumberInput(detail.frequency[modeId][side]) === null) {
+        missingFields.add(`Частота сообщений и стоимость проезда: частота ${getTransportModeLabel(modeId)}, ${side === 'existing' ? 'существующая' : 'прогнозная'}`);
+      }
+      if (parseNumberInput(detail.fare[modeId][side]) === null) {
+        missingFields.add(`Частота сообщений и стоимость проезда: стоимость ${getTransportModeLabel(modeId)}, ${side === 'existing' ? 'существующая' : 'прогнозная'}`);
+      }
+    }
+
+    for (const row of discomfortRows) {
+      if (validateDiscomfortCell(detail.discomfortExisting.values[row.id]?.[modeId] ?? '') !== null) {
+        missingFields.add(`Коэффициент дискомфорта: ${row.label}, ${getTransportModeLabel(modeId)}, существующее`);
+      }
+      if (validateDiscomfortCell(detail.discomfortForecast.values[row.id]?.[modeId] ?? '') !== null) {
+        missingFields.add(`Коэффициент дискомфорта: ${row.label}, ${getTransportModeLabel(modeId)}, прогноз`);
+      }
+    }
+
+    const annualFlow = detail.annualFlows[modeId];
+    const capacityExistingValue = annualFlow.capacityExisting ?? annualFlow.capacity;
+    const capacityForecastValue = annualFlow.capacityForecast ?? annualFlow.capacity;
+    if (validateAnnualFlowField('capacityExisting', capacityExistingValue) !== null) {
+      missingFields.add(`Годовой пассажиропоток: вместимость ${getTransportModeLabel(modeId)}, существующая`);
+    }
+    if (validateAnnualFlowField('capacityForecast', capacityForecastValue) !== null) {
+      missingFields.add(`Годовой пассажиропоток: вместимость ${getTransportModeLabel(modeId)}, прогнозная`);
+    }
+    if (validateAnnualFlowField('occupancyExisting', annualFlow.occupancyExisting) !== null) {
+      missingFields.add(`Годовой пассажиропоток: заполняемость ${getTransportModeLabel(modeId)}, существующая`);
+    }
+    if (validateAnnualFlowField('occupancyForecast', annualFlow.occupancyForecast) !== null) {
+      missingFields.add(`Годовой пассажиропоток: заполняемость ${getTransportModeLabel(modeId)}, прогнозная`);
+    }
+  }
+
+  for (const stationLabel of [detail.fromLabel, detail.toLabel]) {
+    const station = draft.stationDrafts.find((item) => item.label === stationLabel);
+    for (const row of stationOtherParameterRows) {
+      const value = draft.stationOtherParameters[stationLabel]?.[row.id] ?? '';
+      if (validateOtherParameterField(row.id, value) !== null) {
+        missingFields.add(`Прочие параметры: ${row.label} (${station?.name || stationLabel})`);
+      }
+    }
+  }
+
+  return [...missingFields];
 }
 
 function validatePassengerFlowModeInput(fieldId: keyof Pz1PassengerFlowModeInputs, value: string) {
