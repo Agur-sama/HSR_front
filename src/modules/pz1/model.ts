@@ -163,7 +163,7 @@ export const discomfortRows: DataEntryRow[] = [
 
 export const correspondenceTravelTimeRows: DataEntryRow[] = [
   { id: 'originAccess', label: 'Среднее время от центра города 1 до вокзала/автовокзала/аэропорта', helper: 'ЧЧ:ММ' },
-  { id: 'waiting', label: 'Среднее время ожидания отправления ТС', helper: 'ЧЧ:ММ' },
+  { id: 'waiting', label: 'Среднее время ожидания отправления транспортного средства', helper: 'ЧЧ:ММ' },
   { id: 'cleanTravel', label: 'Чистое время поездки', helper: 'ЧЧ:ММ' },
   { id: 'destinationAccess', label: 'Среднее время от вокзала/аэропорта до центра города 2', helper: 'ЧЧ:ММ' },
 ];
