@@ -1364,6 +1364,18 @@ input.is-invalid {
   font-weight: 600;
 }
 
+/* Единица измерения в заголовке строки — отдельной строкой, а не встык
+   к подписи (ТЗ v3.5 §3 П-07: «…АЭРОПОРТАЧЧ:ММ»). Тот же приём, что уже
+   применён в .data-entry small и .regional-parameter-table th small. */
+.input-table th small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+}
+
 .regional-parameter-table input {
   min-width: 120px;
 }
