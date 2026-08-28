@@ -24,6 +24,7 @@ import { ModuleShell } from '../../shared/ui/ModuleShell';
 import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
 import { DataEntryTable } from '../../shared/ui/DataEntryTable';
 import { FieldWithHint } from '../../shared/ui/FieldWithHint';
+import { GroupedNumberInput } from '../../shared/ui/GroupedNumberInput';
 import { OsmStationMap } from './OsmStationMap';
 import {
   countFilledConsumerCells,
@@ -736,13 +737,22 @@ function RegionalCharacteristicsStep() {
 
                         return (
                           <td key={field.id}>
-                            <input
-                              aria-invalid={error ? true : undefined}
-                              className={error ? 'is-invalid' : undefined}
-                              inputMode="decimal"
-                              onChange={(event) => updateRegionParameter(region, field.id, event.target.value)}
-                              value={value}
-                            />
+                            {field.grouped ? (
+                              <GroupedNumberInput
+                                ariaLabel={`${region}: ${field.label}`}
+                                error={error}
+                                onChange={(nextValue) => updateRegionParameter(region, field.id, nextValue)}
+                                value={value}
+                              />
+                            ) : (
+                              <input
+                                aria-invalid={error ? true : undefined}
+                                className={error ? 'is-invalid' : undefined}
+                                inputMode="decimal"
+                                onChange={(event) => updateRegionParameter(region, field.id, event.target.value)}
+                                value={value}
+                              />
+                            )}
                             {error ? <small className="field-error">{error}</small> : null}
                           </td>
                         );

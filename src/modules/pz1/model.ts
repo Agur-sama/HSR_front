@@ -305,16 +305,23 @@ export const regionalCharacteristicFields: Array<{
   { id: 'kGdpFlowRegionB', label: 'Коэффициент влияния ВВП на пассажиропоток региона 2', helper: 'безразм.' },
 ];
 
+/**
+ * `grouped: true` — показывать значение с разделителями разрядов при потере
+ * фокуса (ТЗ v3.5 §3 П-05). Не проставлено у `kGdpFlow`: это безразмерный
+ * коэффициент около единицы, разряды ему не нужны. Индуцированный спрос —
+ * проценты, он вне этой таблицы и тоже без группировки.
+ */
 export const regionalParameterFields: Array<{
   id: keyof Pz1RegionalParameterInputs;
   label: string;
   helper: string;
+  grouped?: boolean;
 }> = [
-  { id: 'grpExisting', label: 'ВРП, существующий', helper: 'млн руб.' },
-  { id: 'grpForecast', label: 'ВРП, прогнозный', helper: 'млн руб.' },
-  { id: 'populationExisting', label: 'Численность населения, существующая', helper: 'тыс. чел.' },
-  { id: 'populationForecast', label: 'Численность населения, прогнозная', helper: 'тыс. чел.' },
-  { id: 'averageSalary', label: 'Средняя заработная плата', helper: 'руб./мес.' },
+  { id: 'grpExisting', label: 'ВРП, существующий', helper: 'млн руб.', grouped: true },
+  { id: 'grpForecast', label: 'ВРП, прогнозный', helper: 'млн руб.', grouped: true },
+  { id: 'populationExisting', label: 'Численность населения, существующая', helper: 'тыс. чел.', grouped: true },
+  { id: 'populationForecast', label: 'Численность населения, прогнозная', helper: 'тыс. чел.', grouped: true },
+  { id: 'averageSalary', label: 'Средняя заработная плата', helper: 'руб./мес.', grouped: true },
   { id: 'kGdpFlow', label: 'Коэффициент влияния ВВП на пассажиропоток', helper: 'безразм.' },
 ];
 
