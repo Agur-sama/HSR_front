@@ -340,6 +340,20 @@ button:focus-visible {
   background: var(--panel-alt);
 }
 
+/* Кнопка «Назад»: контурная, а не бесцветная ссылка (ТЗ v3.5 §3 П-03).
+   Это осознанное отступление от design-reference.html, где нижняя навигация
+   показана как .btn-ghost — заказчик попросил сделать возврат заметнее.
+   Цвет — --primary из палитры Школы ВСМ. */
+.button--outline {
+  border-color: var(--primary);
+  background: #fff;
+  color: var(--primary);
+}
+
+.button--outline:hover:not(:disabled) {
+  background: var(--panel-alt);
+}
+
 .step-header {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);

@@ -1712,7 +1712,7 @@ function ResultStep() {
         <p className="eyebrow">Экспорт</p>
         <h2>Скачать файлы</h2>
         <p className="status-note">PDF нужен для сдачи преподавателю. JSON можно загрузить позже, чтобы продолжить работу с теми же данными.</p>
-        <button className="button button--ghost" onClick={returnToFinalIndicators} type="button">
+        <button className="button button--outline" onClick={returnToFinalIndicators} type="button">
           ← Назад к показателям
         </button>
         <button className="button button--primary" onClick={() => void downloadPdf()} type="button">
