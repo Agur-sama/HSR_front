@@ -104,7 +104,7 @@ export function createPz1PdfSections(summary: Pz1PdfSummary): Pz1PdfSection[] {
       title: '1. Исходные данные',
       rows: [
         ['Команда', formatRequiredValue(summary.team)],
-        ['Название линии', formatRequiredValue(summary.lineTitle)],
+        ['Учебная группа', formatRequiredValue(summary.lineTitle)],
         ['Вариант', formatRequiredValue(summary.variantTitle)],
         ['Дата выполнения', formatDate(summary.createdAt)],
       ],

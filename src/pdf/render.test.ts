@@ -20,7 +20,7 @@ describe('pdf render', () => {
     expect(text).toContain('1. Исходные данные');
     expect(text).toContain('Команда');
     expect(text).toContain('Бригада 7');
-    expect(text).toContain('Название линии');
+    expect(text).toContain('Учебная группа');
     expect(text).toContain('Москва - Санкт-Петербург');
     expect(text).toContain('Технико-экономические показатели');
     expect(text).toContain('13');

@@ -40,7 +40,6 @@ const HSR_ACCELERATION_MINUTES = 2;
 const HSR_BRAKING_MINUTES = 1;
 const PASSPORT_LIMITS = {
   team: { min: 2, max: 40 },
-  lineTitle: { min: 3, max: 80 },
 };
 
 export const russianRegions = [
@@ -979,9 +978,10 @@ export function getPz1TaskStepCount(draft: Pz1Draft) {
 }
 
 export function isPassportComplete(draft: Pz1Draft) {
+  // Поле «Учебная группа» (draft.passport.lineTitle) свободное — валидация непустоты/уникальности
+  // снята по ТЗ v3.5 §3 П-01, оно не блокирует переход к заданию.
   return (
     isLengthInRange(draft.passport.team, PASSPORT_LIMITS.team.min, PASSPORT_LIMITS.team.max) &&
-    isLengthInRange(draft.passport.lineTitle, PASSPORT_LIMITS.lineTitle.min, PASSPORT_LIMITS.lineTitle.max) &&
     isVariantInRange(draft.selectedVariantId)
   );
 }

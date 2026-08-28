@@ -249,17 +249,16 @@ function IntroStep() {
             />
           </label>
           <label>
-            <span>Название линии</span>
+            <span>Учебная группа</span>
             <input
               maxLength={80}
-              minLength={3}
               onChange={(event) =>
                 updateDraft((currentDraft) => ({
                   ...currentDraft,
                   passport: { ...currentDraft.passport, lineTitle: event.target.value },
                 }))
               }
-              placeholder="напр. ВСМ Владивосток — Хабаровск"
+              placeholder="напр. ТЭД-311"
               value={draft.passport.lineTitle}
             />
           </label>
@@ -338,7 +337,7 @@ function IntroStep() {
 
       <section className="import-section">
         <p className="eyebrow">JSON-мост</p>
-        <h2>Загрузка данных</h2>
+        <h2>Загрузка сохранённого проекта</h2>
         <label className="drop-zone" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
           <input accept="application/json,.json" className="visually-hidden" onChange={handleFileInput} type="file" />
           <span>Выберите JSON-файл или перенесите его сюда</span>
