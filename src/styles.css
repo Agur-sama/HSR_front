@@ -401,6 +401,11 @@ button:focus-visible {
 .stations-step {
   display: grid;
   grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+  /* Карта в колонке 2 занимает обе строки и выше содержимого колонки 1.
+     Без явной высоты строк её избыток раскладывается на обе строки, и блок
+     «Участки трассы» уезжает вниз, повисая по центру колонки (ТЗ v3.5 §3 П-02).
+     max-content по первой строке прижимает его к карточкам станций. */
+  grid-template-rows: max-content minmax(0, 1fr);
   gap: 22px;
   align-items: start;
 }
@@ -1060,6 +1065,8 @@ button:focus-visible {
 
 .station-route-distances {
   grid-column: 1;
+  grid-row: 2;
+  align-self: start;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   background: #fff;
@@ -1699,6 +1706,12 @@ input.is-invalid {
     grid-template-columns: 1fr;
   }
 
+  /* В одну колонку блоки просто идут друг за другом — раскладка строк
+     из двухколоночного режима здесь только растянула бы средний блок. */
+  .stations-step {
+    grid-template-rows: none;
+  }
+
   .map-placeholder,
   .osm-map-card {
     grid-column: auto;
@@ -1709,6 +1722,7 @@ input.is-invalid {
   .station-grid,
   .station-route-distances {
     grid-column: auto;
+    grid-row: auto;
   }
 }
 
