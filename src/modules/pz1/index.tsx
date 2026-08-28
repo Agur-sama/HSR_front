@@ -50,6 +50,7 @@ import {
   getStationRouteDistances,
   getSyncedCorrespondenceDetails,
   getSyncedCorrespondenceTables,
+  INDUCED_DEMAND_TOOLTIP,
   isHsrTravelTimeComplete,
   isFinalIndicatorsComplete,
   isPassportComplete,
@@ -769,6 +770,7 @@ function RegionalCharacteristicsStep() {
               inputMode="decimal"
               label="Прогнозируемый индуцированный спрос"
               onChange={(value) => updateRegionalField('inducedDemandPct', value)}
+              tooltip={INDUCED_DEMAND_TOOLTIP}
               value={regional.inducedDemandPct}
             />
           </div>

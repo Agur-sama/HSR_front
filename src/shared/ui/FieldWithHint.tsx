@@ -5,6 +5,8 @@ interface FieldWithHintProps {
   label: string;
   value: string;
   hint: string;
+  /** Текст всплывающей подсказки «i». По умолчанию — тот же `hint`. */
+  tooltip?: string;
   unit?: string;
   readOnly?: boolean;
   error?: string | null;
@@ -17,6 +19,7 @@ export function FieldWithHint({
   label,
   value,
   hint,
+  tooltip,
   unit,
   readOnly = false,
   error = null,
@@ -27,7 +30,7 @@ export function FieldWithHint({
     <label className="field-with-hint" htmlFor={id}>
       <span className="field-with-hint__label">
         {label}
-        <InfoTooltip label={hint} />
+        <InfoTooltip label={tooltip ?? hint} />
       </span>
       <input
         aria-invalid={error ? true : undefined}
