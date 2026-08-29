@@ -7,7 +7,7 @@ import { buildDisplayRoutePoints } from '../../shared/lib/routeGeometry';
 import type { RouteLineMetrics } from '../../shared/lib/routeGeometry';
 import { createRouteLine } from './model';
 import type { Pz1RoutePointDraft, Pz1StationDraft } from './types';
-
+import type { FeatureCollection, Geometry, LineString, Point } from 'geojson';
 const DEFAULT_CENTER: [number, number] = [34.8, 58.1];
 const DEFAULT_ZOOM = 6;
 const MIN_ZOOM = 4;
@@ -248,7 +248,7 @@ export function OsmStationMap({
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setMode('station');
+        setMode('view');
       }
     }
 

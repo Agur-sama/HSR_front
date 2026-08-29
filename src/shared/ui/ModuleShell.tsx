@@ -138,7 +138,12 @@ export function ModuleShell({
 
       {phase !== 'result' ? (
         <footer className="module-actions">
-          <button className="button button--ghost" disabled={phase === 'intro'} onClick={goBack} type="button">
+          <button 
+            className="button button--secondary" 
+            disabled={phase === 'intro'} 
+            onClick={goBack} 
+            type="button"
+          >
             ← Назад
           </button>
           <span className="module-actions__hint">{saveStatus || progressHint}</span>

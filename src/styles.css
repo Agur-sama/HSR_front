@@ -1060,12 +1060,13 @@ button:focus-visible {
 
 .station-route-distances {
   grid-column: 1;
+  grid-row: 2; /* перенести на вторую строку */
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   background: #fff;
   padding: 14px;
+  margin-top: 0;
 }
-
 .station-route-distances h3 {
   margin: 4px 0 10px;
   color: var(--indigo);

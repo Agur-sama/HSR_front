@@ -39,10 +39,10 @@ export function FieldWithHint({
         value={value}
       />
       {error ? <small className="field-error">{error}</small> : null}
-      <small>
+      {/* <small>
         {hint}
         {unit ? `, ${unit}` : ''}
-      </small>
+      </small> */}
     </label>
   );
 }

@@ -32,6 +32,8 @@ import type {
 } from './types';
 import { pz1Variants } from './variants';
 
+
+
 const STATION_LABELS: StationLabel[] = ['А', 'Б', 'В', 'Г'];
 const TERMINAL_LABELS: StationLabel[] = ['А', 'Г'];
 const HSR_MODE_ID: TransportModeId = 'hSR';
@@ -163,10 +165,10 @@ export const discomfortRows: DataEntryRow[] = [
 ];
 
 export const correspondenceTravelTimeRows: DataEntryRow[] = [
-  { id: 'originAccess', label: 'Среднее время от центра города 1 до вокзала/автовокзала/аэропорта', helper: 'ЧЧ:ММ' },
-  { id: 'waiting', label: 'Среднее время ожидания отправления ТС', helper: 'ЧЧ:ММ' },
-  { id: 'cleanTravel', label: 'Чистое время поездки', helper: 'ЧЧ:ММ' },
-  { id: 'destinationAccess', label: 'Среднее время от вокзала/аэропорта до центра города 2', helper: 'ЧЧ:ММ' },
+  { id: 'originAccess', label: 'Среднее время от центра города 1 до вокзала/автовокзала/аэропорта', helper: ' ЧЧ:ММ' },
+  { id: 'waiting', label: 'Среднее время ожидания отправления транспортного средства', helper: ' ЧЧ:ММ' },
+  { id: 'cleanTravel', label: 'Чистое время поездки', helper: ' ЧЧ:ММ' },
+  { id: 'destinationAccess', label: 'Среднее время от вокзала/аэропорта до центра города 2', helper: ' ЧЧ:ММ' },
 ];
 
 export const correspondenceOtherParameterRows: DataEntryRow[] = [
@@ -518,10 +520,13 @@ export function getHsrTravelTimeResult(draft: Pick<Pz1Draft, 'hsrTravelTimes' | 
     return null;
   }
 
+  const sumTravelTime = segments.reduce((sum, segment) => sum + segment.travelTimeMinutes, 0);
+  const totalMinutes = sumTravelTime + (HSR_ACCELERATION_MINUTES + HSR_BRAKING_MINUTES) * segments.length;
+
   return {
     accelerationMinutes: HSR_ACCELERATION_MINUTES,
     brakingMinutes: HSR_BRAKING_MINUTES,
-    totalMinutes: segments.reduce((sum, segment) => sum + segment.travelTimeMinutes, 0),
+    totalMinutes,
     segments,
   };
 }
@@ -801,28 +806,39 @@ export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairK
     const existingTravelTimeHours = getTravelTimeTotalHours(effectiveTravelTime, modeId, 'existing');
     const forecastTravelTimeHours = getTravelTimeTotalHours(effectiveTravelTime, modeId, 'forecast');
     const discomfortAggregate = calculateDiscomfortAggregate(detail.discomfortForecast, modeId);
-    const totalTransportCost =
-      forecastTravelTimeHours === null ? null : getTotalTransportCost(draft, detail, modeId, forecastTravelTimeHours, discomfortAggregate);
+const totalTransportCost =
+  forecastTravelTimeHours === null ? null : getTotalTransportCost(draft, detail, modeId, forecastTravelTimeHours, discomfortAggregate);
 
-    if (
-      existingAnnualFlow === null ||
-      forecastAnnualFlowInput === null ||
-      existingTravelTimeHours === null ||
-      forecastTravelTimeHours === null ||
-      totalTransportCost === null ||
-      totalTransportCost <= 0
-    ) {
-      return null;
-    }
+if (totalTransportCost === null) {
+  return null;
+}
 
-    modes.push({
-      modeId,
-      existingAnnualFlow,
-      travelTimeHours: forecastTravelTimeHours,
-      waitingTimeHours: 0,
-      totalTransportCost,
-      existingTravelTimeHours,
-    });
+// Обработка объекта от автомобиля
+let totalTransportCostValue: number;
+if (typeof totalTransportCost === 'object' && 'forecast' in totalTransportCost) {
+  totalTransportCostValue = totalTransportCost.forecast;
+} else {
+  totalTransportCostValue = totalTransportCost as number;
+}
+
+if (
+  existingAnnualFlow === null ||
+  forecastAnnualFlowInput === null ||
+  existingTravelTimeHours === null ||
+  forecastTravelTimeHours === null ||
+  totalTransportCostValue <= 0
+) {
+  return null;
+}
+
+modes.push({
+  modeId,
+  existingAnnualFlow,
+  travelTimeHours: forecastTravelTimeHours,
+  waitingTimeHours: 0,
+  totalTransportCost: totalTransportCostValue,
+  existingTravelTimeHours,
+});
 
     return modes;
   }, []);
@@ -1118,8 +1134,19 @@ export function validateOtherParameterField(fieldId: string, value: string) {
   return parsed > 0 ? null : 'Значение должно быть больше 0';
 }
 
-export function validateAnnualFlowField(fieldId: string, value: string) {
+export function validateAnnualFlowField(fieldId: string, value: string, modeId?: TransportModeId) {
   const trimmed = value.trim();
+  
+  // Для ВСМ существующая вместимость может быть 0
+  if (fieldId === 'capacityExisting' && modeId === 'hSR') {
+    // Пустое поле или 0 — допустимо
+    if (!trimmed) return null;
+    const parsed = parseNumericInput(trimmed);
+    if (parsed === null) return 'Значение должно быть числом';
+    return parsed >= 0 ? null : 'Значение не может быть отрицательным';
+  }
+
+  // Остальные поля требуют заполнения
   if (!trimmed) {
     return 'Заполните поле';
   }
@@ -1310,7 +1337,7 @@ function getStationRouteMarks(draft: Pick<Pz1Draft, 'routePointDrafts' | 'statio
   return stationsOnRoute;
 }
 
-function getCorrespondenceDistanceKm(draft: Pz1Draft, fromLabel: StationLabel, toLabel: StationLabel) {
+export function getCorrespondenceDistanceKm(draft: Pz1Draft, fromLabel: StationLabel, toLabel: StationLabel) {
   const marks = getStationRouteMarks(draft);
   const fromMark = marks.find((mark) => mark.label === fromLabel);
   const toMark = marks.find((mark) => mark.label === toLabel);
@@ -1440,17 +1467,21 @@ function mergeCorrespondenceDetail(
       return values;
     }, {}),
     annualFlows: transportColumns.reduce<Pz1CorrespondenceDetailDraft['annualFlows']>((values, column) => {
-      values[column.id] = {
-        capacity: importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
-        capacityExisting:
-          importedDetail?.annualFlows?.[column.id]?.capacityExisting ?? importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
-        capacityForecast:
-          importedDetail?.annualFlows?.[column.id]?.capacityForecast ?? importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
-        occupancyExisting: importedDetail?.annualFlows?.[column.id]?.occupancyExisting ?? defaultOccupancyByMode[column.id] ?? '',
-        occupancyForecast: importedDetail?.annualFlows?.[column.id]?.occupancyForecast ?? defaultOccupancyByMode[column.id] ?? '',
-      };
-      return values;
-    }, {} as Pz1CorrespondenceDetailDraft['annualFlows']),
+    const isHSR = column.id === 'hSR';
+    values[column.id] = {
+    capacity: importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
+    capacityExisting:
+      importedDetail?.annualFlows?.[column.id]?.capacityExisting ?? 
+      importedDetail?.annualFlows?.[column.id]?.capacity ?? 
+      (isHSR ? '0' : ''),  // <- Для ВСМ существующая вместимость = 0
+    capacityForecast:
+      importedDetail?.annualFlows?.[column.id]?.capacityForecast ?? 
+      importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
+    occupancyExisting: importedDetail?.annualFlows?.[column.id]?.occupancyExisting ?? defaultOccupancyByMode[column.id] ?? '',
+    occupancyForecast: importedDetail?.annualFlows?.[column.id]?.occupancyForecast ?? defaultOccupancyByMode[column.id] ?? '',
+  };
+  return values;
+  }, {} as Pz1CorrespondenceDetailDraft['annualFlows']),
   };
 }
 
@@ -1957,7 +1988,14 @@ function getTotalTransportCost(
       carMaintenanceCostKm !== null &&
       carOccupancy > 0
     ) {
-      return ((gasolinePrice * gasolineConsumption) / 100 + carMaintenanceCostKm) * routeDistanceKm / carOccupancy + timeCost;
+      const existingCost = ((gasolinePrice * gasolineConsumption) / 100 + carMaintenanceCostKm) * routeDistanceKm;
+      const existingFare = existingCost / carOccupancy + 200;
+      const forecastFare = existingFare + 200;
+      
+      return {
+        existing: Math.round(existingFare),
+        forecast: Math.round(forecastFare)
+      };
     }
 
     return fare === null ? null : fare + timeCost;
@@ -1969,7 +2007,6 @@ function getTotalTransportCost(
 
   return fare + cityFareOrigin + cityFareDestination + timeCost;
 }
-
 function getTravelTimeMonetaryCost(
   draft: Pz1Draft,
   detail: Pz1CorrespondenceDetailDraft,
@@ -2046,7 +2083,7 @@ function getAverageStationOtherParameterValue(
   return formatDecimal(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
-function getAverageStationOtherParameterNumber(
+export function getAverageStationOtherParameterNumber(
   draft: Pz1Draft,
   detail: Pz1CorrespondenceDetailDraft,
   fieldId: string,
@@ -2339,3 +2376,4 @@ function getNearestRoutePointIndex(point: { lon: number; lat: number }, routePoi
     { index: 0, distanceKm: Number.POSITIVE_INFINITY },
   ).index;
 }
+

@@ -73,6 +73,8 @@ import {
   validateRegionalCharacteristicField,
   validateRegionParameterField,
   validateStationField,
+  getCorrespondenceDistanceKm,
+  getAverageStationOtherParameterNumber,
 } from './model';
 import type { Pz1CorrespondenceDetailDraft, Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
 import { getPz1VariantTitle, pz1Variants } from './variants';
@@ -135,14 +137,6 @@ function Pz1Workspace() {
       completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
     },
     {
-      id: 'correspondence-frequency-fare',
-      title: 'Частота сообщений и стоимость проезда',
-      goal: 'Укажите частоту рейсов и стоимость проезда для всех корреспонденций.',
-      content: <AllCorrespondenceFrequencyFareStep />,
-      isComplete: hasCorrespondences,
-      completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
-    },
-    {
       id: 'station-other-parameters',
       title: 'Прочие параметры',
       goal: 'Проверьте городские, автомобильные и трудовые параметры по каждой станции линии.',
@@ -150,6 +144,15 @@ function Pz1Workspace() {
       isComplete: hasCorrespondences,
       completionHint: 'Назначьте минимум две станции, чтобы появились станционные таблицы',
     },
+    {
+      id: 'correspondence-frequency-fare',
+      title: 'Частота сообщений и стоимость проезда',
+      goal: 'Укажите частоту рейсов и стоимость проезда для всех корреспонденций.',
+      content: <AllCorrespondenceFrequencyFareStep />,
+      isComplete: hasCorrespondences,
+      completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+    },
+    
     {
       id: 'annual-flow',
       title: 'Годовой пассажиропоток',
@@ -191,7 +194,41 @@ function Pz1Workspace() {
     />
   );
 }
+function getCalculatedCarFare(
+  draft: Pz1Draft, 
+  detail: Pz1CorrespondenceDetailDraft
+): { existing: number; forecast: number } | null {
+  const routeDistanceKm = getCorrespondenceDistanceKm(draft, detail.fromLabel, detail.toLabel);
+  const carOccupancy = getAverageStationOtherParameterNumber(draft, detail, 'carOccupancy', detail.otherParameters.carOccupancy);
+  const gasolinePrice = getAverageStationOtherParameterNumber(draft, detail, 'gasolinePrice', detail.otherParameters.gasolinePrice);
+  const gasolineConsumption = getAverageStationOtherParameterNumber(draft, detail, 'gasolineConsumption', detail.otherParameters.gasolineConsumption);
+  const carMaintenanceCostKm = getAverageStationOtherParameterNumber(
+    draft,
+    detail,
+    'carMaintenanceCostKm',
+    detail.otherParameters.carMaintenanceCostKm,
+  );
 
+  if (
+    routeDistanceKm === null ||
+    carOccupancy === null ||
+    gasolinePrice === null ||
+    gasolineConsumption === null ||
+    carMaintenanceCostKm === null ||
+    carOccupancy <= 0
+  ) {
+    return null;
+  }
+
+  const existingCost = ((gasolinePrice * gasolineConsumption) / 100 + carMaintenanceCostKm) * routeDistanceKm;
+  const existingFare = existingCost / carOccupancy + 200;
+  const forecastFare = existingFare + 200;
+
+  return {
+    existing: Math.round(existingFare),
+    forecast: Math.round(forecastFare)
+  };
+}
 function IntroStep() {
   const { draft, replaceDraft, setImportedBridge, updateDraft } = useModuleState<Pz1Draft>();
   const [importError, setImportError] = useState('');
@@ -249,7 +286,7 @@ function IntroStep() {
             />
           </label>
           <label>
-            <span>Название линии</span>
+            <span>Учебная группа</span>
             <input
               maxLength={80}
               minLength={3}
@@ -259,7 +296,6 @@ function IntroStep() {
                   passport: { ...currentDraft.passport, lineTitle: event.target.value },
                 }))
               }
-              placeholder="напр. ВСМ Владивосток — Хабаровск"
               value={draft.passport.lineTitle}
             />
           </label>
@@ -338,7 +374,7 @@ function IntroStep() {
 
       <section className="import-section">
         <p className="eyebrow">JSON-мост</p>
-        <h2>Загрузка данных</h2>
+        <h2>Загрузка сохраненного проекта</h2>
         <label className="drop-zone" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
           <input accept="application/json,.json" className="visually-hidden" onChange={handleFileInput} type="file" />
           <span>Выберите JSON-файл или перенесите его сюда</span>
@@ -505,22 +541,24 @@ function StationsStep() {
           );
         })}
       </div>
-      {stationRouteDistances.length > 0 ? (
-        <aside className="station-route-distances">
-          <p className="eyebrow">Участки трассы</p>
-          <h3>Расстояние между станциями</h3>
-          <dl>
-            {stationRouteDistances.map((distance) => (
-              <div key={`${distance.fromLabel}-${distance.toLabel}`}>
-                <dt>
-                  {distance.fromLabel} — {distance.toLabel}
-                </dt>
-                <dd>{formatKm(distance.distanceKm)}</dd>
-              </div>
-            ))}
-          </dl>
-        </aside>
-      ) : null}
+{stationRouteDistances.length > 0 ? (
+  <div style={{ marginTop: '-100px', marginBottom: '290px' }}>
+    <aside className="station-route-distances" style={{ margin: 0 }}>
+      <p className="eyebrow">Участки трассы</p>
+      <h3>Расстояние между станциями</h3>
+      <dl>
+        {stationRouteDistances.map((distance) => (
+          <div key={`${distance.fromLabel}-${distance.toLabel}`}>
+            <dt>
+              {distance.fromLabel} — {distance.toLabel}
+            </dt>
+            <dd>{formatKm(distance.distanceKm)}</dd>
+          </div>
+        ))}
+      </dl>
+    </aside>
+  </div>
+) : null}
       <OsmStationMap
         activeStationLabel={activeStationLabel}
         mapCenter={selectedVariant.mapCenter}
@@ -725,37 +763,50 @@ function RegionalCharacteristicsStep() {
                 </tr>
               </thead>
               <tbody>
-                {stationRegions.map((region) => {
-                  const parameters = getRegionParameters(region);
+  {stationRegions.map((region) => {
+    const parameters = getRegionParameters(region);
 
-                  return (
-                    <tr key={region}>
-                      <th scope="row">{region}</th>
-                      {regionalParameterFields.map((field) => {
-                        const value = parameters[field.id];
-                        const error = validateRegionParameterField(field.id, value);
+    return (
+      <tr key={region}>
+        <th scope="row">{region}</th>
+        {regionalParameterFields.map((field) => {
+          const value = parameters[field.id];
+          const error = validateRegionParameterField(field.id, value);
+          
+          // Исключаем только kGdpFlow (коэффициент влияния)
+          const shouldFormat = field.id !== 'kGdpFlow';
+          
+          // Форматируем число с разделителями для отображения
+          const cleanValue = value.replace(/\s/g, '').replace(',', '.');
+          const displayValue = shouldFormat && cleanValue && !isNaN(Number(cleanValue)) 
+            ? Number(cleanValue).toLocaleString('ru-RU') 
+            : value;
 
-                        return (
-                          <td key={field.id}>
-                            <input
-                              aria-invalid={error ? true : undefined}
-                              className={error ? 'is-invalid' : undefined}
-                              inputMode="decimal"
-                              onChange={(event) => updateRegionParameter(region, field.id, event.target.value)}
-                              value={value}
-                            />
-                            {error ? <small className="field-error">{error}</small> : null}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
+          return (
+            <td key={field.id}>
+              <input
+                aria-invalid={error ? true : undefined}
+                className={error ? 'is-invalid' : undefined}
+                inputMode="decimal"
+                onChange={(event) => {
+                  // Удаляем пробелы при сохранении
+                  const rawValue = event.target.value.replace(/\s/g, '');
+                  updateRegionParameter(region, field.id, rawValue);
+                }}
+                value={displayValue}
+              />
+              {error ? <small className="field-error">{error}</small> : null}
+            </td>
+          );
+        })}
+      </tr>
+    );
+  })}
+    </tbody>
             </table>
             <FieldWithHint
               error={validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct)}
-              hint="%"
+              hint="Дополнительный пассажиропоток, который возникает вследствие запуска новой линии и не существовал бы при её отсутствии."
               id="regional-inducedDemandPct"
               inputMode="decimal"
               label="Прогнозируемый индуцированный спрос"
@@ -1002,9 +1053,28 @@ function CorrespondenceFrequencyStep({ pairKey }: { pairKey: string }) {
 function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const detail = getDetailOrNull(draft, pairKey);
+  
 
   if (!detail) {
     return <MissingCorrespondence />;
+  }
+
+  // Получаем рассчитанные значения для автомобиля
+  const calculatedCarFare = getCalculatedCarFare(draft, detail);
+
+  // Функция для получения отображаемого значения
+  function getDisplayValue(modeId: TransportModeId, side: 'existing' | 'forecast'): string {
+    // Для автомобиля используем рассчитанные значения
+    if (modeId === 'car' && calculatedCarFare) {
+      if (side === 'existing') {
+        return String(calculatedCarFare.existing);
+      } else {
+        return String(calculatedCarFare.forecast);
+      }
+    }
+    
+    // Для остальных видов транспорта берём из стейта
+    return detail.fare[modeId][side];
   }
 
   return (
@@ -1026,6 +1096,7 @@ function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
           )
         }
         values={detail.fare}
+        getDisplayValue={getDisplayValue} // добавляем новый проп
       />
     </section>
   );
@@ -1153,8 +1224,8 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
               const annualFlow = detail.annualFlows[column.id];
               const capacityExistingValue = annualFlow.capacityExisting ?? annualFlow.capacity;
               const capacityForecastValue = annualFlow.capacityForecast ?? annualFlow.capacity;
-              const capacityExistingError = validateAnnualFlowField('capacityExisting', capacityExistingValue);
-              const capacityForecastError = validateAnnualFlowField('capacityForecast', capacityForecastValue);
+              const capacityExistingError = validateAnnualFlowField('capacityExisting', capacityExistingValue, column.id);
+              const capacityForecastError = validateAnnualFlowField('capacityForecast', capacityForecastValue, column.id);
               const occupancyExistingError = validateAnnualFlowField('occupancyExisting', annualFlow.occupancyExisting);
               const occupancyForecastError = validateAnnualFlowField('occupancyForecast', annualFlow.occupancyForecast);
 
@@ -1927,11 +1998,13 @@ function TransportSplitRows({
   helper,
   onChange,
   values,
+  getDisplayValue, // новый проп
 }: {
   getReadOnly?: (modeId: TransportModeId, side: 'existing' | 'forecast') => boolean;
   helper: string;
   onChange: (modeId: TransportModeId, side: 'existing' | 'forecast', value: string) => void;
   values: Pz1CorrespondenceDetailDraft['frequency'];
+  getDisplayValue?: (modeId: TransportModeId, side: 'existing' | 'forecast') => string; // новый проп
 }) {
   return (
     <div className="table-scroll">
@@ -1944,33 +2017,42 @@ function TransportSplitRows({
           </tr>
         </thead>
         <tbody>
-          {transportColumns.map((column) => (
-            <tr key={column.id}>
-              <th scope="row">{column.label}</th>
-              <td>
-                <input
-                  aria-invalid={isNonNegativeNumberInputInvalid(values[column.id].existing) ? true : undefined}
-                  className={isNonNegativeNumberInputInvalid(values[column.id].existing) ? 'is-invalid' : undefined}
-                  inputMode="decimal"
-                  onChange={(event) => onChange(column.id, 'existing', event.target.value)}
-                  readOnly={getReadOnly?.(column.id, 'existing')}
-                  value={values[column.id].existing}
-                />
-                {isNonNegativeNumberInputInvalid(values[column.id].existing) ? <small className="field-error">Число ≥ 0</small> : null}
-              </td>
-              <td>
-                <input
-                  aria-invalid={isNonNegativeNumberInputInvalid(values[column.id].forecast) ? true : undefined}
-                  className={isNonNegativeNumberInputInvalid(values[column.id].forecast) ? 'is-invalid' : undefined}
-                  inputMode="decimal"
-                  onChange={(event) => onChange(column.id, 'forecast', event.target.value)}
-                  readOnly={getReadOnly?.(column.id, 'forecast')}
-                  value={values[column.id].forecast}
-                />
-                {isNonNegativeNumberInputInvalid(values[column.id].forecast) ? <small className="field-error">Число ≥ 0</small> : null}
-              </td>
-            </tr>
-          ))}
+          {transportColumns.map((column) => {
+            const existingValue = getDisplayValue 
+              ? getDisplayValue(column.id, 'existing') 
+              : values[column.id].existing;
+            const forecastValue = getDisplayValue 
+              ? getDisplayValue(column.id, 'forecast') 
+              : values[column.id].forecast;
+
+            return (
+              <tr key={column.id}>
+                <th scope="row">{column.label}</th>
+                <td>
+                  <input
+                    aria-invalid={isNonNegativeNumberInputInvalid(values[column.id].existing) ? true : undefined}
+                    className={isNonNegativeNumberInputInvalid(values[column.id].existing) ? 'is-invalid' : undefined}
+                    inputMode="decimal"
+                    onChange={(event) => onChange(column.id, 'existing', event.target.value)}
+                    readOnly={getReadOnly?.(column.id, 'existing') || column.id === 'car'} // автомобиль только для чтения
+                    value={existingValue}
+                  />
+                  {isNonNegativeNumberInputInvalid(values[column.id].existing) ? <small className="field-error">Число ≥ 0</small> : null}
+                </td>
+                <td>
+                  <input
+                    aria-invalid={isNonNegativeNumberInputInvalid(values[column.id].forecast) ? true : undefined}
+                    className={isNonNegativeNumberInputInvalid(values[column.id].forecast) ? 'is-invalid' : undefined}
+                    inputMode="decimal"
+                    onChange={(event) => onChange(column.id, 'forecast', event.target.value)}
+                    readOnly={getReadOnly?.(column.id, 'forecast') || column.id === 'car'} // автомобиль только для чтения
+                    value={forecastValue}
+                  />
+                  {isNonNegativeNumberInputInvalid(values[column.id].forecast) ? <small className="field-error">Число ≥ 0</small> : null}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
