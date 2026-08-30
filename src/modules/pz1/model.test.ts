@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   createInitialPz1Draft,
   createPz1Result,
+  excludeTransportMode,
+  getActiveTransportColumns,
+  getActiveTransportModes,
+  getExcludedTransportColumns,
+  restoreTransportMode,
   createRouteLine,
   correspondenceTravelTimeRows,
   finalIndicators,
@@ -162,6 +167,55 @@ describe('pz1 model', () => {
     const [table] = getSyncedCorrespondenceTables(draft);
 
     expect(table.activeModes).toEqual(['hSR', 'airplane']);
+  });
+
+  it('исключает вид транспорта из корреспонденции и возвращает его обратно (ТЗ v3.5 §4)', () => {
+    const draft = createInitialPz1Draft();
+
+    const withoutPlane = excludeTransportMode(draft, 'А-Г', 'airplane');
+    expect(getActiveTransportColumns(withoutPlane, 'А-Г').map((column) => column.id)).not.toContain('airplane');
+    expect(getExcludedTransportColumns(withoutPlane, 'А-Г').map((column) => column.id)).toEqual(['airplane']);
+
+    const restored = restoreTransportMode(withoutPlane, 'А-Г', 'airplane');
+    expect(getExcludedTransportColumns(restored, 'А-Г')).toEqual([]);
+  });
+
+  it('возвращает столбец на прежнее место, а не в конец таблицы', () => {
+    const draft = createInitialPz1Draft();
+    const order = getActiveTransportColumns(draft, 'А-Г').map((column) => column.id);
+
+    const roundTrip = restoreTransportMode(excludeTransportMode(draft, 'А-Г', 'bus'), 'А-Г', 'bus');
+
+    expect(getActiveTransportColumns(roundTrip, 'А-Г').map((column) => column.id)).toEqual(order);
+  });
+
+  it('не даёт исключить ВСМ — линия и есть предмет расчёта', () => {
+    const draft = createInitialPz1Draft();
+
+    const unchanged = excludeTransportMode(draft, 'А-Г', 'hSR');
+
+    expect(getActiveTransportColumns(unchanged, 'А-Г').map((column) => column.id)).toContain('hSR');
+    expect(getExcludedTransportColumns(unchanged, 'А-Г')).toEqual([]);
+  });
+
+  it('исключение вида убирает его из прогноза, а не только из таблицы', () => {
+    const draft = createInitialPz1Draft();
+
+    const withoutBus = excludeTransportMode(draft, 'А-Г', 'bus');
+
+    expect(getActiveTransportModes(withoutBus, 'А-Г')).not.toContain('bus');
+    expect(getSyncedCorrespondenceTables(withoutBus)[0].activeModes).not.toContain('bus');
+  });
+
+  it('исключение вида транспорта переживает выгрузку в JSON-мост (DoD ТЗ v3.5 §4)', () => {
+    const draft = createInitialPz1Draft();
+
+    const withoutPlane = excludeTransportMode(draft, 'А-Г', 'airplane');
+    const { consumerProperties } = createPz1Result(withoutPlane);
+
+    expect(consumerProperties).toBeDefined();
+    expect(consumerProperties?.['А-Г'].activeModes).not.toContain('airplane');
+    expect(consumerProperties?.['А-Г'].activeModes).toContain('hSR');
   });
 
   it('validates consumer properties by metric rules', () => {

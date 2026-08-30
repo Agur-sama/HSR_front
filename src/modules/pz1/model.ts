@@ -1228,6 +1228,72 @@ export function isTransportModeRemovable(modeId: TransportModeId) {
   return modeId !== HSR_MODE_ID;
 }
 
+/**
+ * Исключение вида транспорта из корреспонденции (ТЗ v3.3 T-07, восстановлено
+ * по ТЗ v3.5 §4). Состояние живёт в `correspondenceTables[pairKey].activeModes`
+ * — том же поле схемы моста, которое УЖЕ учитывают расчёты: и прогон модели
+ * (`getPz1CorrespondencePassengerFlowForecast`), и агрегат годового потока
+ * ходят только по активным видам. Поэтому исключённый вид обязан пропадать
+ * со всех таблиц корреспонденции, а не только с той, где нажали крестик:
+ * иначе студент заполнял бы поля, которые молча не попадают в расчёт.
+ */
+export function getActiveTransportModes(
+  draft: Pz1Draft,
+  pairKey: string,
+): TransportModeId[] {
+  return syncCorrespondenceTables(draft)[pairKey]?.activeModes ?? [...ALL_TRANSPORT_MODE_IDS];
+}
+
+export function getActiveTransportColumns(draft: Pz1Draft, pairKey: string) {
+  const activeModes = getActiveTransportModes(draft, pairKey);
+  return transportColumns.filter((column) => activeModes.includes(column.id));
+}
+
+export function getExcludedTransportColumns(draft: Pz1Draft, pairKey: string) {
+  const activeModes = getActiveTransportModes(draft, pairKey);
+  return transportColumns.filter((column) => !activeModes.includes(column.id));
+}
+
+/** Точечная правка таблицы корреспонденции — как `patchCorrespondenceDetail`, но для `correspondenceTables`. */
+export function patchCorrespondenceTable(
+  draft: Pz1Draft,
+  pairKey: string,
+  patch: Partial<Pz1CorrespondenceTableDraft>,
+): Pz1Draft {
+  const syncedTables = syncCorrespondenceTables(draft);
+  const currentTable = syncedTables[pairKey];
+
+  if (!currentTable) {
+    return draft;
+  }
+
+  return {
+    ...draft,
+    correspondenceTables: {
+      ...syncedTables,
+      [pairKey]: { ...currentTable, ...patch },
+    },
+  };
+}
+
+export function excludeTransportMode(draft: Pz1Draft, pairKey: string, modeId: TransportModeId): Pz1Draft {
+  if (!isTransportModeRemovable(modeId)) {
+    return draft;
+  }
+
+  const activeModes = getActiveTransportModes(draft, pairKey).filter((activeModeId) => activeModeId !== modeId);
+
+  return patchCorrespondenceTable(draft, pairKey, { activeModes });
+}
+
+export function restoreTransportMode(draft: Pz1Draft, pairKey: string, modeId: TransportModeId): Pz1Draft {
+  // normalize возвращает виды в каноническом порядке колонок — вернувшийся
+  // столбец встаёт на своё прежнее место, а не в конец таблицы.
+  const activeModes = normalizeActiveTransportModes([...getActiveTransportModes(draft, pairKey), modeId]);
+
+  return patchCorrespondenceTable(draft, pairKey, { activeModes });
+}
+
 export function getDuplicateStationNames(draft: Pick<Pz1Draft, 'stationDrafts'>) {
   const counts = new Map<string, number>();
 

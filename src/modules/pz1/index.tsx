@@ -57,6 +57,10 @@ import {
   isRegionalCharacteristicsComplete,
   isStationsStepComplete,
   isTransportModeRemovable,
+  excludeTransportMode,
+  getActiveTransportColumns,
+  getExcludedTransportColumns,
+  restoreTransportMode,
   passengerFlowModeRows,
   passengerFlowRegionalFields,
   regionalParameterFields,
@@ -922,16 +926,25 @@ function CorrespondenceTravelTimeStep({ pairKey }: { pairKey: string }) {
       <p className="eyebrow">Время в пути</p>
       <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
       <SplitModeTable
+        columns={getActiveTransportColumns(draft, pairKey)}
         getReadOnly={(rowId, modeId, side) =>
           (modeId === 'hSR' && side === 'existing') ||
           (modeId === 'hSR' && rowId === 'cleanTravel' && side === 'forecast') ||
           (modeId === 'car' && rowId !== 'cleanTravel')
         }
         onChange={updateTravelTime}
+        onExcludeMode={(modeId) => updateDraft((currentDraft) => excludeTransportMode(currentDraft, pairKey, modeId))}
         rows={correspondenceTravelTimeRows}
         values={travelTime}
       />
-      <p className="status-note">Формат времени: ЧЧ:ММ. Для личного автомобиля вводится только чистое время поездки.</p>
+      <ExcludedModesBar
+        excludedColumns={getExcludedTransportColumns(draft, pairKey)}
+        onRestoreMode={(modeId) => updateDraft((currentDraft) => restoreTransportMode(currentDraft, pairKey, modeId))}
+      />
+      <p className="status-note">
+        Формат времени: ЧЧ:ММ. Для личного автомобиля вводится только чистое время поездки. Крестик в шапке столбца
+        исключает вид транспорта из этой корреспонденции — он пропадёт со всех её таблиц и из расчёта прогноза.
+      </p>
     </section>
   );
 }
@@ -969,6 +982,7 @@ function CorrespondenceDiscomfortStep({ pairKey }: { pairKey: string }) {
       <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
       <SplitDiscomfortEditTable
         aggregates={scenario?.discomfortAggregates}
+        columns={getActiveTransportColumns(draft, pairKey)}
         existingMatrix={detail.discomfortExisting}
         forecastMatrix={detail.discomfortForecast}
         onChange={updateDiscomfort}
@@ -990,6 +1004,7 @@ function CorrespondenceFrequencyStep({ pairKey }: { pairKey: string }) {
       <p className="eyebrow">Частота сообщения</p>
       <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
       <TransportSplitRows
+        columns={getActiveTransportColumns(draft, pairKey)}
         getReadOnly={(modeId, side) => modeId === 'car' || (modeId === 'hSR' && side === 'existing')}
         helper="рейсов/сутки"
         onChange={(modeId, side, value) =>
@@ -1023,6 +1038,7 @@ function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
       <p className="eyebrow">Стоимость проезда</p>
       <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
       <TransportSplitRows
+        columns={getActiveTransportColumns(draft, pairKey)}
         getReadOnly={(modeId, side) => modeId === 'hSR' && side === 'existing'}
         helper="руб./пасс."
         onChange={(modeId, side, value) =>
@@ -1160,7 +1176,7 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
             </tr>
           </thead>
           <tbody>
-            {transportColumns.map((column) => {
+            {getActiveTransportColumns(draft, pairKey).map((column) => {
               const annualFlow = detail.annualFlows[column.id];
               const capacityExistingValue = annualFlow.capacityExisting ?? annualFlow.capacity;
               const capacityForecastValue = annualFlow.capacityForecast ?? annualFlow.capacity;
@@ -1270,7 +1286,7 @@ function CorrespondenceModelStep({ pairKey }: { pairKey: string }) {
                   <YAxis tickFormatter={(value) => formatCompactPassengerFlowValue(Number(value))} />
                   <Tooltip />
                   <Legend />
-                  {transportColumns.map((column) => (
+                  {getActiveTransportColumns(draft, pairKey).map((column) => (
                     <Bar
                       dataKey={column.id}
                       fill={passengerFlowChartColors[column.id]}
@@ -1739,14 +1755,46 @@ function ResultStep() {
   );
 }
 
+/**
+ * Список исключённых видов транспорта с кнопкой возврата (ТЗ v3.5 §4, DoD).
+ * Разметка и класс `.excluded-modes` взяты из ConsumerPropertiesStep — того
+ * экрана, где эта функция жила до перехода на компоновку «страница на тему».
+ */
+function ExcludedModesBar({
+  excludedColumns,
+  onRestoreMode,
+}: {
+  excludedColumns: typeof transportColumns;
+  onRestoreMode: (modeId: TransportModeId) => void;
+}) {
+  if (excludedColumns.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="excluded-modes">
+      <span>Исключены для этой корреспонденции:</span>
+      {excludedColumns.map((column) => (
+        <button className="button button--outline" key={column.id} onClick={() => onRestoreMode(column.id)} type="button">
+          Вернуть {column.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function SplitModeTable({
+  columns,
   getReadOnly,
   onChange,
+  onExcludeMode,
   rows,
   values,
 }: {
+  columns: typeof transportColumns;
   getReadOnly?: (rowId: string, modeId: TransportModeId, side: 'existing' | 'forecast') => boolean;
   onChange: (rowId: string, modeId: TransportModeId, side: 'existing' | 'forecast', value: string) => void;
+  onExcludeMode?: (modeId: TransportModeId) => void;
   rows: typeof correspondenceTravelTimeRows;
   values: Pz1CorrespondenceDetailDraft['travelTime'];
 }) {
@@ -1756,8 +1804,22 @@ function SplitModeTable({
         <thead>
           <tr>
             <th>Показатель</th>
-            {transportColumns.map((column) => (
-              <th key={column.id}>{column.label}</th>
+            {columns.map((column) => (
+              <th key={column.id}>
+                <span className="data-entry__column-head">
+                  {column.label}
+                  {onExcludeMode && isTransportModeRemovable(column.id) ? (
+                    <button
+                      aria-label={`Исключить ${column.label} из корреспонденции`}
+                      className="data-entry__remove-column"
+                      onClick={() => onExcludeMode(column.id)}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </span>
+              </th>
             ))}
           </tr>
         </thead>
@@ -1768,7 +1830,7 @@ function SplitModeTable({
                 {row.label}
                 {row.helper ? <small>{row.helper}</small> : null}
               </th>
-              {transportColumns.map((column) => (
+              {columns.map((column) => (
                 <td key={column.id}>
                   <label className="split-input">
                     <span>Сущ.</span>
@@ -1800,7 +1862,7 @@ function SplitModeTable({
           ))}
           <tr className="input-table__total-row">
             <th scope="row">ИТОГО</th>
-            {transportColumns.map((column) => (
+            {columns.map((column) => (
               <td key={column.id}>
                 <div className="split-total">
                   <span>Сущ. {formatDurationTotal(values, column.id, 'existing')}</span>
@@ -1817,11 +1879,13 @@ function SplitModeTable({
 
 function SplitDiscomfortEditTable({
   aggregates,
+  columns,
   existingMatrix,
   forecastMatrix,
   onChange,
 }: {
   aggregates?: Record<TransportModeId, { existing: number | null; forecast: number | null }>;
+  columns: typeof transportColumns;
   existingMatrix: Pz1Draft['discomfortMatrix'];
   forecastMatrix: Pz1Draft['discomfortMatrix'];
   onChange: (side: 'existing' | 'forecast', rowId: string, modeId: TransportModeId, value: string) => void;
@@ -1832,7 +1896,7 @@ function SplitDiscomfortEditTable({
         <thead>
           <tr>
             <th>Показатель</th>
-            {transportColumns.map((column) => (
+            {columns.map((column) => (
               <th key={column.id}>{column.label}</th>
             ))}
           </tr>
@@ -1841,7 +1905,7 @@ function SplitDiscomfortEditTable({
           {discomfortRows.map((row) => (
             <tr key={row.id}>
               <th scope="row">{row.label}</th>
-              {transportColumns.map((column) => {
+              {columns.map((column) => {
                 const existingValue = existingMatrix.values[row.id]?.[column.id] ?? '';
                 const forecastValue = forecastMatrix.values[row.id]?.[column.id] ?? '';
                 const existingError = validateDiscomfortCell(existingValue);
@@ -1881,7 +1945,7 @@ function SplitDiscomfortEditTable({
           ))}
           <tr className="input-table__total-row">
             <th scope="row">ИТОГО</th>
-            {transportColumns.map((column) => (
+            {columns.map((column) => (
               <td key={column.id}>
                 <div className="split-total">
                   <span>Сущ. {formatNullableDecimal(aggregates?.[column.id]?.existing ?? null)}</span>
@@ -1934,11 +1998,13 @@ function DiscomfortEditTable({
 }
 
 function TransportSplitRows({
+  columns,
   getReadOnly,
   helper,
   onChange,
   values,
 }: {
+  columns: typeof transportColumns;
   getReadOnly?: (modeId: TransportModeId, side: 'existing' | 'forecast') => boolean;
   helper: string;
   onChange: (modeId: TransportModeId, side: 'existing' | 'forecast', value: string) => void;
@@ -1955,7 +2021,7 @@ function TransportSplitRows({
           </tr>
         </thead>
         <tbody>
-          {transportColumns.map((column) => (
+          {columns.map((column) => (
             <tr key={column.id}>
               <th scope="row">{column.label}</th>
               <td>
