@@ -94,19 +94,35 @@ export function computeRouteLineMetrics(routeLine: RouteLine): RouteLineMetrics 
   };
 }
 
-export function buildDisplayRoutePoints(routeLine: RouteLine, stepsPerArc = DEFAULT_ARC_STEPS): GeoPoint[] {
+/**
+ * Ломаная по каждому сегменту отдельно, границы сегментов сохранены.
+ * Нужна тем, кто меряет расстояние вдоль трассы: длину ломаной по сегменту
+ * можно привести к его аналитической длине дуги и не расходиться с виджетом
+ * «Длина трассы» (ТЗ v3.6 T-7).
+ */
+export function buildRoutePointsBySegment(routeLine: RouteLine, stepsPerArc = DEFAULT_ARC_STEPS): GeoPoint[][] {
   const vertexById = new Map(routeLine.vertices.map((vertex) => [vertex.id, vertex]));
-  const points: GeoPoint[] = [];
 
-  for (const segment of routeLine.segments) {
+  return routeLine.segments.map((segment) => {
     const from = vertexById.get(segment.fromVertexId);
     const to = vertexById.get(segment.toVertexId);
 
     if (!from || !to) {
+      return [];
+    }
+
+    return buildSegmentDisplayPoints(from, to, segment.sagittaKm, stepsPerArc);
+  });
+}
+
+export function buildDisplayRoutePoints(routeLine: RouteLine, stepsPerArc = DEFAULT_ARC_STEPS): GeoPoint[] {
+  const points: GeoPoint[] = [];
+
+  for (const segmentPoints of buildRoutePointsBySegment(routeLine, stepsPerArc)) {
+    if (segmentPoints.length === 0) {
       continue;
     }
 
-    const segmentPoints = buildSegmentDisplayPoints(from, to, segment.sagittaKm, stepsPerArc);
     if (points.length > 0) {
       points.push(...segmentPoints.slice(1));
     } else {

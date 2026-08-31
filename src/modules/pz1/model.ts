@@ -20,7 +20,7 @@ import { createBridge } from '../../bridge/io';
 import { distributePassengerFlowByMode, forecastTotalDemand } from '../../shared/lib/passengerFlow';
 import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../shared/lib/passengerFlow';
 import { passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
-import { buildDisplayRoutePoints, computeArcMetrics, computeRouteLineMetrics, computeSagittaFromRadius, haversineDistanceKm } from '../../shared/lib/routeGeometry';
+import { buildDisplayRoutePoints, buildRoutePointsBySegment, computeArcMetrics, computeRouteLineMetrics, computeSagittaFromRadius, haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import type { DataEntryColumn, DataEntryRow } from '../../shared/ui/DataEntryTable';
 import type {
   Pz1CorrespondenceDetailDraft,
@@ -1442,6 +1442,20 @@ export function getStationRouteDistances(draft: Pick<Pz1Draft, 'routePointDrafts
   }));
 }
 
+/**
+ * Отметки станций на трассе с расстоянием от начала.
+ *
+ * Мерная лента — та же, что у виджета «Длина трассы» (ТЗ v3.6 T-7). Раньше
+ * здесь суммировались гаверсинусы по ломаной из 48 точек на дугу, а виджет
+ * брал аналитическую длину дуги из computeRouteLineMetrics. Вписанная ломаная
+ * всегда короче дуги, поэтому одна и та же трасса показывалась двумя числами
+ * (на скриншотах заказчика 246,18 против 246,22 км).
+ *
+ * Ломаная по-прежнему нужна, чтобы понять, ГДЕ на трассе стоит станция, но
+ * расстояния по каждому сегменту масштабируются к его аналитической длине.
+ * Масштаб посегментный, а не общий: стрела прогиба у сегментов разная, и
+ * общий коэффициент врал бы на промежуточных станциях.
+ */
 function getStationRouteMarks(draft: Pick<Pz1Draft, 'routePointDrafts' | 'stationDrafts'>): StationRouteMark[] {
   const routeLine = createRouteLine(draft.routePointDrafts);
   const routePoints = buildDisplayRoutePoints(routeLine, 48);
@@ -1449,15 +1463,25 @@ function getStationRouteMarks(draft: Pick<Pz1Draft, 'routePointDrafts' | 'statio
     return [];
   }
 
-  const cumulativeDistances = routePoints.reduce<number[]>((distances, point, index) => {
-    if (index === 0) {
-      distances.push(0);
-      return distances;
+  const segmentArcLengthById = new Map(
+    computeRouteLineMetrics(routeLine).segments.map((segment) => [segment.segmentId, segment.arcLengthKm]),
+  );
+  const cumulativeDistances: number[] = [0];
+
+  buildRoutePointsBySegment(routeLine, 48).forEach((segmentPoints, segmentIndex) => {
+    if (segmentPoints.length < 2) {
+      return;
     }
 
-    distances.push(distances[index - 1] + haversineDistanceKm(routePoints[index - 1], point));
-    return distances;
-  }, []);
+    const stepDistances = segmentPoints.slice(1).map((point, index) => haversineDistanceKm(segmentPoints[index], point));
+    const polylineLengthKm = stepDistances.reduce((sum, step) => sum + step, 0);
+    const arcLengthKm = segmentArcLengthById.get(routeLine.segments[segmentIndex]?.id) ?? polylineLengthKm;
+    const scale = polylineLengthKm > 0 ? arcLengthKm / polylineLengthKm : 1;
+
+    for (const step of stepDistances) {
+      cumulativeDistances.push(cumulativeDistances[cumulativeDistances.length - 1] + step * scale);
+    }
+  });
   const stationsOnRoute = draft.stationDrafts
     .filter((stationDraft) => stationDraft.enabled)
     .map(toStation)

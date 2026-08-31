@@ -21,6 +21,7 @@ import {
   getPz1CorrespondenceScenarios,
   getPz1RegionalCharacteristics,
   getStationRouteDistances,
+  getRouteMetrics,
   getSyncedCorrespondenceDetails,
   getSyncedCorrespondenceTables,
   isFinalIndicatorsComplete,
@@ -275,6 +276,27 @@ describe('pz1 model', () => {
     }
 
     expect(isHsrTravelTimeComplete(draft)).toBe(true);
+  });
+
+  it('длина трассы и сумма участков между станциями совпадают (ТЗ v3.6 T-7)', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], name: 'Москва', lat: '55.7558', lng: '37.6173' };
+    draft.stationDrafts[1] = { ...draft.stationDrafts[1], enabled: true, name: 'Переславль', lat: '56.7000', lng: '38.7000' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], name: 'Ярославль', lat: '57.6261', lng: '39.8845' };
+    // Разная стрела прогиба по сегментам — общий коэффициент здесь бы соврал.
+    draft.routePointDrafts = [
+      { id: 'p1', lat: '55.7558', lng: '37.6173', sagittaToNextKm: '8' },
+      { id: 'p2', lat: '56.7000', lng: '38.7000', sagittaToNextKm: '2' },
+      { id: 'p3', lat: '57.6261', lng: '39.8845', sagittaToNextKm: '0' },
+    ];
+
+    const widgetLengthKm = getRouteMetrics(draft).totalLengthKm;
+    const sumOfLegsKm = getStationRouteDistances(draft).reduce((sum, leg) => sum + leg.distanceKm, 0);
+
+    expect(widgetLengthKm).toBeGreaterThan(0);
+    // Раньше расхождение было ~0,06 % (ломаная короче дуги). Теперь мерная
+    // лента одна, и сумма участков сходится с длиной трассы до метра.
+    expect(sumOfLegsKm).toBeCloseTo(widgetLengthKm, 3);
   });
 
   it('validates consumer properties by metric rules', () => {
