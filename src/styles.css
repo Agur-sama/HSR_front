@@ -23,6 +23,9 @@
   --panel-alt: var(--bg-soft);
   --danger: var(--color-danger);
   --danger-bg: #fdf3f2;
+  /* Предупреждение (не ошибка) — токены из design-reference.html */
+  --warn-bg: #faeeda;
+  --warn-text: #412402;
   font-family: Raleway, Arial, sans-serif;
   color: var(--ink);
   background: #fff;
@@ -1184,6 +1187,20 @@ button:focus-visible {
   font-size: 10px;
   font-weight: 700;
   line-height: 1.3;
+}
+
+/* Предупреждение: значение допустимо, но подозрительно. Отличается от ошибки
+   и цветом, и тем, что не блокирует переход на следующий шаг. */
+.field-warning {
+  color: var(--warn-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+input.is-warned {
+  border-color: #d9a441;
+  background: var(--warn-bg);
 }
 
 input.is-invalid {

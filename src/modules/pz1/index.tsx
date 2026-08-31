@@ -75,6 +75,7 @@ import {
   validateConsumerCell,
   validateDiscomfortCell,
   validateHsrSpeed,
+  warnHsrSpeed,
   validateAnnualFlowField,
   isAnnualFlowFieldLocked,
   validateOtherParameterField,
@@ -611,6 +612,7 @@ function HsrTravelTimeStep() {
                 const pairKey = `${distance.fromLabel}-${distance.toLabel}`;
                 const speedValue = draft.hsrTravelTimes[pairKey]?.speedKmh ?? '';
                 const speedError = validateHsrSpeed(speedValue);
+                const speedWarning = speedError ? null : warnHsrSpeed(speedValue);
                 const speed = parseNumberInput(speedValue);
                 const travelTimeMinutes =
                   speed !== null && speed > 0 ? (distance.distanceKm / speed) * 60 + 3 : null;
@@ -624,12 +626,13 @@ function HsrTravelTimeStep() {
                     <td>
                       <input
                         aria-invalid={speedError ? true : undefined}
-                        className={speedError ? 'is-invalid' : undefined}
+                        className={speedError ? 'is-invalid' : speedWarning ? 'is-warned' : undefined}
                         inputMode="decimal"
                         onChange={(event) => updateSegmentSpeed(pairKey, event.target.value)}
                         value={speedValue}
                       />
                       {speedError ? <small className="field-error">{speedError}</small> : null}
+                      {speedWarning ? <small className="field-warning">{speedWarning}</small> : null}
                     </td>
                     <td>2</td>
                     <td>1</td>

@@ -1111,6 +1111,29 @@ export function validateHsrSpeed(value: string) {
   return null;
 }
 
+/**
+ * Предупреждающая (не блокирующая) проверка скорости перегона, 50…400 км/ч
+ * (ТЗ v3.6 T-5 / ТЗ v3.4 §БЗ-2). Значение вне диапазона допустимо — студент
+ * должен увидеть предупреждение, но пройти дальше. Поэтому она отделена от
+ * validateHsrSpeed, которая блокирует переход, и в isHsrTravelTimeComplete
+ * намеренно не участвует.
+ */
+const HSR_SPEED_WARNING_RANGE = { min: 50, max: 400 };
+
+export function warnHsrSpeed(value: string) {
+  const parsed = parseNumericInput(value.trim());
+
+  if (parsed === null) {
+    return null;
+  }
+
+  if (parsed < HSR_SPEED_WARNING_RANGE.min || parsed > HSR_SPEED_WARNING_RANGE.max) {
+    return `Скорость вне диапазона ${HSR_SPEED_WARNING_RANGE.min}…${HSR_SPEED_WARNING_RANGE.max} км/ч — проверьте значение`;
+  }
+
+  return null;
+}
+
 export function validateRegionalCharacteristicField(fieldId: keyof Pz1RegionalCharacteristicInputs, value: string) {
   if (fieldId === 'regionA' || fieldId === 'regionB') {
     return value.trim() ? null : 'Выберите регион';

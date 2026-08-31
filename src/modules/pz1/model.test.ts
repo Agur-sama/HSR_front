@@ -28,6 +28,8 @@ import {
   updateCellValue,
   transportColumns,
   validateAnnualFlowField,
+  warnHsrSpeed,
+  isHsrTravelTimeComplete,
   isAnnualFlowFieldLocked,
   validateConsumerCell,
   validateDiscomfortCell,
@@ -249,6 +251,30 @@ describe('pz1 model', () => {
 
     const draft = createInitialPz1Draft();
     expect(getSyncedCorrespondenceDetails(draft)[0].annualFlows.hSR.capacityExisting).toBe('0');
+  });
+
+  it('предупреждает о скорости вне 50…400, но не блокирует (ТЗ v3.6 T-5)', () => {
+    expect(warnHsrSpeed('12')).toBe('Скорость вне диапазона 50…400 км/ч — проверьте значение');
+    expect(warnHsrSpeed('500')).toBe('Скорость вне диапазона 50…400 км/ч — проверьте значение');
+    expect(warnHsrSpeed('300')).toBeNull();
+    expect(warnHsrSpeed('50')).toBeNull();
+    expect(warnHsrSpeed('400')).toBeNull();
+    // Пустое и нечисловое — забота блокирующей проверки, не этой.
+    expect(warnHsrSpeed('')).toBeNull();
+
+    // Скорость 12 км/ч не должна мешать пройти шаг дальше.
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], lat: '55.7558', lng: '37.6173' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], lat: '57.6261', lng: '39.8845' };
+    draft.routePointDrafts = [
+      { id: 'p1', lat: '55.7558', lng: '37.6173', sagittaToNextKm: '0' },
+      { id: 'p2', lat: '57.6261', lng: '39.8845', sagittaToNextKm: '0' },
+    ];
+    for (const distance of getStationRouteDistances(draft)) {
+      draft.hsrTravelTimes[`${distance.fromLabel}-${distance.toLabel}`] = { speedKmh: '12' };
+    }
+
+    expect(isHsrTravelTimeComplete(draft)).toBe(true);
   });
 
   it('validates consumer properties by metric rules', () => {
