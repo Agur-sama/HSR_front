@@ -17,6 +17,7 @@ import type {
   TransportModeId,
 } from '../../bridge/schema';
 import { createBridge } from '../../bridge/io';
+import { calculateCarTravelCost } from '../../shared/lib/carTravelCost';
 import { distributePassengerFlowByMode, forecastTotalDemand } from '../../shared/lib/passengerFlow';
 import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../shared/lib/passengerFlow';
 import { passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
@@ -2107,6 +2108,53 @@ function getTravelTimeTotalHours(
   }, 0);
 
   return totalMinutes === null ? null : totalMinutes / 60;
+}
+
+/**
+ * Существующая стоимость проезда на личном автомобиле — вычисляется, а не
+ * вводится студентом (подтверждено заказчиком 31.08).
+ *
+ * Расстояние — по корреспонденции, через getCorrespondenceDistanceKm.
+ *
+ * ДОПУЩЕНИЕ: «Прочие параметры» с 26.08 задаются по станциям, и у двух
+ * станций одного перегона цена бензина или ОСАГО могут отличаться. Чьи брать
+ * — заказчик не ответил (ТЗ v3.6 §3, вопрос 2). Берём среднее по двум
+ * станциям корреспонденции тем же помощником, что уже используется в расчёте
+ * TTC, чтобы поведение внутри модуля было одинаковым. На значениях по
+ * умолчанию, одинаковых у всех станций, среднее совпадает с любым из них.
+ */
+export function getCarExistingFare(draft: Pz1Draft, pairKey: string): number | null {
+  const detail = getSyncedCorrespondenceDetails(draft).find((item) => item.pairKey === pairKey);
+
+  if (!detail) {
+    return null;
+  }
+
+  const distanceKm = getCorrespondenceDistanceKm(draft, detail.fromLabel, detail.toLabel);
+  const gasolinePrice = getAverageStationOtherParameterNumber(draft, detail, 'gasolinePrice', detail.otherParameters.gasolinePrice);
+  const gasolineConsumption = getAverageStationOtherParameterNumber(
+    draft,
+    detail,
+    'gasolineConsumption',
+    detail.otherParameters.gasolineConsumption,
+  );
+  const carMaintenanceCostKm = getAverageStationOtherParameterNumber(
+    draft,
+    detail,
+    'carMaintenanceCostKm',
+    detail.otherParameters.carMaintenanceCostKm,
+  );
+
+  if (distanceKm === null || gasolinePrice === null || gasolineConsumption === null || carMaintenanceCostKm === null) {
+    return null;
+  }
+
+  return calculateCarTravelCost({
+    fuelConsumptionPer100Km: gasolineConsumption,
+    fuelPricePerLitre: gasolinePrice,
+    maintenanceCostPerKm: carMaintenanceCostKm,
+    distanceKm,
+  });
 }
 
 function getTotalTransportCost(

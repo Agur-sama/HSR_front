@@ -37,6 +37,7 @@ import {
   finalIndicators,
   getCorrespondenceTitle,
   getComputedFinalIndicators,
+  getCarExistingFare,
   getDuplicateStationNames,
   getEnabledStationRegions,
   getEffectivePassengerFlowInputs,
@@ -1048,10 +1049,22 @@ function CorrespondenceFrequencyStep({ pairKey }: { pairKey: string }) {
 function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const detail = getDetailOrNull(draft, pairKey);
+  const carExistingFare = getCarExistingFare(draft, pairKey);
 
   if (!detail) {
     return <MissingCorrespondence />;
   }
+
+  // Существующая стоимость личного авто не вводится, а считается из «Прочих
+  // параметров» и длины корреспонденции. Пока данных не хватает, оставляем
+  // то, что уже лежит в черновике, — поле не должно мигать пустотой.
+  const fareValues =
+    carExistingFare === null
+      ? detail.fare
+      : {
+          ...detail.fare,
+          car: { ...detail.fare.car, existing: formatDecimalValue(carExistingFare) },
+        };
 
   return (
     <section className="form-section correspondence-detail">
@@ -1059,7 +1072,7 @@ function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
       <h3>{getCorrespondenceTitle(draft, detail.fromLabel, detail.toLabel)}</h3>
       <TransportSplitRows
         columns={getActiveTransportColumns(draft, pairKey)}
-        getReadOnly={(modeId, side) => modeId === 'hSR' && side === 'existing'}
+        getReadOnly={(modeId, side) => side === 'existing' && (modeId === 'hSR' || modeId === 'car')}
         helper="руб./пасс."
         onChange={(modeId, side, value) =>
           updateDraft((currentDraft) =>
@@ -1072,10 +1085,19 @@ function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
             })),
           )
         }
-        values={detail.fare}
+        values={fareValues}
       />
+      <p className="status-note">
+        Существующая стоимость поездки на личном автомобиле не вводится — она считается из расхода бензина, цены АИ-92
+        и стоимости ОСАГО с экрана «Прочие параметры» и расстояния этой корреспонденции.
+        {carExistingFare === null ? ' Заполните прочие параметры и трассу, чтобы значение посчиталось.' : ''}
+      </p>
     </section>
   );
+}
+
+function formatDecimalValue(value: number) {
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2, useGrouping: false }).format(value);
 }
 
 function StationOtherParametersStep() {
