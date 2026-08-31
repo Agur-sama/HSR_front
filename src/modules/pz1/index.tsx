@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ChangeEvent, DragEvent, ReactNode } from 'react';
 import {
   Bar,
@@ -25,6 +25,7 @@ import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
 import { DataEntryTable } from '../../shared/ui/DataEntryTable';
 import { FieldWithHint } from '../../shared/ui/FieldWithHint';
 import { GroupedNumberInput } from '../../shared/ui/GroupedNumberInput';
+import { reverseGeocodeRegion } from '../../shared/lib/reverseGeocode';
 import { OsmStationMap } from './OsmStationMap';
 import {
   countFilledConsumerCells,
@@ -414,6 +415,11 @@ function TheoryStep() {
 function StationsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const [activeStationLabel, setActiveStationLabel] = useState<Pz1StationDraft['label']>('А');
+  const [resolvingRegionFor, setResolvingRegionFor] = useState<Pz1StationDraft['label'][]>([]);
+  // Координаты, для которых регион уже определён. Пока станцию не двигали,
+  // ключ совпадает и запроса нет — поэтому автозаполнение не затирает то, что
+  // студент вписал руками, и не срабатывает на восстановлении из файла.
+  const resolvedCoordsRef = useRef<Partial<Record<Pz1StationDraft['label'], string>>>({});
   const routeMetrics = getRouteMetrics(draft);
   const duplicateStationNames = getDuplicateStationNames(draft);
   const stationRouteDistances = getStationRouteDistances(draft);
@@ -439,6 +445,56 @@ function StationsStep() {
       };
     });
   }
+
+  const stationCoordinates = draft.stationDrafts
+    .filter((station) => station.enabled)
+    .map((station) => `${station.label}:${station.lat.trim()},${station.lng.trim()}`)
+    .join('|');
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    for (const station of draft.stationDrafts) {
+      if (!station.enabled) {
+        continue;
+      }
+
+      const latitude = Number(station.lat.trim().replace(',', '.'));
+      const longitude = Number(station.lng.trim().replace(',', '.'));
+      const key = `${latitude},${longitude}`;
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !station.lat.trim() || !station.lng.trim()) {
+        continue;
+      }
+
+      if (resolvedCoordsRef.current[station.label] === key) {
+        continue;
+      }
+
+      resolvedCoordsRef.current[station.label] = key;
+      setResolvingRegionFor((labels) => [...labels, station.label]);
+
+      void reverseGeocodeRegion(latitude, longitude, { knownRegions: russianRegions, signal: controller.signal })
+        .then((region) => {
+          if (controller.signal.aborted || !region) {
+            return;
+          }
+
+          updateDraft((currentDraft) => ({
+            ...currentDraft,
+            stationDrafts: currentDraft.stationDrafts.map((currentStation) =>
+              currentStation.label === station.label ? { ...currentStation, region } : currentStation,
+            ),
+          }));
+        })
+        .finally(() => {
+          setResolvingRegionFor((labels) => labels.filter((label) => label !== station.label));
+        });
+    }
+
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stationCoordinates]);
 
   function replaceRoutePointDrafts(routePointDrafts: Pz1Draft['routePointDrafts']) {
     updateDraft((currentDraft) => ({
@@ -525,6 +581,9 @@ function StationsStep() {
                   value={stationDraft.region}
                 />
                 {regionError ? <small className="field-error">{regionError}</small> : null}
+                {resolvingRegionFor.includes(stationDraft.label) ? (
+                  <small className="field-hint">Определяем регион по координатам…</small>
+                ) : null}
               </label>
             </fieldset>
           );

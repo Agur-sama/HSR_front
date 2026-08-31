@@ -1191,6 +1191,13 @@ button:focus-visible {
 
 /* Предупреждение: значение допустимо, но подозрительно. Отличается от ошибки
    и цветом, и тем, что не блокирует переход на следующий шаг. */
+.field-hint {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
 .field-warning {
   color: var(--warn-text);
   font-size: 10px;
