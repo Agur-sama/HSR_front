@@ -2174,26 +2174,14 @@ function getTotalTransportCost(
   }
 
   if (modeId === CAR_MODE_ID) {
-    const routeDistanceKm = getCorrespondenceDistanceKm(draft, detail.fromLabel, detail.toLabel);
-    const carOccupancy = getAverageStationOtherParameterNumber(draft, detail, 'carOccupancy', detail.otherParameters.carOccupancy);
-    const gasolinePrice = getAverageStationOtherParameterNumber(draft, detail, 'gasolinePrice', detail.otherParameters.gasolinePrice);
-    const gasolineConsumption = getAverageStationOtherParameterNumber(draft, detail, 'gasolineConsumption', detail.otherParameters.gasolineConsumption);
-    const carMaintenanceCostKm = getAverageStationOtherParameterNumber(
-      draft,
-      detail,
-      'carMaintenanceCostKm',
-      detail.otherParameters.carMaintenanceCostKm,
-    );
+    // Стоимость поездки на авто в TTC — та же подтверждённая формула, что и в
+    // поле «Стоимость проезда»: без деления на наполняемость. Считаем одной
+    // функцией из shared/lib, чтобы формула не жила в двух местах и не могла
+    // разойтись — раньше здесь была своя копия с делением на 1,3.
+    const carCost = getCarExistingFare(draft, detail.pairKey);
 
-    if (
-      routeDistanceKm !== null &&
-      carOccupancy !== null &&
-      gasolinePrice !== null &&
-      gasolineConsumption !== null &&
-      carMaintenanceCostKm !== null &&
-      carOccupancy > 0
-    ) {
-      return ((gasolinePrice * gasolineConsumption) / 100 + carMaintenanceCostKm) * routeDistanceKm / carOccupancy + timeCost;
+    if (carCost !== null) {
+      return carCost + timeCost;
     }
 
     return fare === null ? null : fare + timeCost;
