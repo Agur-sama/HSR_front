@@ -3,3 +3,4 @@ scratch/
 .env
 .env.*
 *.log
+dist/
