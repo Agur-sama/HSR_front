@@ -23,6 +23,8 @@ import {
   getStationRouteDistances,
   getRouteMetrics,
   getSyncedCorrespondenceDetails,
+  getEffectiveFareValues,
+  getCarExistingFare,
   getSyncedCorrespondenceTables,
   isFinalIndicatorsComplete,
   isStationsStepComplete,
@@ -297,6 +299,50 @@ describe('pz1 model', () => {
     // Раньше расхождение было ~0,06 % (ломаная короче дуги). Теперь мерная
     // лента одна, и сумма участков сходится с длиной трассы до метра.
     expect(sumOfLegsKm).toBeCloseTo(widgetLengthKm, 3);
+  });
+
+  it('прогнозная стоимость авто по умолчанию равна существующей и перебивается вводом', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], lat: '55.7558', lng: '37.6173' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], lat: '57.6261', lng: '39.8845' };
+    draft.routePointDrafts = [
+      { id: 'p1', lat: '55.7558', lng: '37.6173', sagittaToNextKm: '0' },
+      { id: 'p2', lat: '57.6261', lng: '39.8845', sagittaToNextKm: '0' },
+    ];
+
+    const computed = getCarExistingFare(draft, 'А-Г');
+    expect(computed).not.toBeNull();
+
+    const detail = getSyncedCorrespondenceDetails(draft).find((item) => item.pairKey === 'А-Г');
+    expect(detail).toBeDefined();
+
+    const byDefault = getEffectiveFareValues(draft, detail!);
+    // Рубли: два знака и запятая, а не сырое 4004.816259
+    expect(byDefault.car.existing).toMatch(/^\d+,\d{2}$/);
+    expect(byDefault.car.forecast).toBe(byDefault.car.existing);
+
+    const edited = getEffectiveFareValues(draft, {
+      ...detail!,
+      fare: { ...detail!.fare, car: { ...detail!.fare.car, forecast: '5000' } },
+    });
+    expect(edited.car.forecast).toBe('5000');
+    expect(edited.car.existing).toBe(byDefault.car.existing);
+  });
+
+  it('расчётная стоимость авто не считается незаполненным полем', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], lat: '55.7558', lng: '37.6173' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], lat: '57.6261', lng: '39.8845' };
+    draft.routePointDrafts = [
+      { id: 'p1', lat: '55.7558', lng: '37.6173', sagittaToNextKm: '0' },
+      { id: 'p2', lat: '57.6261', lng: '39.8845', sagittaToNextKm: '0' },
+    ];
+    const detail = getSyncedCorrespondenceDetails(draft).find((item) => item.pairKey === 'А-Г')!;
+
+    // В сыром черновике у авто пусто — именно это раньше уходило в список
+    // недостающих полей и не давало построить модель.
+    expect(detail.fare.car.existing).toBe('');
+    expect(getEffectiveFareValues(draft, detail).car.existing).not.toBe('');
   });
 
   it('validates consumer properties by metric rules', () => {

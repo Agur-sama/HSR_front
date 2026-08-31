@@ -2157,6 +2157,42 @@ export function getCarExistingFare(draft: Pz1Draft, pairKey: string): number | n
   });
 }
 
+/**
+ * Стоимость проезда корреспонденции с подставленным расчётом по личному авто.
+ *
+ * Селектор, а не запись в черновик: производные величины по архитектуре
+ * считаются на чтение, иначе значение пришлось бы держать в состоянии и
+ * синхронизировать при каждой правке прочих параметров или трассы.
+ *
+ * - существующая стоимость авто — всегда расчётная;
+ * - прогнозная по умолчанию равна существующей (заказчик, 31.08), но если
+ *   студент ввёл своё значение, побеждает оно.
+ *
+ * Этим же селектором обязаны пользоваться проверки заполненности: раньше они
+ * читали сырой черновик, видели у авто пустую строку и сообщали «стоимость
+ * Личный автомобиль, существующая» как незаполненное поле, блокируя модель.
+ */
+export function getEffectiveFareValues(
+  draft: Pz1Draft,
+  detail: Pz1CorrespondenceDetailDraft,
+): Pz1CorrespondenceDetailDraft['fare'] {
+  const carCost = getCarExistingFare(draft, detail.pairKey);
+
+  if (carCost === null) {
+    return detail.fare;
+  }
+
+  const computed = formatMoneyInput(carCost);
+
+  return {
+    ...detail.fare,
+    [CAR_MODE_ID]: {
+      existing: computed,
+      forecast: detail.fare[CAR_MODE_ID].forecast.trim() ? detail.fare[CAR_MODE_ID].forecast : computed,
+    },
+  };
+}
+
 function getTotalTransportCost(
   draft: Pz1Draft,
   detail: Pz1CorrespondenceDetailDraft,
@@ -2477,6 +2513,19 @@ function parseDurationToMinutes(value: string) {
   }
 
   return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/**
+ * Денежное значение для поля ввода: два знака, запятая, без разделителя
+ * разрядов. Без группировки намеренно — строка возвращается в поле формы и
+ * потом разбирается parseNumericInput, лишние пробелы там ни к чему.
+ */
+function formatMoneyInput(value: number) {
+  return new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  }).format(value);
 }
 
 function formatDecimal(value: number) {

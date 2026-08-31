@@ -38,6 +38,7 @@ import {
   getCorrespondenceTitle,
   getComputedFinalIndicators,
   getCarExistingFare,
+  getEffectiveFareValues,
   getDuplicateStationNames,
   getEnabledStationRegions,
   getEffectivePassengerFlowInputs,
@@ -1055,16 +1056,7 @@ function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
     return <MissingCorrespondence />;
   }
 
-  // Существующая стоимость личного авто не вводится, а считается из «Прочих
-  // параметров» и длины корреспонденции. Пока данных не хватает, оставляем
-  // то, что уже лежит в черновике, — поле не должно мигать пустотой.
-  const fareValues =
-    carExistingFare === null
-      ? detail.fare
-      : {
-          ...detail.fare,
-          car: { ...detail.fare.car, existing: formatDecimalValue(carExistingFare) },
-        };
+  const fareValues = getEffectiveFareValues(draft, detail);
 
   return (
     <section className="form-section correspondence-detail">
@@ -1089,15 +1081,12 @@ function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
       />
       <p className="status-note">
         Существующая стоимость поездки на личном автомобиле не вводится — она считается из расхода бензина, цены АИ-92
-        и стоимости ОСАГО с экрана «Прочие параметры» и расстояния этой корреспонденции.
+        и стоимости ОСАГО с экрана «Прочие параметры» и расстояния этой корреспонденции. Прогнозная по умолчанию равна
+        существующей, её можно изменить.
         {carExistingFare === null ? ' Заполните прочие параметры и трассу, чтобы значение посчиталось.' : ''}
       </p>
     </section>
   );
-}
-
-function formatDecimalValue(value: number) {
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2, useGrouping: false }).format(value);
 }
 
 function StationOtherParametersStep() {
@@ -2300,6 +2289,9 @@ function getForecastMissingFields(draft: Pz1Draft, pairKey: string) {
   }
 
   const regional = getPz1RegionalCharacteristics(draft);
+  // Стоимость авто — производная, читаем её тем же селектором, что и экран,
+  // иначе расчётное значение считается незаполненным и блокирует модель.
+  const effectiveFare = getEffectiveFareValues(draft, detail);
   const endpoints = [
     { label: detail.fromLabel, title: 'станции отправления' },
     { label: detail.toLabel, title: 'станции назначения' },
@@ -2345,7 +2337,7 @@ function getForecastMissingFields(draft: Pz1Draft, pairKey: string) {
       if (parseNumberInput(detail.frequency[modeId][side]) === null) {
         missingFields.add(`Частота сообщений и стоимость проезда: частота ${getTransportModeLabel(modeId)}, ${side === 'existing' ? 'существующая' : 'прогнозная'}`);
       }
-      if (parseNumberInput(detail.fare[modeId][side]) === null) {
+      if (parseNumberInput(effectiveFare[modeId][side]) === null) {
         missingFields.add(`Частота сообщений и стоимость проезда: стоимость ${getTransportModeLabel(modeId)}, ${side === 'existing' ? 'существующая' : 'прогнозная'}`);
       }
     }
