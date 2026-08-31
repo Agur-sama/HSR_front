@@ -28,6 +28,7 @@ import {
   updateCellValue,
   transportColumns,
   validateAnnualFlowField,
+  isAnnualFlowFieldLocked,
   validateConsumerCell,
   validateDiscomfortCell,
   validateOtherParameterField,
@@ -234,6 +235,20 @@ describe('pz1 model', () => {
   it('счётчик шагов берётся из списка, а не зашит числом', () => {
     expect(getPz1TaskStepCount(createInitialPz1Draft())).toBe(pz1StepIds.length);
     expect(new Set(pz1StepIds).size).toBe(pz1StepIds.length);
+  });
+
+  it('вместимость ВСМ существующая залочена на 0 и не даёт ошибку (ТЗ v3.6 T-3)', () => {
+    expect(isAnnualFlowFieldLocked('capacityExisting', 'hSR')).toBe(true);
+    expect(isAnnualFlowFieldLocked('capacityForecast', 'hSR')).toBe(false);
+    expect(isAnnualFlowFieldLocked('capacityExisting', 'bus')).toBe(false);
+
+    // Пустое значение у ВСМ больше не блокирует переход.
+    expect(validateAnnualFlowField('capacityExisting', '', 'hSR')).toBeNull();
+    // У остальных видов поведение прежнее.
+    expect(validateAnnualFlowField('capacityExisting', '', 'bus')).toBe('Заполните поле');
+
+    const draft = createInitialPz1Draft();
+    expect(getSyncedCorrespondenceDetails(draft)[0].annualFlows.hSR.capacityExisting).toBe('0');
   });
 
   it('validates consumer properties by metric rules', () => {

@@ -76,6 +76,7 @@ import {
   validateDiscomfortCell,
   validateHsrSpeed,
   validateAnnualFlowField,
+  isAnnualFlowFieldLocked,
   validateOtherParameterField,
   validateRegionalCharacteristicField,
   validateRegionParameterField,
@@ -1196,10 +1197,11 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
               const annualFlow = detail.annualFlows[column.id];
               const capacityExistingValue = annualFlow.capacityExisting ?? annualFlow.capacity;
               const capacityForecastValue = annualFlow.capacityForecast ?? annualFlow.capacity;
-              const capacityExistingError = validateAnnualFlowField('capacityExisting', capacityExistingValue);
-              const capacityForecastError = validateAnnualFlowField('capacityForecast', capacityForecastValue);
-              const occupancyExistingError = validateAnnualFlowField('occupancyExisting', annualFlow.occupancyExisting);
-              const occupancyForecastError = validateAnnualFlowField('occupancyForecast', annualFlow.occupancyForecast);
+              const capacityExistingLocked = isAnnualFlowFieldLocked('capacityExisting', column.id);
+              const capacityExistingError = validateAnnualFlowField('capacityExisting', capacityExistingValue, column.id);
+              const capacityForecastError = validateAnnualFlowField('capacityForecast', capacityForecastValue, column.id);
+              const occupancyExistingError = validateAnnualFlowField('occupancyExisting', annualFlow.occupancyExisting, column.id);
+              const occupancyForecastError = validateAnnualFlowField('occupancyForecast', annualFlow.occupancyForecast, column.id);
 
               return (
                 <tr key={column.id}>
@@ -1210,7 +1212,8 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
                       className={capacityExistingError ? 'is-invalid' : undefined}
                       inputMode="decimal"
                       onChange={(event) => updateAnnualFlow(column.id, 'capacityExisting', event.target.value)}
-                      value={capacityExistingValue}
+                      readOnly={capacityExistingLocked}
+                      value={capacityExistingLocked ? '0' : capacityExistingValue}
                     />
                     {capacityExistingError ? <small className="field-error">{capacityExistingError}</small> : null}
                   </td>
@@ -2334,16 +2337,16 @@ function getForecastMissingFields(draft: Pz1Draft, pairKey: string) {
     const annualFlow = detail.annualFlows[modeId];
     const capacityExistingValue = annualFlow.capacityExisting ?? annualFlow.capacity;
     const capacityForecastValue = annualFlow.capacityForecast ?? annualFlow.capacity;
-    if (validateAnnualFlowField('capacityExisting', capacityExistingValue) !== null) {
+    if (validateAnnualFlowField('capacityExisting', capacityExistingValue, modeId) !== null) {
       missingFields.add(`Годовой пассажиропоток: вместимость ${getTransportModeLabel(modeId)}, существующая`);
     }
-    if (validateAnnualFlowField('capacityForecast', capacityForecastValue) !== null) {
+    if (validateAnnualFlowField('capacityForecast', capacityForecastValue, modeId) !== null) {
       missingFields.add(`Годовой пассажиропоток: вместимость ${getTransportModeLabel(modeId)}, прогнозная`);
     }
-    if (validateAnnualFlowField('occupancyExisting', annualFlow.occupancyExisting) !== null) {
+    if (validateAnnualFlowField('occupancyExisting', annualFlow.occupancyExisting, modeId) !== null) {
       missingFields.add(`Годовой пассажиропоток: заполняемость ${getTransportModeLabel(modeId)}, существующая`);
     }
-    if (validateAnnualFlowField('occupancyForecast', annualFlow.occupancyForecast) !== null) {
+    if (validateAnnualFlowField('occupancyForecast', annualFlow.occupancyForecast, modeId) !== null) {
       missingFields.add(`Годовой пассажиропоток: заполняемость ${getTransportModeLabel(modeId)}, прогнозная`);
     }
   }

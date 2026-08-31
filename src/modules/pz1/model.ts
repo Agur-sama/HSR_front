@@ -1177,7 +1177,20 @@ export function validateOtherParameterField(fieldId: string, value: string) {
   return parsed > 0 ? null : 'Значение должно быть больше 0';
 }
 
-export function validateAnnualFlowField(fieldId: string, value: string) {
+/**
+ * Вместимость ВСМ, существующая — залочена на 0 (ТЗ v3.6 T-3), по той же
+ * логике, что частота и стоимость ВСМ: линии ещё не существует, заполнять
+ * нечего. Поле неактивно и не должно давать ошибку валидации.
+ */
+export function isAnnualFlowFieldLocked(fieldId: string, modeId: TransportModeId) {
+  return modeId === HSR_MODE_ID && fieldId === 'capacityExisting';
+}
+
+export function validateAnnualFlowField(fieldId: string, value: string, modeId?: TransportModeId) {
+  if (modeId && isAnnualFlowFieldLocked(fieldId, modeId)) {
+    return null;
+  }
+
   const trimmed = value.trim();
   if (!trimmed) {
     return 'Заполните поле';
@@ -1567,8 +1580,11 @@ function mergeCorrespondenceDetail(
     annualFlows: transportColumns.reduce<Pz1CorrespondenceDetailDraft['annualFlows']>((values, column) => {
       values[column.id] = {
         capacity: importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
-        capacityExisting:
-          importedDetail?.annualFlows?.[column.id]?.capacityExisting ?? importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
+        // Существующая вместимость ВСМ залочена на 0 (ТЗ v3.6 T-3) — кладём 0
+        // в черновик, чтобы в JSON-мост уходил ноль, а не пустая строка.
+        capacityExisting: isAnnualFlowFieldLocked('capacityExisting', column.id)
+          ? '0'
+          : importedDetail?.annualFlows?.[column.id]?.capacityExisting ?? importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
         capacityForecast:
           importedDetail?.annualFlows?.[column.id]?.capacityForecast ?? importedDetail?.annualFlows?.[column.id]?.capacity ?? '',
         occupancyExisting: importedDetail?.annualFlows?.[column.id]?.occupancyExisting ?? defaultOccupancyByMode[column.id] ?? '',
