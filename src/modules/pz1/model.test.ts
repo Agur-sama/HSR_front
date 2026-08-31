@@ -198,7 +198,7 @@ describe('pz1 model', () => {
     expect(getExcludedTransportColumns(unchanged, 'А-Г')).toEqual([]);
   });
 
-  it('исключение вида убирает его из прогноза, а не только из таблицы', () => {
+  it('исключение вида снимает его с активных — модель получит по нему нули', () => {
     const draft = createInitialPz1Draft();
 
     const withoutBus = excludeTransportMode(draft, 'А-Г', 'bus');

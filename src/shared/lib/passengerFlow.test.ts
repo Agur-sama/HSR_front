@@ -74,4 +74,89 @@ describe('passenger flow forecast', () => {
       expect(Math.round(mode.forecastAnnualFlow)).toBe(expectedForecastByMode[mode.modeId]);
     }
   });
+
+  it('исключённый вид даёт нули и остаётся строкой результата (ТЗ v3.6 T-1)', () => {
+    const buildModes = (excludedModeId: TransportModeId | null) =>
+      passengerFlowModeIds.map((modeId) => ({
+        modeId,
+        existingAnnualFlow: modeId === 'hSR' ? 0 : 100_000,
+        travelTimeHours: 4,
+        waitingTimeHours: 1,
+        totalTransportCost: 2_000,
+        existingTravelTimeHours: 5,
+        ...(modeId === excludedModeId
+          ? {
+              existingAnnualFlow: 0,
+              travelTimeHours: 0,
+              waitingTimeHours: 0,
+              totalTransportCost: 0,
+              existingTravelTimeHours: 0,
+              excluded: true,
+            }
+          : {}),
+      }));
+
+    const result = distributePassengerFlowByMode({
+      existingAnnualFlow: 500_000,
+      baseForecast: 600_000,
+      inducedDemand: 100_000,
+      hsrTravelTimeHours: 2,
+      modes: buildModes('bus'),
+    });
+
+    const bus = result.modes.find((mode) => mode.modeId === 'bus');
+
+    // Строка не исчезает из результата, но вклад нулевой во всех трёх слагаемых.
+    expect(result.modes).toHaveLength(6);
+    expect(bus).toBeDefined();
+    expect(bus?.forecastAnnualFlow).toBe(0);
+    expect(bus?.directCapture).toBe(0);
+    expect(bus?.gravityCapture).toBe(0);
+    expect(bus?.inducedCapture).toBe(0);
+    expect(bus?.forecastShare).toBe(0);
+  });
+
+  it('исключение вида не пересчитывает доли остальных пропорционально (ТЗ v3.6 T-1)', () => {
+    // Автобус с нулевыми входами против автобуса, помеченного excluded.
+    // Числа остальных пяти видов должны совпасть: пометка не запускает
+    // перераспределение, она лишь снимает проверки на положительность.
+    const base = {
+      existingAnnualFlow: 500_000,
+      baseForecast: 600_000,
+      inducedDemand: 100_000,
+      hsrTravelTimeHours: 2,
+    };
+    const modeRow = (modeId: TransportModeId) => ({
+      modeId,
+      existingAnnualFlow: modeId === 'hSR' ? 0 : 100_000,
+      travelTimeHours: 4,
+      waitingTimeHours: 1,
+      totalTransportCost: 2_000,
+      existingTravelTimeHours: 5,
+    });
+
+    const withExcluded = distributePassengerFlowByMode({
+      ...base,
+      modes: passengerFlowModeIds.map((modeId) =>
+        modeId === 'bus'
+          ? { ...modeRow(modeId), existingAnnualFlow: 0, excluded: true }
+          : modeRow(modeId),
+      ),
+    });
+    const withoutBusRow = distributePassengerFlowByMode({
+      ...base,
+      modes: passengerFlowModeIds.filter((modeId) => modeId !== 'bus').map(modeRow),
+    });
+
+    for (const modeId of passengerFlowModeIds) {
+      if (modeId === 'bus') {
+        continue;
+      }
+
+      const excludedRun = withExcluded.modes.find((mode) => mode.modeId === modeId);
+      const droppedRun = withoutBusRow.modes.find((mode) => mode.modeId === modeId);
+
+      expect(excludedRun?.forecastAnnualFlow).toBeCloseTo(droppedRun?.forecastAnnualFlow ?? -1, 6);
+    }
+  });
 });

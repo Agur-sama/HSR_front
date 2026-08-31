@@ -38,6 +38,13 @@ export interface PassengerFlowModeInput {
   waitingTimeHours: number;
   totalTransportCost: number;
   existingTravelTimeHours: number;
+  /**
+   * Вид исключён студентом из этой корреспонденции. По ТЗ v3.6 T-1 такой вид
+   * «для модели это просто все нули»: он остаётся строкой результата, но не
+   * даёт ни прямого, ни гравитационного, ни индуцированного захвата. Из
+   * нормализации его не выбрасываем — он входит в неё с нулевым весом.
+   */
+  excluded?: boolean;
 }
 
 export interface PassengerFlowDistributionInput {
@@ -132,14 +139,28 @@ export function distributePassengerFlowByMode(
 
   const directRows = input.modes.map((mode) => {
     assertKnownMode(mode.modeId);
+    const weights = passengerFlowModeWeights[mode.modeId];
+    const penalty = Math.max(weights.time, weights.price, weights.comfort);
+
+    // Исключённый вид не проверяем на положительность стоимости и времени:
+    // его поля студент не заполнял, они нулевые, и это законное состояние.
+    if (mode.excluded) {
+      return {
+        mode,
+        existingShare: 0,
+        penalty,
+        directCapture: 0,
+        impedance: 0,
+        timeSavingHours: 0,
+      };
+    }
+
     assertNonNegative(mode.existingAnnualFlow, `${mode.modeId}.existingAnnualFlow`);
     assertNonNegative(mode.travelTimeHours, `${mode.modeId}.travelTimeHours`);
     assertNonNegative(mode.waitingTimeHours, `${mode.modeId}.waitingTimeHours`);
     assertPositive(mode.totalTransportCost, `${mode.modeId}.totalTransportCost`);
     assertNonNegative(mode.existingTravelTimeHours, `${mode.modeId}.existingTravelTimeHours`);
 
-    const weights = passengerFlowModeWeights[mode.modeId];
-    const penalty = Math.max(weights.time, weights.price, weights.comfort);
     const existingShare =
       input.existingAnnualFlow > EPSILON ? mode.existingAnnualFlow / input.existingAnnualFlow : 0;
     const directCapture = input.baseForecast * existingShare * (1 - penalty);
@@ -158,7 +179,10 @@ export function distributePassengerFlowByMode(
 
   const directTotal = directRows.reduce((sum, row) => sum + row.directCapture, 0);
   const remainder = Math.max(0, input.baseForecast - directTotal);
-  const gravityWeights = normalizeInverseValues(directRows.map((row) => row.impedance));
+  const gravityWeights = normalizeInverseValues(
+    directRows.map((row) => row.impedance),
+    directRows.map((row) => row.mode.excluded === true),
+  );
   const inducedWeights =
     input.inducedDemand > EPSILON
       ? normalizePositiveValues(directRows.map((row) => row.timeSavingHours), 'time savings')
@@ -214,8 +238,17 @@ function calculateImpedance(mode: PassengerFlowModeInput) {
   return Math.pow(travelAndWaitTime * 24 * mode.totalTransportCost, 3);
 }
 
-function normalizeInverseValues(values: number[]) {
-  const inverseValues = values.map((value) => {
+/**
+ * Вес обратно пропорционален импедансу: чем быстрее и дешевле вид, тем выше вес.
+ * Исключённые виды получают нулевой вес и не влияют на веса остальных
+ * (их вклад в сумму равен нулю), но строку в результате сохраняют.
+ */
+function normalizeInverseValues(values: number[], excludedFlags: boolean[]) {
+  const inverseValues = values.map((value, index) => {
+    if (excludedFlags[index]) {
+      return 0;
+    }
+
     assertPositive(value, 'impedance');
     return 1 / value;
   });

@@ -795,9 +795,27 @@ export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairK
   }
 
   const effectiveTravelTime = getEffectiveTravelTimeValues(draft, detail);
-  const modeInputs = table.activeModes.reduce<PassengerFlowModeInput[] | null>((modes, modeId) => {
+  // Идём по ВСЕМ видам транспорта, а не только по активным (ТЗ v3.6 T-1):
+  // исключённый вид остаётся строкой результата с нулями, а не выпадает из
+  // массива. Если его выбросить, оставшиеся перенормируются между собой —
+  // это и есть отменённое заказчиком «перераспределение долей».
+  const modeInputs = ALL_TRANSPORT_MODE_IDS.reduce<PassengerFlowModeInput[] | null>((modes, modeId) => {
     if (modes === null) {
       return null;
+    }
+
+    if (!table.activeModes.includes(modeId)) {
+      modes.push({
+        modeId,
+        existingAnnualFlow: 0,
+        travelTimeHours: 0,
+        waitingTimeHours: 0,
+        totalTransportCost: 0,
+        existingTravelTimeHours: 0,
+        excluded: true,
+      });
+
+      return modes;
     }
 
     const existingAnnualFlow =
