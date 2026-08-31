@@ -17,6 +17,10 @@ export interface Pz1Variant {
   toCity: string;
   fromRegion: string;
   toRegion: string;
+  /** Координаты городов [долгота, широта] — единственный источник вида карты. */
+  fromCoords: [number, number];
+  toCoords: [number, number];
+  /** Вычисляется из fromCoords/toCoords, руками не задаётся. */
   mapCenter: [number, number];
   mapZoom: number;
 }
