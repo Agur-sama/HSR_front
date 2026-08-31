@@ -25,6 +25,7 @@ import {
   getSyncedCorrespondenceDetails,
   getEffectiveFareValues,
   getCarExistingFare,
+  getCarForecastFare,
   getSyncedCorrespondenceTables,
   isFinalIndicatorsComplete,
   isStationsStepComplete,
@@ -329,6 +330,25 @@ describe('pz1 model', () => {
     expect(edited.car.existing).toBe(byDefault.car.existing);
   });
 
+  it('введённая прогнозная стоимость авто побеждает расчётную и идёт в расчёт', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], lat: '55.7558', lng: '37.6173' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], lat: '57.6261', lng: '39.8845' };
+    draft.routePointDrafts = [
+      { id: 'p1', lat: '55.7558', lng: '37.6173', sagittaToNextKm: '0' },
+      { id: 'p2', lat: '57.6261', lng: '39.8845', sagittaToNextKm: '0' },
+    ];
+    const detail = getSyncedCorrespondenceDetails(draft).find((item) => item.pairKey === 'А-Г')!;
+    const computed = getCarExistingFare(draft, 'А-Г');
+
+    // Пусто — берётся расчётная.
+    expect(getCarForecastFare(draft, detail)).toBeCloseTo(computed ?? -1, 6);
+
+    // Введено — побеждает ввод, в том числе с запятой как разделителем.
+    const edited = { ...detail, fare: { ...detail.fare, car: { ...detail.fare.car, forecast: '5500,50' } } };
+    expect(getCarForecastFare(draft, edited)).toBeCloseTo(5500.5, 6);
+  });
+
   it('расчётная стоимость авто не считается незаполненным полем', () => {
     const draft = createInitialPz1Draft();
     draft.stationDrafts[0] = { ...draft.stationDrafts[0], lat: '55.7558', lng: '37.6173' };
@@ -343,6 +363,71 @@ describe('pz1 model', () => {
     // недостающих полей и не давало построить модель.
     expect(detail.fare.car.existing).toBe('');
     expect(getEffectiveFareValues(draft, detail).car.existing).not.toBe('');
+  });
+
+  it('прогнозная стоимость авто влияет на прогноз: дороже поездка — меньше доля авто', () => {
+    const buildDraft = (carForecastFare: string) => {
+      const draft = createInitialPz1Draft();
+      draft.stationDrafts[0] = { ...draft.stationDrafts[0], name: 'А', region: 'Москва', lat: '55.7558', lng: '37.6173' };
+      draft.stationDrafts[3] = { ...draft.stationDrafts[3], name: 'Г', region: 'Ярославская область', lat: '57.6261', lng: '39.8845' };
+      draft.routePointDrafts = [
+        { id: 'p1', lat: '55.7558', lng: '37.6173', sagittaToNextKm: '0' },
+        { id: 'p2', lat: '57.6261', lng: '39.8845', sagittaToNextKm: '0' },
+      ];
+      draft.hsrTravelTimes = { 'А-Г': { speedKmh: '300' } };
+
+      const regionParameters = {
+        grpExisting: '1000000',
+        grpForecast: '1200000',
+        populationExisting: '12000',
+        populationForecast: '12500',
+        averageSalary: '90000',
+        kGdpFlow: '0,9',
+      };
+      draft.regionalCharacteristics = {
+        ...draft.regionalCharacteristics,
+        regionA: 'Москва',
+        regionB: 'Ярославская область',
+        inducedDemandPct: '35',
+        regionParameters: { 'Москва': regionParameters, 'Ярославская область': regionParameters },
+      };
+
+      const detail = { ...getSyncedCorrespondenceDetails(draft)[0] };
+      for (const row of correspondenceTravelTimeRows) {
+        for (const column of transportColumns) {
+          detail.travelTime[row.id][column.id] = { existing: '1:00', forecast: '1:00' };
+        }
+      }
+      for (const column of transportColumns) {
+        detail.frequency[column.id] = { existing: '6', forecast: '6' };
+        detail.fare[column.id] = { existing: '2500', forecast: '2500' };
+        detail.annualFlows[column.id] = {
+          capacity: '300',
+          capacityExisting: '300',
+          capacityForecast: '300',
+          occupancyExisting: '0,8',
+          occupancyForecast: '0,8',
+        };
+      }
+      detail.fare.hSR = { existing: '0', forecast: '2500' };
+      detail.annualFlows.hSR = { ...detail.annualFlows.hSR, capacityExisting: '0' };
+      detail.fare.car = { existing: '', forecast: carForecastFare };
+      draft.correspondenceDetails = { 'А-Г': detail };
+
+      return draft;
+    };
+
+    const byDefault = getPz1CorrespondencePassengerFlowForecast(buildDraft(''), 'А-Г');
+    const expensive = getPz1CorrespondencePassengerFlowForecast(buildDraft('12000'), 'А-Г');
+
+    expect(byDefault).not.toBeNull();
+    expect(expensive).not.toBeNull();
+
+    const carByDefault = byDefault?.modes.find((mode) => mode.modeId === 'car');
+    const carExpensive = expensive?.modes.find((mode) => mode.modeId === 'car');
+
+    // Пустое поле — берётся расчётная стоимость; введённая дороже — доля авто падает.
+    expect(carExpensive?.forecastShare ?? 1).toBeLessThan(carByDefault?.forecastShare ?? 0);
   });
 
   it('validates consumer properties by metric rules', () => {

@@ -2172,6 +2172,25 @@ export function getCarExistingFare(draft: Pz1Draft, pairKey: string): number | n
  * читали сырой черновик, видели у авто пустую строку и сообщали «стоимость
  * Личный автомобиль, существующая» как незаполненное поле, блокируя модель.
  */
+/**
+ * Прогнозная стоимость поездки на авто: введённое студентом значение
+ * побеждает, иначе берётся расчётная (она же существующая).
+ *
+ * Единственное место, где живёт это правило. Им пользуются и подстановка в
+ * поле, и расчёт TTC — иначе на экране было бы одно число, а в модели другое.
+ *
+ * Почему поле вообще влияет на расчёт: у всех остальных видов транспорта TTC
+ * считается по прогнозной стоимости, и авто не должно быть исключением.
+ * «Прочие параметры» одноразрядные — отдельной прогнозной цены бензина там
+ * нет, поэтому это поле остаётся единственным способом заложить в прогноз
+ * подорожание топлива.
+ */
+export function getCarForecastFare(draft: Pz1Draft, detail: Pz1CorrespondenceDetailDraft): number | null {
+  const enteredValue = parseNumericInput(detail.fare[CAR_MODE_ID].forecast);
+
+  return enteredValue ?? getCarExistingFare(draft, detail.pairKey);
+}
+
 export function getEffectiveFareValues(
   draft: Pz1Draft,
   detail: Pz1CorrespondenceDetailDraft,
@@ -2210,11 +2229,10 @@ function getTotalTransportCost(
   }
 
   if (modeId === CAR_MODE_ID) {
-    // Стоимость поездки на авто в TTC — та же подтверждённая формула, что и в
-    // поле «Стоимость проезда»: без деления на наполняемость. Считаем одной
-    // функцией из shared/lib, чтобы формула не жила в двух местах и не могла
-    // разойтись — раньше здесь была своя копия с делением на 1,3.
-    const carCost = getCarExistingFare(draft, detail.pairKey);
+    // Прогнозная стоимость поездки: введённая студентом, иначе расчётная.
+    // Городские тарифы к авто не прибавляются — поездка идёт от двери до
+    // двери, городским транспортом человек не пользуется.
+    const carCost = getCarForecastFare(draft, detail);
 
     if (carCost !== null) {
       return carCost + timeCost;
