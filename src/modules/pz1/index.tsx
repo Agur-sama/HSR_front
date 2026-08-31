@@ -45,6 +45,7 @@ import {
   getPz1CorrespondencePassengerFlowForecast,
   getPz1CorrespondenceScenarios,
   getPz1TaskStepCount,
+  pz1StepIds,
   getPz1RegionalCharacteristics,
   getRouteMetrics,
   getStationRouteDistances,
@@ -80,6 +81,7 @@ import {
   validateRegionParameterField,
   validateStationField,
 } from './model';
+import type { Pz1StepId } from './model';
 import type { Pz1CorrespondenceDetailDraft, Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
 import { getPz1VariantTitle, pz1Variants } from './variants';
 
@@ -96,7 +98,7 @@ function Pz1Workspace() {
   const fileSlug = sanitizeFileName(draft.passport.lineTitle, 'pz1');
   const correspondenceDetails = getSyncedCorrespondenceDetails(draft);
   const hasCorrespondences = correspondenceDetails.length > 0;
-  const taskSteps: ModuleTaskStep[] = [
+  const stepsById: Record<Pz1StepId, ModuleTaskStep> = keyStepsById([
     {
       id: 'stations',
       title: 'Размещение станций и план трассы',
@@ -181,7 +183,10 @@ function Pz1Workspace() {
       isComplete: isFinalIndicatorsComplete(draft),
       completionHint: 'Заполните все обязательные поля, чтобы продолжить',
     },
-  ];
+  ]);
+  // Порядок берём из pz1StepIds, а не из порядка литералов выше —
+  // менять последовательность шагов нужно в одном месте, в модели.
+  const taskSteps: ModuleTaskStep[] = pz1StepIds.map((stepId) => stepsById[stepId]);
 
   return (
     <ModuleShell
@@ -195,6 +200,17 @@ function Pz1Workspace() {
       theory={<TheoryStep />}
       title="Технико-экономическое обоснование проекта ВСМ"
     />
+  );
+}
+
+/** Раскладывает список шагов по их стабильным id, чтобы порядок задавался только pz1StepIds. */
+function keyStepsById(steps: Array<ModuleTaskStep & { id: Pz1StepId }>): Record<Pz1StepId, ModuleTaskStep> {
+  return steps.reduce(
+    (map, step) => {
+      map[step.id] = step;
+      return map;
+    },
+    {} as Record<Pz1StepId, ModuleTaskStep>,
   );
 }
 

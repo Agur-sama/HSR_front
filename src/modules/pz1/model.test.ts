@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createInitialPz1Draft,
   createPz1Result,
+  getPz1TaskStepCount,
+  pz1StepIds,
   excludeTransportMode,
   getActiveTransportColumns,
   getActiveTransportModes,
@@ -216,6 +218,22 @@ describe('pz1 model', () => {
     expect(consumerProperties).toBeDefined();
     expect(consumerProperties?.['А-Г'].activeModes).not.toContain('airplane');
     expect(consumerProperties?.['А-Г'].activeModes).toContain('hSR');
+  });
+
+  it('«Прочие параметры» стоят раньше «Частоты и стоимости» (ТЗ v3.6 T-2)', () => {
+    const other = pz1StepIds.indexOf('station-other-parameters');
+    const frequencyFare = pz1StepIds.indexOf('correspondence-frequency-fare');
+
+    expect(other).toBeGreaterThanOrEqual(0);
+    expect(other).toBeLessThan(frequencyFare);
+    // Позиция 06 из 10 в подписи шага — индекс 5.
+    expect(other).toBe(5);
+    expect(frequencyFare).toBe(6);
+  });
+
+  it('счётчик шагов берётся из списка, а не зашит числом', () => {
+    expect(getPz1TaskStepCount(createInitialPz1Draft())).toBe(pz1StepIds.length);
+    expect(new Set(pz1StepIds).size).toBe(pz1StepIds.length);
   });
 
   it('validates consumer properties by metric rules', () => {

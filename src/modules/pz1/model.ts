@@ -1006,9 +1006,34 @@ function getAnnualFlowForecastFromCorrespondenceTables(draft: Pz1Draft) {
   return hasCalculatedFlow ? totalAnnualFlow : null;
 }
 
+/**
+ * Порядок шагов задания ПЗ1 — единственный источник истины.
+ * Компонент собирает шаги по этому списку, поэтому поменять порядок можно
+ * только здесь, и счётчик «N из 10» съедет автоматически.
+ *
+ * «Прочие параметры» стоят перед «Частотой и стоимостью» не для красоты
+ * (ТЗ v3.6 T-2): формула стоимости личного авто берёт расход бензина,
+ * цену АИ-92 и ОСАГО с экрана прочих параметров. Если экран стоимости идёт
+ * раньше — считать нечем.
+ */
+export const pz1StepIds = [
+  'stations',
+  'hsr-travel-time',
+  'regional-characteristics',
+  'correspondence-travel-time',
+  'correspondence-discomfort',
+  'station-other-parameters',
+  'correspondence-frequency-fare',
+  'annual-flow',
+  'model',
+  'final-indicators',
+] as const;
+
+export type Pz1StepId = (typeof pz1StepIds)[number];
+
 export function getPz1TaskStepCount(draft: Pz1Draft) {
   void draft;
-  return 10;
+  return pz1StepIds.length;
 }
 
 export function isPassportComplete(draft: Pz1Draft) {
