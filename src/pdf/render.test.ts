@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createPz1PdfBlob, createPz1PdfSections } from './render';
+import { createPz1PdfBlob, createPz1PdfSections, formatDistanceKm } from './render';
 
 describe('pdf render', () => {
   it('creates Russian PZ1 report sections without placeholder text', () => {
@@ -69,5 +69,12 @@ describe('pdf render', () => {
 
     expect(blob.type).toBe('application/pdf');
     expect(blob.size).toBeGreaterThan(10_000);
+  });
+
+  it('километры в отчёте округляются до 2 знаков (ТЗ v3.6 T-6)', () => {
+    // На экране было 610,32, а в таблице перегонов PDF — 610,315.
+    expect(formatDistanceKm(610.315)).toBe('610,32');
+    expect(formatDistanceKm(246.2249)).toBe('246,22');
+    expect(formatDistanceKm(100)).toBe('100');
   });
 });

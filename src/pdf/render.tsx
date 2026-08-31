@@ -374,7 +374,7 @@ function HsrTravelTimeTable({ hsrTravelTime }: { hsrTravelTime?: Pz1Result['hsrT
             <Text style={styles.stationTypeCell}>
               {segment.fromLabel} — {segment.toLabel}
             </Text>
-            <Text style={styles.stationCoordCell}>{formatNumber(segment.distanceKm)}</Text>
+            <Text style={styles.stationCoordCell}>{formatDistanceKm(segment.distanceKm)}</Text>
             <Text style={styles.stationCoordCell}>{formatNumber(segment.speedKmh)}</Text>
             <Text style={styles.stationCoordCell}>{formatNumber(hsrTravelTime.accelerationMinutes)}</Text>
             <Text style={styles.stationCoordCell}>{formatNumber(hsrTravelTime.brakingMinutes)}</Text>
@@ -843,6 +843,17 @@ function formatDate(value: string) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 5 }).format(value);
+}
+
+/**
+ * Расстояния в километрах — везде 2 знака, включая внутренние таблицы отчёта
+ * (ТЗ v3.6 T-6). На экране было «610,32», а в таблице перегонов PDF — «610,315»
+ * от общего formatNumber с пятью знаками, и одна величина читалась двумя
+ * разными числами. Округляем ТОЛЬКО при отображении: в расчёт длина идёт с
+ * полной точностью, она участвует во времени хода и стоимости личного авто.
+ */
+export function formatDistanceKm(value: number) {
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value);
 }
 
 function formatInteger(value: number) {
