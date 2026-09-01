@@ -270,7 +270,7 @@ export function OsmStationMap({
     updateGeoJsonSource(map, ROUTE_POINT_SOURCE_ID, createPointGeoJson(routePointCoordinates));
     routeCoordinatesRef.current = routeCoordinates;
     syncRouteOverlay(map, routeCoordinates, setRouteOverlayPoints);
-    schedulePreviewCapture(map, onPreviewImageChangeRef, previewTimerRef);
+    schedulePreviewCapture(map, onPreviewImageChangeRef, previewTimerRef, stations, routeCoordinates);
   }, [isMapReady, routeCoordinates, routePointCoordinates, stationCoordinates]);
 
   useEffect(() => {
@@ -622,10 +622,37 @@ function updateGeoJsonSource(
   }
 }
 
+/** Максимальная ширина снимка карты для отчёта — чтобы PNG в JSON-мосте
+ *  не разрастался на экранах с большим devicePixelRatio. */
+const PREVIEW_MAX_WIDTH = 1200;
+/* Пропорции снимка берутся от самой карты, но зажимаются в разумные рамки:
+   в узком окне карта не должна уезжать в квадрат, в широком — в полоску.
+   Внутри этого коридора кадр совпадает с экранным один в один, и обрезать
+   нечего: станции стоят у самых краёв карты, и любой кроп срезает их первыми. */
+const PREVIEW_MIN_ASPECT = 1.4;
+const PREVIEW_MAX_ASPECT = 2;
+
+/**
+ * Снимок карты для PDF: подложка с тайлами, линия трассы и метки станций —
+ * всё в одной картинке и в одной проекции.
+ *
+ * Раньше в отчёт уходил голый снимок GL-канвы, а станции и трассу PDF дорисовывал
+ * поверх собственной линейной проекцией «долгота/широта → прямоугольник». С
+ * веб-меркатором снимка она не совпадает, поэтому подпись «кривая карта» в
+ * отчёте была честной. Теперь трасса и метки проецируются тем же map.project(),
+ * что и сама карта, — совпадение по построению, дорисовывать поверх нечего.
+ *
+ * Трасса и станции рисуются вручную, а не берутся из GL-снимка: станции MapLibre
+ * держит DOM-элементами поверх канвы, а линия трассы в сохранённый кадр буфера
+ * попадает не всегда. Ручная отрисовка не зависит от того, какой кадр GL успел
+ * оставить в буфере.
+ */
 function schedulePreviewCapture(
   map: MapLibreMap,
   onPreviewImageChangeRef: MutableRefObject<(previewImage: string) => void>,
   previewTimerRef: MutableRefObject<number | null>,
+  stations: Pz1StationDraft[],
+  routeCoordinates: number[][],
 ) {
   if (previewTimerRef.current !== null) {
     window.clearTimeout(previewTimerRef.current);
@@ -633,11 +660,153 @@ function schedulePreviewCapture(
 
   previewTimerRef.current = window.setTimeout(() => {
     try {
-      onPreviewImageChangeRef.current(map.getCanvas().toDataURL('image/png'));
+      const preview = composeMapPreview(map, stations, routeCoordinates);
+
+      if (preview) {
+        onPreviewImageChangeRef.current(preview);
+      }
     } catch {
-      // If a tile provider taints the canvas, keep the previous preview image.
+      // Канва испорчена сторонними тайлами без CORS — оставляем прошлый снимок.
     }
   }, 300);
+}
+
+function composeMapPreview(
+  map: MapLibreMap,
+  stations: Pz1StationDraft[],
+  routeCoordinates: number[][],
+): string | null {
+  const source = map.getCanvas();
+
+  if (source.width === 0 || source.height === 0) {
+    return null;
+  }
+
+  const aspect = Math.min(Math.max(source.width / source.height, PREVIEW_MIN_ASPECT), PREVIEW_MAX_ASPECT);
+  const targetWidth = Math.round(Math.min(source.width, PREVIEW_MAX_WIDTH));
+  const targetHeight = Math.round(targetWidth / aspect);
+
+  const target = document.createElement('canvas');
+  target.width = targetWidth;
+  target.height = targetHeight;
+
+  const context = target.getContext('2d');
+  if (!context) {
+    return null;
+  }
+
+  // Вписываем снимок целиком: обрезка кадра съедала бы станции, которые почти
+  // всегда стоят у самого края карты.
+  const scale = Math.min(targetWidth / source.width, targetHeight / source.height);
+  const drawWidth = source.width * scale;
+  const drawHeight = source.height * scale;
+  const offsetX = (targetWidth - drawWidth) / 2;
+  const offsetY = (targetHeight - drawHeight) / 2;
+
+  context.drawImage(source, offsetX, offsetY, drawWidth, drawHeight);
+  fillPreviewMargins(context, target, { offsetX, offsetY, drawWidth, drawHeight });
+
+  // map.project даёт CSS-пиксели, канва — пиксели устройства: переводим тем же
+  // множителем, что и при отрисовке снимка.
+  const pixelRatio = source.width / source.clientWidth || 1;
+  const toPreviewPoint = (coordinates: [number, number]) => {
+    const projected = map.project(coordinates);
+
+    return {
+      x: offsetX + projected.x * pixelRatio * scale,
+      y: offsetY + projected.y * pixelRatio * scale,
+    };
+  };
+
+  context.save();
+  context.beginPath();
+  context.rect(offsetX, offsetY, drawWidth, drawHeight);
+  context.clip();
+
+  drawPreviewRoute(context, routeCoordinates.filter(isValidLngLatPair).map(([lng, lat]) => toPreviewPoint([lng, lat])));
+
+  for (const station of stations) {
+    if (!station.enabled) {
+      continue;
+    }
+
+    const point = parseLngLat(station);
+    if (!point) {
+      continue;
+    }
+
+    drawPreviewStation(context, toPreviewPoint(point), station.label);
+  }
+
+  context.restore();
+
+  return target.toDataURL('image/png');
+}
+
+/**
+ * Закрашивает поля, оставшиеся от вписывания снимка, цветом самой карты.
+ * Поля появляются только на нетипично широком или узком окне; серые полосы
+ * в отчёте выглядели бы браком вёрстки, подложка карты — нет.
+ */
+function fillPreviewMargins(
+  context: CanvasRenderingContext2D,
+  target: HTMLCanvasElement,
+  frame: { offsetX: number; offsetY: number; drawWidth: number; drawHeight: number },
+) {
+  const { offsetX, offsetY, drawWidth, drawHeight } = frame;
+
+  if (offsetX < 1 && offsetY < 1) {
+    return;
+  }
+
+  const sample = context.getImageData(Math.round(offsetX) + 1, Math.round(offsetY) + 1, 1, 1).data;
+  context.fillStyle = `rgb(${sample[0]}, ${sample[1]}, ${sample[2]})`;
+
+  if (offsetY >= 1) {
+    context.fillRect(0, 0, target.width, offsetY);
+    context.fillRect(0, offsetY + drawHeight, target.width, target.height - offsetY - drawHeight);
+  }
+
+  if (offsetX >= 1) {
+    context.fillRect(0, 0, offsetX, target.height);
+    context.fillRect(offsetX + drawWidth, 0, target.width - offsetX - drawWidth, target.height);
+  }
+}
+
+function drawPreviewRoute(context: CanvasRenderingContext2D, points: ScreenPoint[]) {
+  if (points.length < 2) {
+    return;
+  }
+
+  context.beginPath();
+  context.moveTo(points[0].x, points[0].y);
+  points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  // Белая подложка под линией: на пёстрых тайлах красная трасса без неё
+  // теряется среди дорог такого же цвета.
+  context.strokeStyle = '#ffffff';
+  context.lineWidth = 9;
+  context.stroke();
+  context.strokeStyle = '#E0182D';
+  context.lineWidth = 5;
+  context.stroke();
+}
+
+function drawPreviewStation(context: CanvasRenderingContext2D, point: ScreenPoint, label: string) {
+  context.beginPath();
+  context.arc(point.x, point.y, 12, 0, Math.PI * 2);
+  context.fillStyle = '#003D84';
+  context.fill();
+  context.lineWidth = 3;
+  context.strokeStyle = '#ffffff';
+  context.stroke();
+
+  context.fillStyle = '#ffffff';
+  context.font = '800 14px Raleway, Arial, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(label, point.x, point.y + 1);
 }
 
 function clearDraftRoute(map: MapLibreMap) {

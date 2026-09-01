@@ -13,7 +13,10 @@ import { buildDisplayRoutePoints, computeRouteLineMetrics } from '../shared/lib/
 const PAGE_SIZE = 'A4';
 const MARGIN_MM = 20;
 const PDF_MAP_WIDTH = 470;
-const PDF_MAP_HEIGHT = 80;
+/* Высота только для запасной схемы: снимок настоящей карты вставляется по
+   ширине и сам держит свои пропорции. Раньше здесь была полоса 470×80 —
+   в ней и настоящая карта выглядела бы сплющенной. */
+const PDF_MAP_HEIGHT = 282;
 const PDF_MAP_PADDING = 12;
 const runtimeProcess = (globalThis as { process?: { cwd: () => string; versions?: { node?: string } } }).process;
 
@@ -249,6 +252,12 @@ function MapPlanPreview({
   const overlay = createMapOverlay(routeLine, stations);
   const hasOverlay = overlay.routePoints.length >= 2 || overlay.stationPoints.length > 0;
 
+  // Снимок карты уже содержит и трассу, и станции в проекции самой карты.
+  // Дорисовывать поверх него схему нельзя: у неё своя линейная проекция, с
+  // веб-меркатором она не совпадает и линия ложится мимо. Схему показываем
+  // только когда снимка нет — как запасной вариант, а не как слой поверх.
+  const showSchematicOverlay = !previewImage && hasOverlay;
+
   return (
     <View style={styles.mapFrame}>
       {previewImage ? (
@@ -258,7 +267,7 @@ function MapPlanPreview({
           {hasOverlay ? null : <Text style={styles.mapText}>Снимок карты не был сохранён в результате шага.</Text>}
         </View>
       )}
-      {hasOverlay ? (
+      {showSchematicOverlay ? (
         <Svg
           height={PDF_MAP_HEIGHT}
           style={styles.mapOverlay}
@@ -1203,19 +1212,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#eef3ec',
     border: '1 solid #111111',
-    height: 78,
+    /* Высота рамки не задана: её задаёт сам снимок, вставленный по ширине.
+       Фиксированная высота растягивала бы карту под чужие пропорции —
+       ровно то, из-за чего снимок переставал быть похож на карту. */
     justifyContent: 'center',
     overflow: 'hidden',
     marginBottom: 10,
     position: 'relative',
   },
   mapImage: {
-    height: '100%',
     width: '100%',
   },
   mapFallback: {
     alignItems: 'center',
-    height: '100%',
+    height: PDF_MAP_HEIGHT,
     justifyContent: 'center',
     width: '100%',
   },
