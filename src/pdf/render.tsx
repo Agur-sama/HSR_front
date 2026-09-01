@@ -158,7 +158,7 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
       </Page>
 
       <Page size={PAGE_SIZE} style={styles.page}>
-        <RunningHeader pageNumber="2" summary={summary} />
+        <RunningHeader section="Исходные данные и план трассы" summary={summary} />
         <Text style={styles.sectionTitle}>1. Исходные данные варианта</Text>
         <KeyValueTable rows={sections[0].rows} />
         <Text style={styles.sectionTitle}>2. План трассы и размещение станций</Text>
@@ -172,7 +172,7 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
       </Page>
 
       <Page size={PAGE_SIZE} style={styles.page}>
-        <RunningHeader pageNumber="3" summary={summary} />
+        <RunningHeader section="Корреспонденции и прогноз" summary={summary} />
         <Text style={styles.sectionTitle}>3. Матрица корреспонденций</Text>
         <KeyValueTable rows={sections[2].rows} />
         <RegionalCharacteristicsTable regionalCharacteristics={summary.regionalCharacteristics} />
@@ -185,7 +185,7 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
       </Page>
 
       <Page size={PAGE_SIZE} style={styles.page}>
-        <RunningHeader pageNumber="4" summary={summary} />
+        <RunningHeader section="Технико-экономические показатели" summary={summary} />
         <Text style={styles.sectionTitle}>5. Технико-экономические показатели</Text>
         <FinalIndicatorsTable finalIndicatorValues={summary.finalIndicators ?? {}} totalLengthKm={summary.totalLengthKm} />
         {summary.notes ? (
@@ -199,13 +199,27 @@ function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
   );
 }
 
-function RunningHeader({ pageNumber, summary }: { pageNumber: string; summary: Pz1PdfSummary }) {
+/**
+ * Колонтитул: слева — чья работа, справа — название раздела.
+ *
+ * Номера листа здесь намеренно нет. Раньше он задавался строкой («2», «3»,
+ * «4») на каждый элемент Page, но Page переносится на несколько физических
+ * листов, и номер повторялся: листы 2 и 3 были оба подписаны «2», листы
+ * 4–6 — «3». То есть номер был не просто бесполезен, а неверен.
+ *
+ * Штатный способ — динамический `render={({ pageNumber }) => …}` — в
+ * браузерной сборке @react-pdf/renderer 4.5.1 не вызывается вовсе:
+ * проверено подстановкой константы, в PDF не попадает ничего. В Node на той
+ * же версии тот же код работает. Пока это не разобрано, в колонтитуле стоит
+ * название раздела — оно всегда верно и помогает ориентироваться не хуже.
+ */
+function RunningHeader({ section, summary }: { section: string; summary: Pz1PdfSummary }) {
   return (
     <View style={styles.runningHeader} fixed>
       <Text>
         Команда «{formatRequiredValue(summary.team)}» · ПЗ1 · {formatRequiredValue(summary.lineTitle)}
       </Text>
-      <Text>{pageNumber}</Text>
+      <Text>{section}</Text>
     </View>
   );
 }
@@ -279,18 +293,18 @@ function StationTable({ stations }: { stations: PdfStation[] }) {
     <View style={styles.table}>
       <View style={styles.tableHeaderRow}>
         <Text style={styles.stationLabelCell}>Станция</Text>
-        <Text style={styles.stationTypeCell}>Тип</Text>
-        <Text style={styles.stationNameCell}>Название</Text>
-        <Text style={styles.stationNameCell}>Регион</Text>
-        <Text style={styles.stationCoordCell}>Координаты</Text>
+        <Text style={[styles.stationTypeCell, styles.stationTypeWideCell]}>Тип</Text>
+        <Text style={[styles.stationNameCell, styles.stationNarrowCell]}>Название</Text>
+        <Text style={[styles.stationNameCell, styles.stationNarrowCell]}>Регион</Text>
+        <Text style={[styles.stationCoordCell, styles.stationNarrowCell]}>Координаты</Text>
       </View>
       {stations.map((station) => (
         <View key={station.label} style={styles.tableRow}>
           <Text style={styles.stationLabelCell}>{station.label}</Text>
-          <Text style={styles.stationTypeCell}>{formatStationType(station.type)}</Text>
-          <Text style={styles.stationNameCell}>{station.name}</Text>
-          <Text style={styles.stationNameCell}>{station.region ?? 'не выбран'}</Text>
-          <Text style={styles.stationCoordCell}>
+          <Text style={[styles.stationTypeCell, styles.stationTypeWideCell]}>{formatStationType(station.type)}</Text>
+          <Text style={[styles.stationNameCell, styles.stationNarrowCell]}>{station.name}</Text>
+          <Text style={[styles.stationNameCell, styles.stationNarrowCell]}>{station.region ?? 'не выбран'}</Text>
+          <Text style={[styles.stationCoordCell, styles.stationNarrowCell]}>
             {formatNumber(station.lat)}; {formatNumber(station.lng)}
           </Text>
         </View>
@@ -309,17 +323,17 @@ function RouteSegmentTable({ routeLine }: { routeLine?: RouteLine }) {
   return (
     <View style={styles.table}>
       <View style={styles.tableHeaderRow}>
-        <Text style={styles.stationLabelCell}>№</Text>
-        <Text style={styles.stationTypeCell}>Радиус между точками</Text>
-        <Text style={styles.stationNameCell}>Радиус</Text>
-        <Text style={styles.stationCoordCell}>Длина</Text>
+        <Text style={[styles.stationLabelCell, styles.segmentIndexCell]}>№</Text>
+        <Text style={[styles.stationTypeCell, styles.segmentWideCell]}>Радиус между точками</Text>
+        <Text style={[styles.stationNameCell, styles.segmentWideCell]}>Радиус</Text>
+        <Text style={[styles.stationCoordCell, styles.segmentWideCell]}>Длина</Text>
       </View>
       {metrics.segments.map((segment, index) => (
         <View key={segment.segmentId} style={styles.tableRow}>
-          <Text style={styles.stationLabelCell}>{index + 1}</Text>
-          <Text style={styles.stationTypeCell}>{formatMeters(routeLine.segments[index].sagittaKm * 1000)}</Text>
-          <Text style={styles.stationNameCell}>{segment.radiusKm ? formatKm(segment.radiusKm) : 'прямая вставка'}</Text>
-          <Text style={styles.stationCoordCell}>{formatKm(segment.arcLengthKm)}</Text>
+          <Text style={[styles.stationLabelCell, styles.segmentIndexCell]}>{index + 1}</Text>
+          <Text style={[styles.stationTypeCell, styles.segmentWideCell]}>{formatMeters(routeLine.segments[index].sagittaKm * 1000)}</Text>
+          <Text style={[styles.stationNameCell, styles.segmentWideCell]}>{segment.radiusKm ? formatKm(segment.radiusKm) : 'прямая вставка'}</Text>
+          <Text style={[styles.stationCoordCell, styles.segmentWideCell]}>{formatKm(segment.arcLengthKm)}</Text>
         </View>
       ))}
     </View>
@@ -336,15 +350,15 @@ function StationRouteDistanceTable({ distances }: { distances: StationRouteDista
       <Text style={styles.caption}>Таблица 1 — Расстояния между соседними станциями вдоль трассы</Text>
       <View style={styles.table}>
         <View style={styles.tableHeaderRow}>
-          <Text style={styles.stationTypeCell}>Участок</Text>
-          <Text style={styles.stationCoordCell}>Длина по трассе</Text>
+          <Text style={[styles.stationTypeCell, styles.halfCell]}>Участок</Text>
+          <Text style={[styles.stationCoordCell, styles.halfCell]}>Длина по трассе</Text>
         </View>
         {distances.map((distance) => (
           <View key={`${distance.fromLabel}-${distance.toLabel}`} style={styles.tableRow}>
-            <Text style={styles.stationTypeCell}>
+            <Text style={[styles.stationTypeCell, styles.halfCell]}>
               {distance.fromLabel} — {distance.toLabel}
             </Text>
-            <Text style={styles.stationCoordCell}>{formatKm(distance.distanceKm)}</Text>
+            <Text style={[styles.stationCoordCell, styles.halfCell]}>{formatKm(distance.distanceKm)}</Text>
           </View>
         ))}
       </View>
@@ -885,6 +899,10 @@ function formatDuration(totalMinutes: number) {
 }
 
 function formatStationType(type: PdfStation['type']) {
+  // Дефис обычный. Неразрывный U+2011 тут не годится: в подключённом наборе
+  // PT Serif у него нет глифа, и слово печаталось как «начальноконечная».
+  // Перенос по дефису (с удвоением) снят тем, что столбец «Тип» расширен до
+  // 25 % — слово помещается в строку целиком.
   return type === 'terminal' ? 'начально-конечная' : 'промежуточная';
 }
 
@@ -1011,6 +1029,26 @@ const styles = StyleSheet.create({
     borderRight: '1 solid #111111',
     padding: 4,
     width: '60%',
+  },
+  /* Ширины столбцов у таблиц с разным числом колонок: общие стили ячеек дают
+     в сумме 78 %, из-за чего подложка шапки уходила правее данных и правый
+     край таблицы выглядел рваным. */
+  halfCell: {
+    width: '50%',
+  },
+  /* «начально-конечная» — самая длинная подпись в таблице станций, ей нужен
+     столбец пошире, иначе слово переносится по дефису. 12+25+21+21+21 = 100 %. */
+  stationTypeWideCell: {
+    width: '25%',
+  },
+  stationNarrowCell: {
+    width: '21%',
+  },
+  segmentIndexCell: {
+    width: '10%',
+  },
+  segmentWideCell: {
+    width: '30%',
   },
   stationLabelCell: {
     borderBottom: '1 solid #111111',

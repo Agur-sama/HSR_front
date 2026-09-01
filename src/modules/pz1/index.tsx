@@ -2273,18 +2273,30 @@ function buildPassengerFlowChartRow(label: string, getValue: (modeId: TransportM
   return row;
 }
 
+const CHART_LEGEND_TEXT_X = 726;
+const CHART_LEGEND_FONT = '600 14px Raleway, Arial, sans-serif';
+
 function createPassengerFlowChartImage(forecast: Pz1PassengerFlowResult) {
   const canvas = document.createElement('canvas');
   const pixelRatio = window.devicePixelRatio || 1;
-  const width = 920;
   const height = 360;
-  canvas.width = width * pixelRatio;
-  canvas.height = height * pixelRatio;
 
   const context = canvas.getContext('2d');
   if (!context) {
     return undefined;
   }
+
+  // Ширину подбираем под самую длинную подпись легенды, а не берём круглым
+  // числом: «Поезд дальнего следования» не влезал в прежние 920 px и
+  // обрезался по правому краю картинки в PDF.
+  context.font = CHART_LEGEND_FONT;
+  const widestLabel = Math.max(
+    ...transportColumns.map((column) => context.measureText(column.label).width),
+  );
+  const width = Math.ceil(Math.max(920, CHART_LEGEND_TEXT_X + widestLabel + 24));
+
+  canvas.width = width * pixelRatio;
+  canvas.height = height * pixelRatio;
 
   context.scale(pixelRatio, pixelRatio);
   context.fillStyle = '#ffffff';
@@ -2355,13 +2367,13 @@ function createPassengerFlowChartImage(forecast: Pz1PassengerFlowResult) {
   });
 
   context.textAlign = 'left';
-  context.font = '600 14px Raleway, Arial, sans-serif';
+  context.font = CHART_LEGEND_FONT;
   transportColumns.forEach((column, index) => {
     const y = 84 + index * 36;
     context.fillStyle = passengerFlowChartColors[column.id];
     context.fillRect(700, y - 12, 16, 16);
     context.fillStyle = '#232323';
-    context.fillText(column.label, 726, y + 1);
+    context.fillText(column.label, CHART_LEGEND_TEXT_X, y + 1);
   });
 
   return canvas.toDataURL('image/png');

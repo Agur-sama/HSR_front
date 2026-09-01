@@ -1503,7 +1503,7 @@ input.is-invalid {
 
 .forecast-output-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
   gap: 14px;
   align-items: stretch;
 }
@@ -1515,9 +1515,22 @@ input.is-invalid {
   padding: 8px;
 }
 
-.forecast-result-table th,
-.forecast-result-table td {
+/* Числа не переносим — они должны читаться одной строкой. А вот название
+   вида транспорта переносить можно: «Поезд дальнего следования» в одну
+   строку съедал 124 px, из-за чего таблица не влезала рядом с диаграммой
+   и обрезалась справа. */
+.forecast-result-table td,
+.forecast-result-table thead th {
   white-space: nowrap;
+}
+
+.forecast-result-table tbody th {
+  white-space: normal;
+  min-width: 0;
+}
+
+.forecast-result-table thead th:first-child {
+  white-space: normal;
 }
 
 .correspondence-table {
