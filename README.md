@@ -80,7 +80,7 @@ docs/         — архитектура, дизайн-система, спец�
 
 Читать в этом порядке — так же, как это делает разработчик, впервые открывший проект:
 
-1. [`AGENTS.md`](./AGENTS.md) / [`CLAUDE.md`](./CLAUDE.md) — правила проекта и ограничения (файлы идентичны по содержимому)
+1. [`CONTRIBUTING.md`](./CONTRIBUTING.md) — правила проекта и ограничения
 2. [`docs/architecture.md`](./docs/architecture.md) — стек, состояние приложения, JSON-мост, ограничения iSpring, что запрещено и почему
 3. [`docs/design-system.md`](./docs/design-system.md) и [`docs/design-reference.html`](./docs/design-reference.html) — палитра и компоненты. Эталон — HTML-файл, его нужно открыть в браузере; дизайн по словесному описанию не воспроизводить
 4. [`docs/pz-specs.md`](./docs/pz-specs.md) — спецификации по каждому ПЗ
