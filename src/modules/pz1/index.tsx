@@ -88,6 +88,7 @@ import {
   validateRegionalCharacteristicField,
   validateRegionParameterField,
   validateStationField,
+  validatePassportTeam,
 } from './model';
 import type { Pz1StepId } from './model';
 import type { Pz1CorrespondenceDetailDraft, Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
@@ -200,7 +201,7 @@ function Pz1Workspace() {
     <ModuleShell
       intro={<IntroStep />}
       introComplete={isIntroComplete(draft)}
-      introCompletionHint="Заполните все поля, чтобы начать"
+      introCompletionHint="Впишите название команды, чтобы начать"
       onSaveDraft={() => jsonFileDraftStorage.save(createPz1Bridge(draft), `${fileSlug}-bridge.json`)}
       result={<ResultStep />}
       subtitle="Практическое задание № 1"
@@ -224,6 +225,7 @@ function keyStepsById(steps: Array<ModuleTaskStep & { id: Pz1StepId }>): Record<
 
 function IntroStep() {
   const { draft, replaceDraft, setImportedBridge, updateDraft } = useModuleState<Pz1Draft>();
+  const { markTouched, shouldShowError } = useTouchedFields();
   const [importError, setImportError] = useState('');
   const [importStatus, setImportStatus] = useState('');
   const selectedVariant = pz1Variants.find((variant) => variant.id === draft.selectedVariantId) ?? pz1Variants[0];
@@ -257,6 +259,12 @@ function IntroStep() {
     }
   }
 
+  // Ошибку показываем только после того, как поле побывало в фокусе, — пустая
+  // форма не должна встречать студента красным.
+  const teamError = shouldShowError('passport.team', draft.passport.team)
+    ? validatePassportTeam(draft.passport.team)
+    : null;
+
   return (
     <div className="intro-layout">
       <section className="form-section">
@@ -266,8 +274,11 @@ function IntroStep() {
           <label>
             <span>Название команды</span>
             <input
+              aria-invalid={teamError ? true : undefined}
+              className={teamError ? 'is-invalid' : undefined}
               maxLength={40}
               minLength={2}
+              onBlur={() => markTouched('passport.team')}
               onChange={(event) =>
                 updateDraft((currentDraft) => ({
                   ...currentDraft,
@@ -277,6 +288,7 @@ function IntroStep() {
               placeholder="напр. Юнит-3"
               value={draft.passport.team}
             />
+            {teamError ? <small className="field-error">{teamError}</small> : null}
           </label>
           <label>
             <span>Учебная группа</span>

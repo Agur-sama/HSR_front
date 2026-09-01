@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  validatePassportTeam,
   createInitialPz1Draft,
   createPz1Result,
   getPz1TaskStepCount,
@@ -241,6 +242,14 @@ describe('pz1 model', () => {
   it('счётчик шагов берётся из списка, а не зашит числом', () => {
     expect(getPz1TaskStepCount(createInitialPz1Draft())).toBe(pz1StepIds.length);
     expect(new Set(pz1StepIds).size).toBe(pz1StepIds.length);
+  });
+
+  it('название команды проверяется, учебная группа остаётся свободной (ТЗ v3.5 §3 П-01)', () => {
+    expect(validatePassportTeam('')).toBe('Впишите название команды');
+    expect(validatePassportTeam('  ')).toBe('Впишите название команды');
+    expect(validatePassportTeam('Ю')).toBe('Не короче 2 символов');
+    expect(validatePassportTeam('Ю'.repeat(41))).toBe('Не длиннее 40 символов');
+    expect(validatePassportTeam('Юнит-3')).toBeNull();
   });
 
   it('вместимость ВСМ существующая залочена на 0 и не даёт ошибку (ТЗ v3.6 T-3)', () => {

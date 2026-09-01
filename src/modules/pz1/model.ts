@@ -777,7 +777,10 @@ export function getPz1CorrespondenceScenarios(draft: Pz1Draft) {
         {} as NonNullable<Pz1Result['correspondenceScenarios']>[string]['discomfortAggregates'],
       ),
       frequency: detail.frequency,
-      fare: detail.fare,
+      // Стоимость личного авто считается, а не вводится: в отчёт должна уйти
+      // та же величина, что видит студент на экране, иначе в PDF на её месте
+      // остаётся «не заполнено».
+      fare: getEffectiveFareValues(draft, detail),
       otherParameters: getLegacyOtherParametersForCorrespondence(draft, detail),
       annualFlows,
       passengerFlowForecast: getPz1CorrespondencePassengerFlowForecast(draft, detail.pairKey) ?? undefined,
@@ -1050,6 +1053,30 @@ export type Pz1StepId = (typeof pz1StepIds)[number];
 export function getPz1TaskStepCount(draft: Pz1Draft) {
   void draft;
   return pz1StepIds.length;
+}
+
+/**
+ * Ошибка поля «Название команды» на интро.
+ *
+ * Возвращает null, когда всё в порядке. Поле «Учебная группа» тут намеренно
+ * не проверяется: по ТЗ v3.5 §3 П-01 оно свободное.
+ */
+export function validatePassportTeam(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return 'Впишите название команды';
+  }
+
+  if (trimmed.length < PASSPORT_LIMITS.team.min) {
+    return `Не короче ${PASSPORT_LIMITS.team.min} символов`;
+  }
+
+  if (trimmed.length > PASSPORT_LIMITS.team.max) {
+    return `Не длиннее ${PASSPORT_LIMITS.team.max} символов`;
+  }
+
+  return null;
 }
 
 export function isPassportComplete(draft: Pz1Draft) {
