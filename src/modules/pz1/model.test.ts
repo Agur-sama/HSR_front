@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  countFilledConsumerCells,
   validatePassportTeam,
   createInitialPz1Draft,
   createPz1Result,
@@ -226,6 +227,36 @@ describe('pz1 model', () => {
     expect(consumerProperties).toBeDefined();
     expect(consumerProperties?.['А-Г'].activeModes).not.toContain('airplane');
     expect(consumerProperties?.['А-Г'].activeModes).toContain('hSR');
+  });
+
+  it('счётчик заполненных ячеек смотрит в таблицы, которые заполняет студент', () => {
+    // Регресс: счёт шёл по correspondenceTables и discomfortMatrix — их заполнял
+    // экран «Потребительские свойства», которого в задании больше нет. В отчёте
+    // всегда стоял 0, сколько бы студент ни ввёл.
+    const draft = createInitialPz1Draft();
+    const [detail] = getSyncedCorrespondenceDetails(draft);
+    const before = countFilledConsumerCells(draft);
+
+    // Частота автобуса по умолчанию пустая — на ней и видно, следит ли счётчик
+    // за черновиком корреспонденции.
+    const withBusFrequency = (bus: { existing: string; forecast: string }) => ({
+      ...draft,
+      correspondenceDetails: {
+        ...draft.correspondenceDetails,
+        [detail.pairKey]: { ...detail, frequency: { ...detail.frequency, bus } },
+      },
+    });
+
+    expect(before).toBeGreaterThan(0);
+    expect(countFilledConsumerCells(withBusFrequency({ existing: '8', forecast: '10' }))).toBe(before + 2);
+    expect(countFilledConsumerCells(withBusFrequency({ existing: '8', forecast: '' }))).toBe(before + 1);
+  });
+
+  it('исключённый вид транспорта не идёт в счёт заполненных ячеек', () => {
+    const draft = createInitialPz1Draft();
+    const withoutBus = excludeTransportMode(draft, 'А-Г', 'bus');
+
+    expect(countFilledConsumerCells(withoutBus)).toBeLessThan(countFilledConsumerCells(draft));
   });
 
   it('«Прочие параметры» стоят раньше «Частоты и стоимости» (ТЗ v3.6 T-2)', () => {

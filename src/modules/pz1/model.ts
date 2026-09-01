@@ -596,12 +596,64 @@ export function syncCorrespondenceDetails(
   return details;
 }
 
+/**
+ * Сколько расчётных ячеек по корреспонденциям студент заполнил.
+ *
+ * Считается по `correspondenceDetails` — по тем самым таблицам, которые он
+ * видит на шагах 04…08. Раньше счёт шёл по `correspondenceTables` и
+ * `discomfortMatrix`: их заполнял отдельный экран «Потребительские свойства»,
+ * которого после перехода на компоновку «страница на тему» в задании нет.
+ * Писать в эти структуры стало некому, и в отчёте всегда стоял 0 — сколько бы
+ * студент ни ввёл.
+ *
+ * Исключённые из корреспонденции виды транспорта в счёт не идут: их ячейки
+ * студенту не показывают, и заполнить он их не может.
+ */
 export function countFilledConsumerCells(draft: Pz1Draft) {
-  const correspondenceCellCount = getSyncedCorrespondenceTables(draft)
-    .flatMap((table) => consumerRows.flatMap((row) => table.activeModes.map((modeId) => table.values[row.id]?.[modeId] ?? '')))
-    .filter((value) => value.trim().length > 0).length;
+  const isFilled = (value: string | undefined) => (value ?? '').trim().length > 0;
+  const countSplit = (value: SplitTransportValue | undefined) =>
+    (isFilled(value?.existing) ? 1 : 0) + (isFilled(value?.forecast) ? 1 : 0);
 
-  return correspondenceCellCount + countFilledDiscomfortCells(draft.discomfortMatrix);
+  return getSyncedCorrespondenceDetails(draft).reduce((total, detail) => {
+    const activeModes = getActiveTransportModes(draft, detail.pairKey);
+
+    const travelTimeCells = correspondenceTravelTimeRows.reduce(
+      (sum, row) => sum + activeModes.reduce((rowSum, modeId) => rowSum + countSplit(detail.travelTime[row.id]?.[modeId]), 0),
+      0,
+    );
+
+    const discomfortCells = discomfortRows.reduce(
+      (sum, row) =>
+        sum +
+        activeModes.reduce(
+          (rowSum, modeId) =>
+            rowSum +
+            (isFilled(detail.discomfortExisting.values[row.id]?.[modeId]) ? 1 : 0) +
+            (isFilled(detail.discomfortForecast.values[row.id]?.[modeId]) ? 1 : 0),
+          0,
+        ),
+      0,
+    );
+
+    const frequencyAndFareCells = activeModes.reduce(
+      (sum, modeId) => sum + countSplit(detail.frequency[modeId]) + countSplit(detail.fare[modeId]),
+      0,
+    );
+
+    const annualFlowCells = activeModes.reduce((sum, modeId) => {
+      const flow = detail.annualFlows[modeId];
+
+      return (
+        sum +
+        (isFilled(flow?.capacityExisting) ? 1 : 0) +
+        (isFilled(flow?.capacityForecast) ? 1 : 0) +
+        (isFilled(flow?.occupancyExisting) ? 1 : 0) +
+        (isFilled(flow?.occupancyForecast) ? 1 : 0)
+      );
+    }, 0);
+
+    return total + travelTimeCells + discomfortCells + frequencyAndFareCells + annualFlowCells;
+  }, 0);
 }
 
 export function getPz1PassengerFlowForecast(draft: Pz1Draft): Pz1PassengerFlowResult | null {

@@ -125,7 +125,7 @@ export function createPz1PdfSections(summary: Pz1PdfSummary): Pz1PdfSection[] {
     {
       title: '3. Заполнение расчётных таблиц',
       rows: [
-        ['Ячейки потребительских свойств', String(summary.filledConsumerCells)],
+        ['Заполнено ячеек по корреспонденциям', String(summary.filledConsumerCells)],
         ['Технико-экономические показатели', String(summary.filledIndicatorCount)],
       ],
     },
