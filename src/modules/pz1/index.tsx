@@ -23,9 +23,12 @@ import { jsonFileDraftStorage } from '../../bridge/storage';
 import { ModuleShell } from '../../shared/ui/ModuleShell';
 import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
 import { DataEntryTable } from '../../shared/ui/DataEntryTable';
+import { DurationInput } from '../../shared/ui/DurationInput';
+import { isDurationInvalid, parseDurationToMinutes } from '../../shared/lib/durationInput';
 import { FieldWithHint } from '../../shared/ui/FieldWithHint';
 import { GroupedNumberInput } from '../../shared/ui/GroupedNumberInput';
 import { reverseGeocodeRegion } from '../../shared/lib/reverseGeocode';
+import { useTouchedFields } from '../../shared/hooks/useTouchedFields';
 import { OsmStationMap } from './OsmStationMap';
 import {
   countFilledConsumerCells,
@@ -416,6 +419,7 @@ function StationsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const [activeStationLabel, setActiveStationLabel] = useState<Pz1StationDraft['label']>('А');
   const [resolvingRegionFor, setResolvingRegionFor] = useState<Pz1StationDraft['label'][]>([]);
+  const { markTouched, shouldShowError } = useTouchedFields();
   // Координаты, для которых регион уже определён. Пока станцию не двигали,
   // ключ совпадает и запроса нет — поэтому автозаполнение не затирает то, что
   // студент вписал руками, и не срабатывает на восстановлении из файла.
@@ -513,10 +517,16 @@ function StationsStep() {
         </datalist>
         {draft.stationDrafts.map((stationDraft) => {
           const isTerminal = stationDraft.type === 'terminal';
-          const nameError = validateStationField(stationDraft, 'name', duplicateStationNames);
-          const latError = validateStationField(stationDraft, 'lat');
-          const lngError = validateStationField(stationDraft, 'lng');
-          const regionError = validateStationField(stationDraft, 'region');
+          // Ошибку показываем, только если поле уже трогали или в нём что-то
+          // введено: пустая форма не должна встречать студента красным.
+          const fieldError = (field: 'name' | 'lat' | 'lng' | 'region') => {
+            const error = validateStationField(stationDraft, field, field === 'name' ? duplicateStationNames : undefined);
+            return shouldShowError(`${stationDraft.label}.${field}`, stationDraft[field]) ? error : null;
+          };
+          const nameError = fieldError('name');
+          const latError = fieldError('lat');
+          const lngError = fieldError('lng');
+          const regionError = fieldError('region');
 
           return (
             <fieldset
@@ -542,6 +552,7 @@ function StationsStep() {
                 <input
                   aria-invalid={nameError ? true : undefined}
                   className={nameError ? 'is-invalid' : undefined}
+                  onBlur={() => markTouched(`${stationDraft.label}.name`)}
                   onChange={(event) => updateStation(stationDraft.label, { name: event.target.value })}
                   value={stationDraft.name}
                 />
@@ -554,7 +565,8 @@ function StationsStep() {
                     aria-invalid={latError ? true : undefined}
                     className={latError ? 'is-invalid' : undefined}
                     inputMode="decimal"
-                    onChange={(event) => updateStation(stationDraft.label, { lat: event.target.value })}
+                    onBlur={() => markTouched(`${stationDraft.label}.lat`)}
+                  onChange={(event) => updateStation(stationDraft.label, { lat: event.target.value })}
                     value={stationDraft.lat}
                   />
                   {latError ? <small className="field-error">{latError}</small> : null}
@@ -565,7 +577,8 @@ function StationsStep() {
                     aria-invalid={lngError ? true : undefined}
                     className={lngError ? 'is-invalid' : undefined}
                     inputMode="decimal"
-                    onChange={(event) => updateStation(stationDraft.label, { lng: event.target.value })}
+                    onBlur={() => markTouched(`${stationDraft.label}.lng`)}
+                  onChange={(event) => updateStation(stationDraft.label, { lng: event.target.value })}
                     value={stationDraft.lng}
                   />
                   {lngError ? <small className="field-error">{lngError}</small> : null}
@@ -577,6 +590,7 @@ function StationsStep() {
                   aria-invalid={regionError ? true : undefined}
                   className={regionError ? 'is-invalid' : undefined}
                   list="russian-regions"
+                  onBlur={() => markTouched(`${stationDraft.label}.region`)}
                   onChange={(event) => updateStation(stationDraft.label, { region: event.target.value })}
                   value={stationDraft.region}
                 />
@@ -740,6 +754,7 @@ function HsrTravelTimeStep() {
 
 function RegionalCharacteristicsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const { markTouched, shouldShowError } = useTouchedFields();
   const regional = getPz1RegionalCharacteristics(draft);
   const stationRegions = getEnabledStationRegions(draft.stationDrafts);
 
@@ -823,7 +838,10 @@ function RegionalCharacteristicsStep() {
                       <th scope="row">{region}</th>
                       {regionalParameterFields.map((field) => {
                         const value = parameters[field.id];
-                        const error = validateRegionParameterField(field.id, value);
+                        const fieldKey = `${region}.${field.id}`;
+                        const error = shouldShowError(fieldKey, value)
+                          ? validateRegionParameterField(field.id, value)
+                          : null;
 
                         return (
                           <td key={field.id}>
@@ -831,6 +849,7 @@ function RegionalCharacteristicsStep() {
                               <GroupedNumberInput
                                 ariaLabel={`${region}: ${field.label}`}
                                 error={error}
+                                onBlur={() => markTouched(fieldKey)}
                                 onChange={(nextValue) => updateRegionParameter(region, field.id, nextValue)}
                                 value={value}
                               />
@@ -839,6 +858,7 @@ function RegionalCharacteristicsStep() {
                                 aria-invalid={error ? true : undefined}
                                 className={error ? 'is-invalid' : undefined}
                                 inputMode="decimal"
+                                onBlur={() => markTouched(fieldKey)}
                                 onChange={(event) => updateRegionParameter(region, field.id, event.target.value)}
                                 value={value}
                               />
@@ -853,11 +873,16 @@ function RegionalCharacteristicsStep() {
               </tbody>
             </table>
             <FieldWithHint
-              error={validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct)}
+              error={
+                shouldShowError('inducedDemandPct', regional.inducedDemandPct)
+                  ? validateRegionalCharacteristicField('inducedDemandPct', regional.inducedDemandPct)
+                  : null
+              }
               hint="%"
               id="regional-inducedDemandPct"
               inputMode="decimal"
               label="Прогнозируемый индуцированный спрос"
+              onBlur={() => markTouched('inducedDemandPct')}
               onChange={(value) => updateRegionalField('inducedDemandPct', value)}
               tooltip={INDUCED_DEMAND_TOOLTIP}
               value={regional.inducedDemandPct}
@@ -1154,6 +1179,7 @@ function CorrespondenceFareStep({ pairKey }: { pairKey: string }) {
 
 function StationOtherParametersStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const { markTouched, shouldShowError } = useTouchedFields();
   const enabledStations = draft.stationDrafts.filter((station) => station.enabled);
 
   function updateStationOtherParameter(stationLabel: Pz1StationDraft['label'], fieldId: string, value: string) {
@@ -1190,12 +1216,17 @@ function StationOtherParametersStep() {
 
               return (
                 <FieldWithHint
-                  error={validateOtherParameterField(row.id, value)}
+                  error={
+                    shouldShowError(`${station.label}.${row.id}`, value)
+                      ? validateOtherParameterField(row.id, value)
+                      : null
+                  }
                   hint={row.helper ?? ''}
                   id={`${station.label}-${row.id}`}
                   inputMode="decimal"
                   key={row.id}
                   label={row.label}
+                  onBlur={() => markTouched(`${station.label}.${row.id}`)}
                   onChange={(nextValue) => updateStationOtherParameter(station.label, row.id, nextValue)}
                   value={value}
                 />
@@ -1210,6 +1241,7 @@ function StationOtherParametersStep() {
 
 function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const { markTouched, shouldShowError } = useTouchedFields();
   const detail = getDetailOrNull(draft, pairKey);
   const scenario = getPz1CorrespondenceScenarios(draft)[pairKey];
 
@@ -1275,10 +1307,14 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
               const capacityExistingValue = annualFlow.capacityExisting ?? annualFlow.capacity;
               const capacityForecastValue = annualFlow.capacityForecast ?? annualFlow.capacity;
               const capacityExistingLocked = isAnnualFlowFieldLocked('capacityExisting', column.id);
-              const capacityExistingError = validateAnnualFlowField('capacityExisting', capacityExistingValue, column.id);
-              const capacityForecastError = validateAnnualFlowField('capacityForecast', capacityForecastValue, column.id);
-              const occupancyExistingError = validateAnnualFlowField('occupancyExisting', annualFlow.occupancyExisting, column.id);
-              const occupancyForecastError = validateAnnualFlowField('occupancyForecast', annualFlow.occupancyForecast, column.id);
+              const flowError = (fieldId: string, fieldValue: string) =>
+                shouldShowError(`${column.id}.${fieldId}`, fieldValue)
+                  ? validateAnnualFlowField(fieldId, fieldValue, column.id)
+                  : null;
+              const capacityExistingError = flowError('capacityExisting', capacityExistingValue);
+              const capacityForecastError = flowError('capacityForecast', capacityForecastValue);
+              const occupancyExistingError = flowError('occupancyExisting', annualFlow.occupancyExisting);
+              const occupancyForecastError = flowError('occupancyForecast', annualFlow.occupancyForecast);
 
               return (
                 <tr key={column.id}>
@@ -1288,6 +1324,7 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
                       aria-invalid={capacityExistingError ? true : undefined}
                       className={capacityExistingError ? 'is-invalid' : undefined}
                       inputMode="decimal"
+                      onBlur={() => markTouched(`${column.id}.capacityExisting`)}
                       onChange={(event) => updateAnnualFlow(column.id, 'capacityExisting', event.target.value)}
                       readOnly={capacityExistingLocked}
                       value={capacityExistingLocked ? '0' : capacityExistingValue}
@@ -1299,6 +1336,7 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
                       aria-invalid={capacityForecastError ? true : undefined}
                       className={capacityForecastError ? 'is-invalid' : undefined}
                       inputMode="decimal"
+                      onBlur={() => markTouched(`${column.id}.capacityForecast`)}
                       onChange={(event) => updateAnnualFlow(column.id, 'capacityForecast', event.target.value)}
                       value={capacityForecastValue}
                     />
@@ -1309,6 +1347,7 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
                       aria-invalid={occupancyExistingError ? true : undefined}
                       className={occupancyExistingError ? 'is-invalid' : undefined}
                       inputMode="decimal"
+                      onBlur={() => markTouched(`${column.id}.occupancyExisting`)}
                       onChange={(event) => updateAnnualFlow(column.id, 'occupancyExisting', event.target.value)}
                       value={annualFlow.occupancyExisting}
                     />
@@ -1319,6 +1358,7 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
                       aria-invalid={occupancyForecastError ? true : undefined}
                       className={occupancyForecastError ? 'is-invalid' : undefined}
                       inputMode="decimal"
+                      onBlur={() => markTouched(`${column.id}.occupancyForecast`)}
                       onChange={(event) => updateAnnualFlow(column.id, 'occupancyForecast', event.target.value)}
                       value={annualFlow.occupancyForecast}
                     />
@@ -1928,30 +1968,24 @@ function SplitModeTable({
               </th>
               {columns.map((column) => (
                 <td key={column.id}>
-                  <label className="split-input">
-                    <span>Сущ.</span>
-                    <input
-                      aria-invalid={isDurationInputInvalid(values[row.id][column.id].existing) ? true : undefined}
-                      className={isDurationInputInvalid(values[row.id][column.id].existing) ? 'is-invalid' : undefined}
-                      inputMode="numeric"
-                      onChange={(event) => onChange(row.id, column.id, 'existing', event.target.value)}
-                      readOnly={getReadOnly?.(row.id, column.id, 'existing')}
-                      value={values[row.id][column.id].existing}
-                    />
-                    {isDurationInputInvalid(values[row.id][column.id].existing) ? <small className="field-error">ЧЧ:ММ</small> : null}
-                  </label>
-                  <label className="split-input">
-                    <span>Прогн.</span>
-                    <input
-                      aria-invalid={isDurationInputInvalid(values[row.id][column.id].forecast) ? true : undefined}
-                      className={isDurationInputInvalid(values[row.id][column.id].forecast) ? 'is-invalid' : undefined}
-                      inputMode="numeric"
-                      onChange={(event) => onChange(row.id, column.id, 'forecast', event.target.value)}
-                      readOnly={getReadOnly?.(row.id, column.id, 'forecast')}
-                      value={values[row.id][column.id].forecast}
-                    />
-                    {isDurationInputInvalid(values[row.id][column.id].forecast) ? <small className="field-error">ЧЧ:ММ</small> : null}
-                  </label>
+                  {(['existing', 'forecast'] as const).map((side) => {
+                    const cellValue = values[row.id][column.id][side];
+                    const invalid = isDurationInvalid(cellValue);
+
+                    return (
+                      <label className="split-input" key={side}>
+                        <span>{side === 'existing' ? 'Сущ.' : 'Прогн.'}</span>
+                        <DurationInput
+                          ariaLabel={`${row.label}: ${column.label}, ${side === 'existing' ? 'существующее' : 'прогнозное'}`}
+                          invalid={invalid}
+                          onChange={(nextValue) => onChange(row.id, column.id, side, nextValue)}
+                          readOnly={getReadOnly?.(row.id, column.id, side)}
+                          value={cellValue}
+                        />
+                        {invalid ? <small className="field-error">ЧЧ:ММ</small> : null}
+                      </label>
+                    );
+                  })}
                 </td>
               ))}
             </tr>
@@ -2388,10 +2422,10 @@ function getForecastMissingFields(draft: Pz1Draft, pairKey: string) {
   const travelTime = scenario?.travelTime ?? detail.travelTime;
   for (const modeId of table.activeModes) {
     for (const row of correspondenceTravelTimeRows) {
-      if (parseDurationInput(travelTime[row.id][modeId].existing) === null) {
+      if (parseDurationToMinutes(travelTime[row.id][modeId].existing) === null) {
         missingFields.add(`Время в пути: ${row.label}, ${getTransportModeLabel(modeId)}, существующее`);
       }
-      if (parseDurationInput(travelTime[row.id][modeId].forecast) === null) {
+      if (parseDurationToMinutes(travelTime[row.id][modeId].forecast) === null) {
         missingFields.add(`Время в пути: ${row.label}, ${getTransportModeLabel(modeId)}, прогноз`);
       }
     }
@@ -2612,20 +2646,11 @@ function formatDurationTotal(
       return null;
     }
 
-    const minutes = parseDurationInput(values[row.id][modeId][side]);
+    const minutes = parseDurationToMinutes(values[row.id][modeId][side]);
     return minutes === null ? null : sum + minutes;
   }, 0);
 
   return totalMinutes === null ? '—' : formatDuration(totalMinutes);
-}
-
-function parseDurationInput(value: string) {
-  const match = /^(\d{1,2}):([0-5]\d)$/.exec(value.trim());
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
-}
-
-function isDurationInputInvalid(value: string) {
-  return value.trim().length > 0 && parseDurationInput(value) === null;
 }
 
 function isNonNegativeNumberInputInvalid(value: string) {

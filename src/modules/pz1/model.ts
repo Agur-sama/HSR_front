@@ -18,6 +18,7 @@ import type {
 } from '../../bridge/schema';
 import { createBridge } from '../../bridge/io';
 import { calculateCarTravelCost } from '../../shared/lib/carTravelCost';
+import { parseDurationToMinutes } from '../../shared/lib/durationInput';
 import { distributePassengerFlowByMode, forecastTotalDemand } from '../../shared/lib/passengerFlow';
 import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../shared/lib/passengerFlow';
 import { CAR_EXISTING_FLOW_MULTIPLIER, SERVICE_WINDOW_HOURS, passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
@@ -2561,16 +2562,6 @@ function parseNumericInput(value: string) {
 
   const parsed = Number(value.replace(/\s/g, '').replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseDurationToMinutes(value: string) {
-  const match = /^(\d{1,2}):([0-5]\d)$/.exec(value.trim());
-
-  if (!match) {
-    return null;
-  }
-
-  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 /**

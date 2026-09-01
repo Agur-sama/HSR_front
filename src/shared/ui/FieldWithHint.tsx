@@ -11,6 +11,7 @@ interface FieldWithHintProps {
   readOnly?: boolean;
   error?: string | null;
   inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
+  onBlur?: () => void;
   onChange: (value: string) => void;
 }
 
@@ -24,6 +25,7 @@ export function FieldWithHint({
   readOnly = false,
   error = null,
   inputMode,
+  onBlur,
   onChange,
 }: FieldWithHintProps) {
   return (
@@ -37,6 +39,7 @@ export function FieldWithHint({
         className={error ? 'is-invalid' : undefined}
         id={id}
         inputMode={inputMode}
+        onBlur={onBlur}
         onChange={(event) => onChange(event.target.value)}
         readOnly={readOnly}
         value={value}

@@ -9,6 +9,7 @@ interface GroupedNumberInputProps {
   className?: string;
   error?: string | null;
   id?: string;
+  onBlur?: () => void;
   readOnly?: boolean;
   style?: CSSProperties;
 }
@@ -28,6 +29,7 @@ export function GroupedNumberInput({
   className,
   error = null,
   id,
+  onBlur,
   readOnly = false,
   style,
 }: GroupedNumberInputProps) {
@@ -40,7 +42,10 @@ export function GroupedNumberInput({
       className={[error ? 'is-invalid' : '', className ?? ''].filter(Boolean).join(' ') || undefined}
       id={id}
       inputMode="decimal"
-      onBlur={() => setIsFocused(false)}
+      onBlur={() => {
+        setIsFocused(false);
+        onBlur?.();
+      }}
       onChange={(event) => onChange(stripGroupSeparators(event.target.value))}
       onFocus={() => setIsFocused(true)}
       readOnly={readOnly}
