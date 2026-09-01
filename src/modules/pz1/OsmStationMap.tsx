@@ -8,8 +8,6 @@ import type { RouteLineMetrics } from '../../shared/lib/routeGeometry';
 import { createRouteLine } from './model';
 import type { Pz1RoutePointDraft, Pz1StationDraft } from './types';
 
-const DEFAULT_CENTER: [number, number] = [34.8, 58.1];
-const DEFAULT_ZOOM = 6;
 const MIN_ZOOM = 4;
 const MAX_ZOOM = 19;
 const ROUTE_SOURCE_ID = 'vsm-route-source';
@@ -25,8 +23,9 @@ type MapMode = 'view' | 'station' | 'route';
 
 interface OsmStationMapProps {
   activeStationLabel: Pz1StationDraft['label'];
-  mapCenter?: [number, number];
-  mapZoom?: number;
+  /** Вид карты варианта: считается из координат его городов в variants.ts. */
+  mapCenter: [number, number];
+  mapZoom: number;
   onActiveStationChange: (label: Pz1StationDraft['label']) => void;
   onPreviewImageChange: (previewImage: string) => void;
   onRoutePointDraftsChange: (routePointDrafts: Pz1RoutePointDraft[]) => void;
@@ -43,8 +42,8 @@ interface ScreenPoint {
 
 export function OsmStationMap({
   activeStationLabel,
-  mapCenter = DEFAULT_CENTER,
-  mapZoom = DEFAULT_ZOOM,
+  mapCenter,
+  mapZoom,
   onActiveStationChange,
   onPreviewImageChange,
   onRoutePointDraftsChange,
@@ -386,7 +385,10 @@ export function OsmStationMap({
 
     const map = mapRef.current;
     if (!map || coordinates.length === 0) {
-      map?.flyTo({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
+      // Возвращаемся к виду своего варианта, а не к общей для всех точке:
+      // раньше здесь стояла константа под Великим Новгородом, и «Центр» на
+      // пустой карте уводил студента за тысячи километров от его городов.
+      map?.flyTo({ center: mapCenter, zoom: mapZoom });
       return;
     }
 
