@@ -660,12 +660,12 @@ function HsrTravelTimeStep() {
             <thead>
               <tr>
                 <th>Перегон</th>
-                <th>Километровая отметка</th>
-                <th>Расстояние, км</th>
-                <th>Средняя скорость, км/ч</th>
-                <th>Разгон, мин</th>
-                <th>Торможение, мин</th>
-                <th>Время, ЧЧ:ММ</th>
+                <th className="numeric">Километровая отметка</th>
+                <th className="numeric">Расстояние, км</th>
+                <th className="numeric">Средняя скорость, км/ч</th>
+                <th className="numeric">Разгон, мин</th>
+                <th className="numeric">Торможение, мин</th>
+                <th className="numeric">Время, ЧЧ:ММ</th>
               </tr>
             </thead>
             <tbody>
@@ -682,8 +682,10 @@ function HsrTravelTimeStep() {
                 return (
                   <tr key={pairKey}>
                     <th scope="row">{getCorrespondenceTitle(draft, distance.fromLabel, distance.toLabel)}</th>
-                    <td>{formatKm(cumulativeKm)}</td>
-                    <td>{formatPassengerFlowValue(distance.distanceKm)}</td>
+                    <td className="numeric">{formatKm(cumulativeKm)}</td>
+                    {/* Те же 2 знака, что и у километровой отметки рядом: одна
+                        величина не должна читаться с разной точностью. */}
+                    <td className="numeric">{formatKmValue(distance.distanceKm)}</td>
                     <td>
                       <input
                         aria-invalid={speedError ? true : undefined}
@@ -695,9 +697,11 @@ function HsrTravelTimeStep() {
                       {speedError ? <small className="field-error">{speedError}</small> : null}
                       {speedWarning ? <small className="field-warning">{speedWarning}</small> : null}
                     </td>
-                    <td>2</td>
-                    <td>1</td>
-                    <td>{travelTimeMinutes === null ? 'не рассчитано' : formatDuration(travelTimeMinutes)}</td>
+                    <td className="numeric">2</td>
+                    <td className="numeric">1</td>
+                    <td className="numeric">
+                      {travelTimeMinutes === null ? 'не рассчитано' : formatDuration(travelTimeMinutes)}
+                    </td>
                   </tr>
                 );
               })}
@@ -1255,14 +1259,14 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
           <thead>
             <tr>
               <th>Вид транспорта</th>
-              <th>Вместимость ТС существующая, пасс.</th>
-              <th>Вместимость ТС прогнозная, пасс.</th>
-              <th>Заполняемость существующая</th>
-              <th>Заполняемость прогнозная</th>
-              <th>Рейсов/сутки существующие</th>
-              <th>Рейсов/сутки прогноз</th>
-              <th>Поток существующий, пасс./год</th>
-              <th>Поток прогнозный, пасс./год</th>
+              <th className="numeric">Вместимость ТС существующая, пасс.</th>
+              <th className="numeric">Вместимость ТС прогнозная, пасс.</th>
+              <th className="numeric">Заполняемость существующая</th>
+              <th className="numeric">Заполняемость прогнозная</th>
+              <th className="numeric">Рейсов/сутки существующие</th>
+              <th className="numeric">Рейсов/сутки прогноз</th>
+              <th className="numeric">Поток существующий, пасс./год</th>
+              <th className="numeric">Поток прогнозный, пасс./год</th>
             </tr>
           </thead>
           <tbody>
@@ -1320,10 +1324,10 @@ function CorrespondenceAnnualFlowStep({ pairKey }: { pairKey: string }) {
                     />
                     {occupancyForecastError ? <small className="field-error">{occupancyForecastError}</small> : null}
                   </td>
-                  <td>{detail.frequency[column.id].existing || '—'}</td>
-                  <td>{detail.frequency[column.id].forecast || '—'}</td>
-                  <td>{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].existingAnnualFlow)}</td>
-                  <td>{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].forecastAnnualFlow)}</td>
+                  <td className="numeric">{detail.frequency[column.id].existing || '—'}</td>
+                  <td className="numeric">{detail.frequency[column.id].forecast || '—'}</td>
+                  <td className="numeric">{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].existingAnnualFlow)}</td>
+                  <td className="numeric">{formatOptionalPassengerFlowValue(scenario.annualFlows[column.id].forecastAnnualFlow)}</td>
                 </tr>
               );
             })}
@@ -2557,6 +2561,11 @@ function getDiscomfortInputStyle(value: string): CSSProperties | undefined {
   return {
     backgroundColor: `rgb(${mix.r}, ${mix.g}, ${mix.b})`,
   };
+}
+
+/** Километры без единицы измерения — для ячейки, где «км» уже в шапке. */
+function formatKmValue(value: number) {
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value);
 }
 
 function formatKm(value: number) {

@@ -418,13 +418,17 @@ button:focus-visible {
 .stations-step {
   display: grid;
   grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
-  /* Карта в колонке 2 занимает обе строки и выше содержимого колонки 1.
-     Без явной высоты строк её избыток раскладывается на обе строки, и блок
-     «Участки трассы» уезжает вниз, повисая по центру колонки (ТЗ v3.5 §3 П-02).
-     max-content по первой строке прижимает его к карточкам станций. */
-  grid-template-rows: max-content minmax(0, 1fr);
   gap: 22px;
   align-items: start;
+}
+
+/* Карта в колонке 2 занимает обе строки и выше содержимого колонки 1.
+   Без явной высоты строк её избыток раскладывается на обе строки, и блок
+   «Участки трассы» уезжает вниз, повисая по центру колонки (ТЗ v3.5 §3 П-02).
+   Правило только для экрана станций: интро и итог двух строк не имеют, и
+   раскладка строк им лишь мешала. */
+.stations-step {
+  grid-template-rows: max-content minmax(0, 1fr);
 }
 
 .form-section,
@@ -1215,7 +1219,11 @@ input.is-invalid {
   background: var(--danger-bg);
 }
 
-.compact-toggle {
+/* Специфичность важнее порядка: `.station-editor label` (0,1,1) перебивает
+   одиночный `.compact-toggle` (0,1,0) и превращает строку в сетку из двух
+   рядов — чекбокс уезжает над подписью. Поэтому селектор с родителем. */
+.compact-toggle,
+.station-editor .compact-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1411,6 +1419,25 @@ input.is-invalid {
 /* Единица измерения в заголовке строки — отдельной строкой, а не встык
    к подписи (ТЗ v3.5 §3 П-07: «…АЭРОПОРТАЧЧ:ММ»). Тот же приём, что уже
    применён в .data-entry small и .regional-parameter-table th small. */
+/* Числовые ячейки: вправо и табличными цифрами, чтобы разряды стояли
+   столбиком и колонку можно было читать взглядом сверху вниз. */
+.input-table th.numeric {
+  text-align: right;
+}
+
+.input-table td.numeric,
+.forecast-result-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.input-table td.numeric input,
+.input-table input[inputmode='decimal'],
+.input-table input[inputmode='numeric'] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .input-table th small {
   display: block;
   margin-top: 4px;
@@ -1532,9 +1559,18 @@ input.is-invalid {
 
 .data-entry__column-head {
   display: flex;
-  align-items: center;
+  /* По верхнему краю, а не по центру: у подписей разное число строк, и при
+     центрировании крестики исключения вставали на разной высоте. */
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* Шапки столбцов тоже по верхнему краю — иначе однострочные подписи висят
+   по центру относительно двухстрочных соседей. */
+.input-table thead th,
+.data-entry thead th {
+  vertical-align: top;
 }
 
 .data-entry__remove-column {
@@ -1592,6 +1628,12 @@ input.is-invalid {
   align-items: center;
   border-bottom: 1px solid var(--border);
   padding: 10px 0;
+}
+
+/* Под таблицей регионов поле не должно быть вдвое шире её ячеек —
+   ограничиваем по той же мерке, что и столбцы таблицы. */
+.regional-step .field-with-hint input {
+  max-width: 220px;
 }
 
 .field-with-hint__label {

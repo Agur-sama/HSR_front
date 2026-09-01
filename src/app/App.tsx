@@ -30,7 +30,6 @@ function ModuleNotFound({ requestedPz }: { requestedPz: PzNumber | null }) {
   return (
     <main className="module-shell module-shell--empty">
       <section className="empty-module">
-        <p className="eyebrow">Web Object ВСМ</p>
         <h1>Модуль не найден</h1>
         <p>
           Параметр <code>?pz=</code> сейчас равен: <strong>{label}</strong>. Доступны модули <code>?pz=1</code> и{' '}

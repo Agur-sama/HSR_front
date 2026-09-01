@@ -99,7 +99,6 @@ export function ModuleShell({
       {phase === 'intro' ? (
         <header className="module-topline">
           <div>
-            <p className="eyebrow">Web Object ВСМ</p>
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
