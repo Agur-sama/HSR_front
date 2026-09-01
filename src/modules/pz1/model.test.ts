@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   countFilledConsumerCells,
+  createPz1Bridge,
+  readPz1Position,
   isConsumerPropertiesComplete,
   validatePassportTeam,
   createInitialPz1Draft,
@@ -228,6 +230,37 @@ describe('pz1 model', () => {
     expect(consumerProperties).toBeDefined();
     expect(consumerProperties?.['А-Г'].activeModes).not.toContain('airplane');
     expect(consumerProperties?.['А-Г'].activeModes).toContain('hSR');
+  });
+
+  it('позиция шага в мосте адресуется стабильным id и переживает реордер (ФТ-23, ТЗ v3.6 T-2)', () => {
+    const draft = createInitialPz1Draft();
+    const bridge = createPz1Bridge(draft, { phase: 'task', stepId: 'station-other-parameters', theorySeen: true });
+
+    expect(bridge.position?.pz1?.stepId).toBe('station-other-parameters');
+    expect(readPz1Position(bridge)).toEqual({
+      phase: 'task',
+      stepIndex: pz1StepIds.indexOf('station-other-parameters'),
+      theorySeen: true,
+    });
+  });
+
+  it('файл без позиции и с незнакомым шагом открывается с интро, а не с чужого экрана', () => {
+    const draft = createInitialPz1Draft();
+
+    expect(readPz1Position(createPz1Bridge(draft))).toBeNull();
+    expect(readPz1Position(createPz1Bridge(draft, { phase: 'task', stepId: 'consumer-properties' }))).toBeNull();
+    expect(readPz1Position(createPz1Bridge(draft, { phase: 'intro', stepId: 'stations' }))).toBeNull();
+    expect(readPz1Position(null)).toBeNull();
+  });
+
+  it('сохранение на итоге возвращает на итог', () => {
+    const draft = createInitialPz1Draft();
+
+    expect(readPz1Position(createPz1Bridge(draft, { phase: 'result' }))).toEqual({
+      phase: 'result',
+      stepIndex: pz1StepIds.length - 1,
+      theorySeen: true,
+    });
   });
 
   it('признак заполненности потребительских свойств зависит от корреспонденций', () => {

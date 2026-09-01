@@ -37,21 +37,20 @@ export function ModuleShell({
   result,
   onSaveDraft,
 }: ModuleShellProps) {
-  const { phase, currentStepIndex, setPhase, setCurrentStepIndex } = useModuleState<unknown>();
+  const { phase, currentStepIndex, theorySeen, setPhase, setCurrentStepIndex, setTheorySeen } = useModuleState<unknown>();
   const [theoryOpen, setTheoryOpen] = useState(false);
-  const [theoryComplete, setTheoryComplete] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
   const activeTaskStep = taskSteps[currentStepIndex] ?? taskSteps[0];
   const activeTaskStepComplete = activeTaskStep?.isComplete ?? true;
   const canGoForward =
-    phase === 'intro' ? introComplete : phase === 'task' ? theoryComplete && activeTaskStepComplete : false;
+    phase === 'intro' ? introComplete : phase === 'task' ? theorySeen && activeTaskStepComplete : false;
   const progressHint = getProgressHint({
     activeTaskStep,
     activeTaskStepComplete,
     introComplete,
     introCompletionHint,
     phase,
-    theoryComplete,
+    theorySeen,
   });
 
   function goBack() {
@@ -78,9 +77,12 @@ export function ModuleShell({
     }
 
     if (phase === 'intro') {
+      // Шаг не сбрасываем на первый: сюда попадают и те, кто заглянул на интро
+      // с середины задания, и те, кто загрузил файл и возвращается на своё
+      // место. Раньше и тех и других отбрасывало на шаг 01.
       setPhase('task');
-      setCurrentStepIndex(0);
-      setTheoryOpen(true);
+      setCurrentStepIndex(Math.min(Math.max(currentStepIndex, 0), taskSteps.length - 1));
+      setTheoryOpen(!theorySeen);
       return;
     }
 
@@ -102,7 +104,7 @@ export function ModuleShell({
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
-          <ProgressRoute activePhase={phase} theoryComplete={theoryComplete} />
+          <ProgressRoute activePhase={phase} theoryComplete={theorySeen} />
         </header>
       ) : (
         <header className="module-workbar">
@@ -110,7 +112,7 @@ export function ModuleShell({
             <span className="eyebrow">Рабочее пространство</span>
             <strong>{title}</strong>
           </div>
-          <ProgressRoute activePhase={phase} theoryComplete={theoryComplete} />
+          <ProgressRoute activePhase={phase} theoryComplete={theorySeen} />
           {phase === 'task' ? (
             <button className="button button--ghost" onClick={() => setTheoryOpen(true)} type="button">
               Теория
@@ -162,7 +164,7 @@ export function ModuleShell({
       {phase === 'task' && theoryOpen ? (
         <TheoryOverlay
           onComplete={() => {
-            setTheoryComplete(true);
+            setTheorySeen(true);
             setTheoryOpen(false);
           }}
         >
@@ -215,20 +217,20 @@ function getProgressHint({
   introComplete,
   introCompletionHint,
   phase,
-  theoryComplete,
+  theorySeen,
 }: {
   activeTaskStep?: ModuleTaskStep;
   activeTaskStepComplete: boolean;
   introComplete: boolean;
   introCompletionHint: string;
   phase: ModulePhase;
-  theoryComplete: boolean;
+  theorySeen: boolean;
 }) {
   if (phase === 'intro') {
     return introComplete ? 'Паспорт готов, можно начать.' : introCompletionHint;
   }
 
-  if (!theoryComplete) {
+  if (!theorySeen) {
     return 'Откройте теорию и подтвердите переход к практике.';
   }
 

@@ -1,5 +1,6 @@
 import type {
   BridgeSchema,
+  ModulePosition,
   CorrespondenceTable,
   Passport,
   Pz1DiscomfortMatrix,
@@ -377,7 +378,7 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
   };
 }
 
-export function createPz1Bridge(draft: Pz1Draft): BridgeSchema {
+export function createPz1Bridge(draft: Pz1Draft, position?: ModulePosition): BridgeSchema {
   return createBridge(
     createPassport(draft),
     {
@@ -393,7 +394,35 @@ export function createPz1Bridge(draft: Pz1Draft): BridgeSchema {
         finalIndicators: isFinalIndicatorsComplete(draft),
       },
     },
+    position ? { pz1: position } : undefined,
   );
+}
+
+/**
+ * Куда открывать задание после загрузки файла.
+ *
+ * Шаг ищется по стабильному id, поэтому файл, сохранённый до реордера шагов,
+ * открывает тот же экран, а не тот же номер. Незнакомый id и файлы без позиции
+ * дают интро — как было до появления поля.
+ */
+export function readPz1Position(bridge: BridgeSchema | null | undefined) {
+  const position = bridge?.position?.pz1;
+
+  if (!position || position.phase === 'intro' || !position.phase) {
+    return null;
+  }
+
+  if (position.phase === 'result') {
+    return { phase: 'result' as const, stepIndex: pz1StepIds.length - 1, theorySeen: true };
+  }
+
+  const stepIndex = position.stepId ? pz1StepIds.indexOf(position.stepId as Pz1StepId) : -1;
+
+  if (stepIndex < 0) {
+    return null;
+  }
+
+  return { phase: 'task' as const, stepIndex, theorySeen: position.theorySeen ?? true };
 }
 
 export function createPz1Result(draft: Pz1Draft): Pz1Result {

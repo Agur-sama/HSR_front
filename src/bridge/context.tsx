@@ -7,10 +7,18 @@ export type ModulePhase = 'intro' | 'task' | 'result';
 export interface ModuleStateContextValue<TDraft> {
   phase: ModulePhase;
   currentStepIndex: number;
+  /**
+   * Показывали ли уже теорию. Живёт здесь, а не внутри ModuleShell, потому что
+   * это часть позиции студента: при восстановлении из файла нужно вернуть шаг
+   * вместе с признаком, что теорию он уже прошёл, — иначе «Далее» окажется
+   * заблокированной, а оверлей теории закрыт, и выйти будет некуда.
+   */
+  theorySeen: boolean;
   draft: TDraft;
   importedBridge: BridgeSchema | null;
   setPhase: (phase: ModulePhase) => void;
   setCurrentStepIndex: (index: number) => void;
+  setTheorySeen: (seen: boolean) => void;
   updateDraft: (updater: (draft: TDraft) => TDraft) => void;
   replaceDraft: (draft: TDraft) => void;
   setImportedBridge: (bridge: BridgeSchema | null) => void;
@@ -30,6 +38,7 @@ export function ModuleStateProvider<TDraft>({
 }: ModuleStateProviderProps<TDraft>) {
   const [phase, setPhase] = useState<ModulePhase>('intro');
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [theorySeen, setTheorySeen] = useState(false);
   const [draft, setDraft] = useState(initialDraft);
   const [importedBridge, setImportedBridge] = useState<BridgeSchema | null>(initialImportedBridge);
 
@@ -37,15 +46,17 @@ export function ModuleStateProvider<TDraft>({
     () => ({
       phase,
       currentStepIndex,
+      theorySeen,
       draft,
       importedBridge,
       setPhase,
       setCurrentStepIndex,
+      setTheorySeen,
       updateDraft: (updater) => setDraft((currentDraft) => updater(currentDraft)),
       replaceDraft: setDraft,
       setImportedBridge,
     }),
-    [currentStepIndex, draft, importedBridge, phase],
+    [currentStepIndex, draft, importedBridge, phase, theorySeen],
   );
 
   return <ModuleStateContext.Provider value={value as ModuleStateContextValue<unknown>}>{children}</ModuleStateContext.Provider>;

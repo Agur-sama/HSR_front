@@ -79,6 +79,7 @@ import {
   validateRegionalCharacteristicField,
   validateRegionParameterField,
   validateStationField,
+  readPz1Position,
   validatePassportTeam,
 } from './model';
 import type { Pz1StepId } from './model';
@@ -94,7 +95,7 @@ export function Pz1Module() {
 }
 
 function Pz1Workspace() {
-  const { draft } = useModuleState<Pz1Draft>();
+  const { currentStepIndex, draft, phase, theorySeen } = useModuleState<Pz1Draft>();
   const fileSlug = sanitizeFileName(draft.passport.lineTitle, 'pz1');
   const correspondenceDetails = getSyncedCorrespondenceDetails(draft);
   const hasCorrespondences = correspondenceDetails.length > 0;
@@ -193,7 +194,14 @@ function Pz1Workspace() {
       intro={<IntroStep />}
       introComplete={isIntroComplete(draft)}
       introCompletionHint="Впишите название команды, чтобы начать"
-      onSaveDraft={() => jsonFileDraftStorage.save(createPz1Bridge(draft), `${fileSlug}-bridge.json`)}
+      onSaveDraft={() =>
+        jsonFileDraftStorage.save(
+          // Позицию пишем стабильным id шага: файл, сохранённый до реордера,
+          // должен открывать тот же экран, а не тот же номер.
+          createPz1Bridge(draft, { phase, stepId: pz1StepIds[currentStepIndex], theorySeen }),
+          `${fileSlug}-bridge.json`,
+        )
+      }
       result={<ResultStep />}
       subtitle="Практическое задание № 1"
       taskSteps={taskSteps}
@@ -215,7 +223,8 @@ function keyStepsById(steps: Array<ModuleTaskStep & { id: Pz1StepId }>): Record<
 }
 
 function IntroStep() {
-  const { draft, replaceDraft, setImportedBridge, updateDraft } = useModuleState<Pz1Draft>();
+  const { draft, replaceDraft, setCurrentStepIndex, setImportedBridge, setTheorySeen, updateDraft } =
+    useModuleState<Pz1Draft>();
   const { markTouched, shouldShowError } = useTouchedFields();
   const [importError, setImportError] = useState('');
   const [importStatus, setImportStatus] = useState('');
@@ -227,6 +236,23 @@ function IntroStep() {
       setImportedBridge(bridge);
       replaceDraft({ ...createInitialPz1Draft(bridge), importedFileName: file.name });
       setImportError('');
+
+      // Возвращаем не только данные, но и место, на котором студент сохранился
+      // (ФТ-23). Файлы без позиции открываются с интро, как и раньше.
+      const position = readPz1Position(bridge);
+
+      if (position) {
+        // Фазу не переключаем: студент остаётся на интро, видит имя файла и сам
+        // нажимает «Начать» — молча телепортировать его в середину задания хуже,
+        // чем вернуть туда по его же действию.
+        setTheorySeen(position.theorySeen);
+        setCurrentStepIndex(position.stepIndex);
+        setImportStatus(
+          `Загружен файл: ${file.name}. «Начать» вернёт на шаг ${position.stepIndex + 1} из ${pz1StepIds.length}.`,
+        );
+        return;
+      }
+
       setImportStatus(`Загружен файл: ${file.name}`);
     } catch (error) {
       setImportStatus('');

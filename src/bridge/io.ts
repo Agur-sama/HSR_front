@@ -7,11 +7,13 @@ export function createBridge(
   passport: Passport,
   completed: BridgeSchema['completed'] = {},
   progress?: BridgeSchema['progress'],
+  position?: BridgeSchema['position'],
 ): BridgeSchema {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     passport,
     ...(progress ? { progress } : {}),
+    ...(position ? { position } : {}),
     completed,
   };
 }

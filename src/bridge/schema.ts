@@ -210,10 +210,25 @@ export interface Passport {
   createdAt: string;
 }
 
+/**
+ * Где студент остановился, когда сохранял файл.
+ *
+ * Шаг адресуется стабильным id, а не номером: порядок шагов уже менялся
+ * (ТЗ v3.6 T-2), и файл, сохранённый до реордера, не должен открывать чужой
+ * экран. Поле необязательное — файлы, сохранённые раньше, просто открываются
+ * с интро, как и открывались.
+ */
+export interface ModulePosition {
+  stepId?: string;
+  phase?: 'intro' | 'task' | 'result';
+  theorySeen?: boolean;
+}
+
 export interface BridgeSchema {
   schemaVersion: BridgeSchemaVersion;
   passport: Passport;
   progress?: Partial<Record<'pz1' | 'pz2' | 'pz3' | 'pz4' | 'pz5' | 'pz6' | 'pz7' | 'pz8', Record<string, boolean>>>;
+  position?: Partial<Record<'pz1' | 'pz2' | 'pz3' | 'pz4' | 'pz5' | 'pz6' | 'pz7' | 'pz8', ModulePosition>>;
   completed: Partial<{
     pz1: Pz1Result;
     pz2: Pz2Result;
