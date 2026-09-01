@@ -8,6 +8,7 @@ import { downloadTextFile } from '../bridge/io';
 import type { CorrespondenceTable, GeoPoint, Pz1PassengerFlowResult, Pz1Result, RouteLine, TransportModeId } from '../bridge/schema';
 import { correspondenceTravelTimeRows, consumerRows, discomfortRows, finalIndicators, transportColumns } from '../modules/pz1/model';
 import type { StationRouteDistance } from '../modules/pz1/model';
+import { formatGroupedNumber } from '../shared/lib/numberFormat';
 import { buildDisplayRoutePoints, computeRouteLineMetrics } from '../shared/lib/routeGeometry';
 
 const PAGE_SIZE = 'A4';
@@ -385,32 +386,36 @@ function HsrTravelTimeTable({ hsrTravelTime }: { hsrTravelTime?: Pz1Result['hsrT
       <Text style={styles.caption}>Таблица 2 — Время хода ВСМ по перегонам</Text>
       <View style={styles.table}>
         <View style={styles.tableHeaderRow}>
-          <Text style={styles.stationTypeCell}>Перегон</Text>
-          <Text style={styles.stationCoordCell}>Расстояние, км</Text>
-          <Text style={styles.stationCoordCell}>Скорость, км/ч</Text>
-          <Text style={styles.stationCoordCell}>Разгон, мин</Text>
-          <Text style={styles.stationCoordCell}>Торможение, мин</Text>
-          <Text style={styles.stationCoordCell}>Время</Text>
+          <Text style={[styles.stationTypeCell, styles.hsrSegmentCell]}>Перегон</Text>
+          <Text style={[styles.stationCoordCell, styles.hsrDistanceCell]}>Расстояние, км</Text>
+          <Text style={[styles.stationCoordCell, styles.hsrSpeedCell]}>Скорость, км/ч</Text>
+          <Text style={[styles.stationCoordCell, styles.hsrAccelCell]}>Разгон, мин</Text>
+          <Text style={[styles.stationCoordCell, styles.hsrBrakeCell]}>Торможение, мин</Text>
+          <Text style={[styles.stationCoordCell, styles.hsrTimeCell]}>Время</Text>
         </View>
         {hsrTravelTime.segments.map((segment) => (
           <View key={`${segment.fromLabel}-${segment.toLabel}`} style={styles.tableRow}>
-            <Text style={styles.stationTypeCell}>
+            <Text style={[styles.stationTypeCell, styles.hsrSegmentCell]}>
               {segment.fromLabel} — {segment.toLabel}
             </Text>
-            <Text style={styles.stationCoordCell}>{formatDistanceKm(segment.distanceKm)}</Text>
-            <Text style={styles.stationCoordCell}>{formatNumber(segment.speedKmh)}</Text>
-            <Text style={styles.stationCoordCell}>{formatNumber(hsrTravelTime.accelerationMinutes)}</Text>
-            <Text style={styles.stationCoordCell}>{formatNumber(hsrTravelTime.brakingMinutes)}</Text>
-            <Text style={styles.stationCoordCell}>{formatDuration(segment.travelTimeMinutes)}</Text>
+            <Text style={[styles.stationCoordCell, styles.hsrDistanceCell]}>{formatDistanceKm(segment.distanceKm)}</Text>
+            <Text style={[styles.stationCoordCell, styles.hsrSpeedCell]}>{formatNumber(segment.speedKmh)}</Text>
+            <Text style={[styles.stationCoordCell, styles.hsrAccelCell]}>{formatNumber(hsrTravelTime.accelerationMinutes)}</Text>
+            <Text style={[styles.stationCoordCell, styles.hsrBrakeCell]}>{formatNumber(hsrTravelTime.brakingMinutes)}</Text>
+            <Text style={[styles.stationCoordCell, styles.hsrTimeCell]}>{formatDuration(segment.travelTimeMinutes)}</Text>
           </View>
         ))}
         <View style={styles.tableHeaderRow}>
-          <Text style={styles.stationTypeCell}>Итого</Text>
-          <Text style={styles.stationCoordCell}>—</Text>
-          <Text style={styles.stationCoordCell}>—</Text>
-          <Text style={styles.stationCoordCell}>{formatDuration(hsrTravelTime.accelerationMinutes * hsrTravelTime.segments.length)}</Text>
-          <Text style={styles.stationCoordCell}>{formatDuration(hsrTravelTime.brakingMinutes * hsrTravelTime.segments.length)}</Text>
-          <Text style={styles.stationCoordCell}>{formatDuration(hsrTravelTime.totalMinutes)}</Text>
+          <Text style={[styles.stationTypeCell, styles.hsrSegmentCell]}>Итого</Text>
+          <Text style={[styles.stationCoordCell, styles.hsrDistanceCell]}>—</Text>
+          <Text style={[styles.stationCoordCell, styles.hsrSpeedCell]}>—</Text>
+          <Text style={[styles.stationCoordCell, styles.hsrAccelCell]}>
+            {formatDuration(hsrTravelTime.accelerationMinutes * hsrTravelTime.segments.length)}
+          </Text>
+          <Text style={[styles.stationCoordCell, styles.hsrBrakeCell]}>
+            {formatDuration(hsrTravelTime.brakingMinutes * hsrTravelTime.segments.length)}
+          </Text>
+          <Text style={[styles.stationCoordCell, styles.hsrTimeCell]}>{formatDuration(hsrTravelTime.totalMinutes)}</Text>
         </View>
       </View>
     </>
@@ -521,18 +526,20 @@ function CorrespondenceScenariosTable({ scenarios }: { scenarios: NonNullable<Pz
 
   return (
     <>
-      <Text style={styles.caption}>Таблица 4 — Расчёты по корреспонденциям</Text>
-      {scenarioList.map((scenario) => (
+      {scenarioList.map((scenario, scenarioIndex) => (
         <View key={scenario.pairKey} style={styles.compactTableBlock} wrap={false}>
+          {/* Подпись таблицы живёт внутри первого блока: снаружи она оставалась
+              внизу предыдущей страницы, а сама таблица уезжала на следующую. */}
+          {scenarioIndex === 0 ? <Text style={styles.caption}>Таблица 4 — Расчёты по корреспонденциям</Text> : null}
           <Text style={styles.compactTableTitle}>{scenario.title}</Text>
           <View style={styles.compactTable}>
             <View style={styles.compactHeaderRow}>
               <Text style={styles.flowModeCell}>Вид транспорта</Text>
-              <Text style={styles.modeCell}>Время, ЧЧ:ММ</Text>
+              <Text style={styles.modeCell}>Время в пути</Text>
               <Text style={styles.modeCell}>Дискомфорт</Text>
-              <Text style={styles.modeCell}>Рейсов/сутки</Text>
-              <Text style={styles.modeCell}>Руб./пасс.</Text>
-              <Text style={styles.modeCell}>Пасс./год</Text>
+              <Text style={styles.modeCell}>Рейсов в сутки</Text>
+              <Text style={styles.modeCell}>Стоимость, руб.</Text>
+              <Text style={styles.modeCell}>Пассажиров в год</Text>
             </View>
             {transportColumns.map((column) => (
               <View key={column.id} style={styles.tableRow}>
@@ -677,12 +684,16 @@ function PassengerFlowForecastReport({
 
   return (
     <View>
+      {/* Единица вынесена в подпись таблицы: длинные подписи строк движок
+          переносил внутри слова и рисовал на месте переноса дефис, которого
+          нет в кириллическом наборе PT Serif, — в отчёте выходил квадратик. */}
+      <Text style={styles.caption}>Итоги прогноза, пассажиров в год</Text>
       <KeyValueTable
         rows={[
-          ['Существующий рынок, пасс./год', formatInteger(forecast.totalDemand.existingAnnualFlow)],
-          ['Базовый прогноз, пасс./год', formatInteger(forecast.totalDemand.baseForecast)],
-          ['Индуцированный спрос, пасс./год', formatInteger(forecast.totalDemand.inducedDemand)],
-          ['Итоговый прогноз, пасс./год', formatInteger(forecast.totalDemand.totalForecast)],
+          ['Существующий рынок', formatInteger(forecast.totalDemand.existingAnnualFlow)],
+          ['Базовый прогноз', formatInteger(forecast.totalDemand.baseForecast)],
+          ['Индуцированный спрос', formatInteger(forecast.totalDemand.inducedDemand)],
+          ['Итоговый прогноз', formatInteger(forecast.totalDemand.totalForecast)],
         ]}
       />
       <Text style={styles.caption}>Таблица 3 — Распределение прогноза пассажиропотока по видам транспорта</Text>
@@ -837,8 +848,16 @@ function formatScenarioTravelTime(
   return totalMinutes === null ? 'не заполнено' : formatDuration(totalMinutes);
 }
 
+/**
+ * Пара «существующее / прогнозное» в узкой ячейке отчёта.
+ *
+ * Значения ставятся на разные строки, а не через косую черту: движок разметки
+ * переносит длинную строку по любому месту, включая неразрывный пробел внутри
+ * числа, и дописывает дефис — в отчёте выходило «970 900 / 970-» и «900»
+ * на следующей строке. Явный перенос убирает у него выбор.
+ */
 function formatSplitValue(existingValue: string, forecastValue: string) {
-  return `${existingValue} / ${forecastValue}`;
+  return `${existingValue}\n${forecastValue}`;
 }
 
 function formatOptionalInteger(value: number | undefined) {
@@ -854,9 +873,14 @@ function parseDurationToMinutes(value: string) {
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
 
+/**
+ * Значение, введённое студентом, — в отчёт в том же виде, в каком он видел его
+ * на экране: с разделением разрядов (ТЗ v3.5 §3 П-05). Раньше в PDF уходило
+ * сырое «14500000», хотя на экране стояло «14 500 000».
+ */
 function formatRequiredValue(value: string) {
   const trimmed = value.trim();
-  return trimmed || 'не заполнено';
+  return trimmed ? formatGroupedNumber(trimmed) : 'не заполнено';
 }
 
 function formatDate(value: string) {
@@ -1052,6 +1076,26 @@ const styles = StyleSheet.create({
   },
   stationNarrowCell: {
     width: '21%',
+  },
+  /* Таблица времени хода: шесть столбцов, общие стили дают в сумме 136 %,
+     из-за чего «Торможение, мин» наезжало на «Время». 16+17+16+15+20+16 = 100 %. */
+  hsrSegmentCell: {
+    width: '16%',
+  },
+  hsrDistanceCell: {
+    width: '17%',
+  },
+  hsrSpeedCell: {
+    width: '16%',
+  },
+  hsrAccelCell: {
+    width: '15%',
+  },
+  hsrBrakeCell: {
+    width: '20%',
+  },
+  hsrTimeCell: {
+    width: '16%',
   },
   segmentIndexCell: {
     width: '10%',
