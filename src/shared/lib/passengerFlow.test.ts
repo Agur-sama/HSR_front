@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { TransportModeId } from '../../bridge/schema';
 import { distributePassengerFlowByMode, forecastTotalDemand } from './passengerFlow';
-import { passengerFlowModeIds, passengerFlowModeWeights } from './passengerFlowWeights';
+import {
+  CAR_EXISTING_FLOW_MULTIPLIER,
+  SERVICE_WINDOW_HOURS,
+  passengerFlowModeIds,
+  passengerFlowModeWeights,
+  passengerFlowRetentionCoefficients,
+} from './passengerFlowWeights';
 
 const expectedForecastByMode: Record<TransportModeId, number> = {
   hSR: 1_588_309,
@@ -73,6 +79,86 @@ describe('passenger flow forecast', () => {
     for (const mode of result.modes) {
       expect(Math.round(mode.forecastAnnualFlow)).toBe(expectedForecastByMode[mode.modeId]);
     }
+  });
+
+  it('коэффициенты удержания заданы заказчиком, а не выведены из весов', () => {
+    expect(passengerFlowRetentionCoefficients).toEqual({
+      hSR: 0,
+      airplane: 0.7,
+      bus: 0.7,
+      suburbanTrain: 0.6,
+      longDistanceTrain: 0.4,
+      car: 0.5,
+    });
+
+    // Прежняя реконструкция 1 − max(вес) давала эти числа лишь у двух видов
+    // из шести — фиксируем расхождение, чтобы её не вернули «как было».
+    const reconstructed = (modeId: TransportModeId) => {
+      const weights = passengerFlowModeWeights[modeId];
+      return 1 - Math.max(weights.time, weights.price, weights.comfort);
+    };
+    const matching = passengerFlowModeIds.filter(
+      (modeId) => Math.abs(reconstructed(modeId) - passengerFlowRetentionCoefficients[modeId]) < 1e-9,
+    );
+
+    expect(matching).toEqual(['suburbanTrain', 'car']);
+  });
+
+  it('константы наполняемости авто и периода обслуживания', () => {
+    expect(CAR_EXISTING_FLOW_MULTIPLIER).toBe(1.3);
+    expect(SERVICE_WINDOW_HOURS).toBe(18);
+  });
+
+  it('индуцированный спрос уходит целиком ВСМ, остальным ноль', () => {
+    const result = distributePassengerFlowByMode({
+      existingAnnualFlow: 500_000,
+      baseForecast: 600_000,
+      inducedDemand: 100_000,
+      hsrTravelTimeHours: 2,
+      modes: passengerFlowModeIds.map((modeId) => ({
+        modeId,
+        existingAnnualFlow: modeId === 'hSR' ? 0 : 100_000,
+        travelTimeHours: 4,
+        waitingTimeHours: 1,
+        totalTransportCost: 2_000,
+        existingTravelTimeHours: 5,
+      })),
+    });
+
+    const hsr = result.modes.find((mode) => mode.modeId === 'hSR');
+
+    expect(hsr?.inducedCapture).toBeCloseTo(100_000, 6);
+    for (const mode of result.modes) {
+      if (mode.modeId !== 'hSR') {
+        expect(mode.inducedCapture).toBe(0);
+      }
+    }
+    expect(result.inducedTotal).toBeCloseTo(100_000, 6);
+  });
+
+  it('удержание уровня 1 считается по коэффициенту заказчика', () => {
+    const existingAnnualFlow = 1_000_000;
+    const baseForecast = 2_000_000;
+    const result = distributePassengerFlowByMode({
+      existingAnnualFlow,
+      baseForecast,
+      inducedDemand: 0,
+      hsrTravelTimeHours: 2,
+      modes: passengerFlowModeIds.map((modeId) => ({
+        modeId,
+        // Весь существующий поток у автобуса, чтобы проверить коэффициент точно.
+        existingAnnualFlow: modeId === 'bus' ? existingAnnualFlow : 0,
+        travelTimeHours: 4,
+        waitingTimeHours: 1,
+        totalTransportCost: 2_000,
+        existingTravelTimeHours: 5,
+      })),
+    });
+
+    const bus = result.modes.find((mode) => mode.modeId === 'bus');
+
+    // доля 1,0 × коэффициент автобуса 0,7 × базовый прогноз
+    expect(bus?.directCapture).toBeCloseTo(baseForecast * 0.7, 6);
   });
 
   it('исключённый вид даёт нули и остаётся строкой результата (ТЗ v3.6 T-1)', () => {

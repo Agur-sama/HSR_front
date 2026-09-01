@@ -1,5 +1,5 @@
 import type { TransportModeId } from '../../bridge/schema';
-import { passengerFlowModeWeights } from './passengerFlowWeights';
+import { passengerFlowModeWeights, passengerFlowRetentionCoefficients } from './passengerFlowWeights';
 
 const EPSILON = 1e-9;
 
@@ -139,8 +139,9 @@ export function distributePassengerFlowByMode(
 
   const directRows = input.modes.map((mode) => {
     assertKnownMode(mode.modeId);
-    const weights = passengerFlowModeWeights[mode.modeId];
-    const penalty = Math.max(weights.time, weights.price, weights.comfort);
+    // Уровень 1: доля существующего потока вида, которая за ним остаётся.
+    // Коэффициент задан заказчиком явно, а не выведен из таблицы весов.
+    const penalty = 1 - passengerFlowRetentionCoefficients[mode.modeId];
 
     // Исключённый вид не проверяем на положительность стоимости и времени:
     // его поля студент не заполнял, они нулевые, и это законное состояние.
@@ -183,10 +184,10 @@ export function distributePassengerFlowByMode(
     directRows.map((row) => row.impedance),
     directRows.map((row) => row.mode.excluded === true),
   );
-  const inducedWeights =
-    input.inducedDemand > EPSILON
-      ? normalizePositiveValues(directRows.map((row) => row.timeSavingHours), 'time savings')
-      : directRows.map(() => 0);
+  // Уровень 3: индуцированный спрос целиком уходит ВСМ. Дословно из документа
+  // заказчика: «для остальных видов транспорта уровень 3 = 0». Раньше он
+  // распределялся между всеми видами пропорционально экономии времени.
+  const inducedWeights = directRows.map((row) => (row.mode.modeId === 'hSR' && !row.mode.excluded ? 1 : 0));
 
   const modes = directRows.map((row, index): PassengerFlowModeForecast => {
     const gravityWeight = gravityWeights[index];
@@ -254,14 +255,6 @@ function normalizeInverseValues(values: number[], excludedFlags: boolean[]) {
   });
 
   return normalizeBySum(inverseValues, 'inverse impedance');
-}
-
-function normalizePositiveValues(values: number[], label: string) {
-  for (const value of values) {
-    assertNonNegative(value, label);
-  }
-
-  return normalizeBySum(values, label);
 }
 
 function normalizeBySum(values: number[], label: string) {

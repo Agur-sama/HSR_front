@@ -20,7 +20,7 @@ import { createBridge } from '../../bridge/io';
 import { calculateCarTravelCost } from '../../shared/lib/carTravelCost';
 import { distributePassengerFlowByMode, forecastTotalDemand } from '../../shared/lib/passengerFlow';
 import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../shared/lib/passengerFlow';
-import { passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
+import { CAR_EXISTING_FLOW_MULTIPLIER, SERVICE_WINDOW_HOURS, passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
 import { buildDisplayRoutePoints, buildRoutePointsBySegment, computeArcMetrics, computeRouteLineMetrics, computeSagittaFromRadius, haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import type { DataEntryColumn, DataEntryRow } from '../../shared/ui/DataEntryTable';
 import type {
@@ -819,8 +819,10 @@ export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairK
       return modes;
     }
 
+    // Существующий поток авто считается не по рейсам, а от суммы остальных
+    // видов — он подставляется вторым проходом ниже.
     const existingAnnualFlow =
-      modeId === HSR_MODE_ID
+      modeId === HSR_MODE_ID || modeId === CAR_MODE_ID
         ? 0
         : calculateAnnualFlow(
             detail.annualFlows[modeId].capacityExisting ?? detail.annualFlows[modeId].capacity,
@@ -853,7 +855,7 @@ export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairK
       modeId,
       existingAnnualFlow,
       travelTimeHours: forecastTravelTimeHours,
-      waitingTimeHours: 0,
+      waitingTimeHours: getWaitingTimeHours(detail, modeId),
       totalTransportCost,
       existingTravelTimeHours,
     });
@@ -863,6 +865,18 @@ export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairK
 
   if (!modeInputs) {
     return null;
+  }
+
+  // Поток личного авто — сумма потоков остальных видов, умноженная на
+  // наполняемость (документ заказчика «Расчет модели»). Поэтому он считается
+  // вторым проходом: на первом остальные виды уже посчитаны.
+  const flowWithoutCar = modeInputs.reduce(
+    (sum, mode) => (mode.modeId === CAR_MODE_ID ? sum : sum + mode.existingAnnualFlow),
+    0,
+  );
+  const carInput = modeInputs.find((mode) => mode.modeId === CAR_MODE_ID);
+  if (carInput && !carInput.excluded) {
+    carInput.existingAnnualFlow = flowWithoutCar * CAR_EXISTING_FLOW_MULTIPLIER;
   }
 
   const existingAnnualFlow = modeInputs.reduce((sum, mode) => sum + mode.existingAnnualFlow, 0);
@@ -2233,19 +2247,43 @@ function getTotalTransportCost(
     // Городские тарифы к авто не прибавляются — поездка идёт от двери до
     // двери, городским транспортом человек не пользуется.
     const carCost = getCarForecastFare(draft, detail);
+    const discomfortSurcharge = discomfortAggregate ?? 0;
 
     if (carCost !== null) {
-      return carCost + timeCost;
+      // Та же структура k3, что и у остальных видов: стоимость, время и
+      // надбавка на дискомфорт от стоимости.
+      return carCost + timeCost + carCost * discomfortSurcharge;
     }
 
-    return fare === null ? null : fare + timeCost;
+    return fare === null ? null : fare + timeCost + fare * discomfortSurcharge;
   }
 
   if (fare === null || cityFareOrigin === null || cityFareDestination === null) {
     return null;
   }
 
-  return fare + cityFareOrigin + cityFareDestination + timeCost;
+  // k3 = k3_1 + k3_2 × k3_3 из документа заказчика: к сумме «стоимость плюс
+  // время» добавляется ещё стоимость, взвешенная коэффициентом дискомфорта.
+  const totalFare = fare + cityFareOrigin + cityFareDestination;
+
+  return totalFare + timeCost + totalFare * (discomfortAggregate ?? 0);
+}
+
+/**
+ * Среднее время ожидания отправления: период обслуживания, делённый на частоту
+ * сообщения (документ заказчика, k2 = 18 / частота / 24 — деление на 24 там
+ * переводит в сутки, у нас величина хранится в часах).
+ *
+ * У личного автомобиля ожидания нет — сел и поехал.
+ */
+function getWaitingTimeHours(detail: Pz1CorrespondenceDetailDraft, modeId: TransportModeId) {
+  if (modeId === CAR_MODE_ID) {
+    return 0;
+  }
+
+  const frequency = parseNumericInput(detail.frequency[modeId].forecast);
+
+  return frequency !== null && frequency > 0 ? SERVICE_WINDOW_HOURS / frequency : 0;
 }
 
 function getTravelTimeMonetaryCost(
@@ -2262,7 +2300,9 @@ function getTravelTimeMonetaryCost(
     return null;
   }
 
-  return hourlyWage * travelTimeHours * (1 + discomfortAggregate) * frequencyFactor;
+  // Дискомфорт входит множителем (сумма коэффициентов / 8), а не как (1 + …):
+  // так задано в документе заказчика, k3_1_2.
+  return hourlyWage * travelTimeHours * discomfortAggregate * frequencyFactor;
 }
 
 function getAverageHourlyWageForCorrespondence(draft: Pz1Draft, detail: Pz1CorrespondenceDetailDraft) {

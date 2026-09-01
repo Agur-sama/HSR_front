@@ -430,6 +430,67 @@ describe('pz1 model', () => {
     expect(carExpensive?.forecastShare ?? 1).toBeLessThan(carByDefault?.forecastShare ?? 0);
   });
 
+  it('существующий поток авто = сумма остальных × 1,3 (документ заказчика)', () => {
+    const draft = createInitialPz1Draft();
+    draft.stationDrafts[0] = { ...draft.stationDrafts[0], name: 'А', region: 'Москва', lat: '55.7558', lng: '37.6173' };
+    draft.stationDrafts[3] = { ...draft.stationDrafts[3], name: 'Г', region: 'Ярославская область', lat: '57.6261', lng: '39.8845' };
+    draft.routePointDrafts = [
+      { id: 'p1', lat: '55.7558', lng: '37.6173', sagittaToNextKm: '0' },
+      { id: 'p2', lat: '57.6261', lng: '39.8845', sagittaToNextKm: '0' },
+    ];
+    draft.hsrTravelTimes = { 'А-Г': { speedKmh: '300' } };
+    const regionParameters = {
+      grpExisting: '1000000',
+      grpForecast: '1200000',
+      populationExisting: '12000',
+      populationForecast: '12500',
+      averageSalary: '90000',
+      kGdpFlow: '0,9',
+    };
+    draft.regionalCharacteristics = {
+      ...draft.regionalCharacteristics,
+      regionA: 'Москва',
+      regionB: 'Ярославская область',
+      inducedDemandPct: '35',
+      regionParameters: { 'Москва': regionParameters, 'Ярославская область': regionParameters },
+    };
+
+    const detail = { ...getSyncedCorrespondenceDetails(draft)[0] };
+    for (const row of correspondenceTravelTimeRows) {
+      for (const column of transportColumns) {
+        detail.travelTime[row.id][column.id] = { existing: '1:00', forecast: '1:00' };
+      }
+    }
+    for (const column of transportColumns) {
+      detail.frequency[column.id] = { existing: '6', forecast: '6' };
+      detail.fare[column.id] = { existing: '2500', forecast: '2500' };
+      detail.annualFlows[column.id] = {
+        capacity: '300',
+        capacityExisting: '300',
+        capacityForecast: '300',
+        occupancyExisting: '0,8',
+        occupancyForecast: '0,8',
+      };
+    }
+    detail.fare.hSR = { existing: '0', forecast: '2500' };
+    detail.annualFlows.hSR = { ...detail.annualFlows.hSR, capacityExisting: '0' };
+    draft.correspondenceDetails = { 'А-Г': detail };
+
+    const forecast = getPz1CorrespondencePassengerFlowForecast(draft, 'А-Г');
+    expect(forecast).not.toBeNull();
+
+    const modes = forecast!.modes;
+    const car = modes.find((mode) => mode.modeId === 'car')!;
+    const others = modes
+      .filter((mode) => mode.modeId !== 'car')
+      .reduce((sum, mode) => sum + mode.existingAnnualFlow, 0);
+
+    expect(others).toBeGreaterThan(0);
+    expect(car.existingAnnualFlow).toBeCloseTo(others * 1.3, 3);
+    // У ВСМ существующего потока нет.
+    expect(modes.find((mode) => mode.modeId === 'hSR')!.existingAnnualFlow).toBe(0);
+  });
+
   it('validates consumer properties by metric rules', () => {
     expect(validateDiscomfortCell('1,2')).toBe('Значение должно быть в диапазоне от 0 до 1');
     expect(validateConsumerCell('dailyFrequency', '-1')).toBe('Значение не может быть отрицательным');
