@@ -19,7 +19,7 @@ import type {
 } from '../../bridge/schema';
 import { createBridge } from '../../bridge/io';
 import { calculateCarTravelCost } from '../../shared/lib/carTravelCost';
-import { parseDurationToMinutes } from '../../shared/lib/durationInput';
+import { isDurationInvalid, parseDurationToMinutes } from '../../shared/lib/durationInput';
 import { distributePassengerFlowByMode, forecastTotalDemand } from '../../shared/lib/passengerFlow';
 import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../shared/lib/passengerFlow';
 import { CAR_EXISTING_FLOW_MULTIPLIER, SERVICE_WINDOW_HOURS, passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
@@ -1327,14 +1327,38 @@ export function validateAnnualFlowField(fieldId: string, value: string, modeId?:
   return parsed > 0 ? null : 'Значение должно быть больше 0';
 }
 
+/**
+ * Заполнены ли потребительские свойства по всем корреспонденциям.
+ *
+ * Смотрит `correspondenceDetails` — таблицы шагов 04 и 05, которые студент
+ * заполняет сейчас. Раньше проверялись `correspondenceTables` и
+ * `discomfortMatrix` от экрана «Потребительские свойства», которого в задании
+ * больше нет: писать в них стало некому, пустая ячейка проверку не проходит,
+ * и в сохранённом мосте `progress.pz1.consumerProperties` стоял false при
+ * любой заполненной работе.
+ */
 export function isConsumerPropertiesComplete(draft: Pz1Draft) {
-  const correspondenceTablesComplete = getSyncedCorrespondenceTables(draft).every((table) =>
-    consumerRows.every((row) =>
-      table.activeModes.every((modeId) => validateConsumerCell(row.id, table.values[row.id]?.[modeId] ?? '') === null),
-    ),
-  );
+  return getSyncedCorrespondenceDetails(draft).every((detail) => {
+    const activeModes = getActiveTransportModes(draft, detail.pairKey);
 
-  return correspondenceTablesComplete && isDiscomfortMatrixComplete(draft.discomfortMatrix);
+    const travelTimeComplete = correspondenceTravelTimeRows.every((row) =>
+      activeModes.every((modeId) => {
+        const cell = detail.travelTime[row.id]?.[modeId];
+
+        return !isDurationInvalid(cell?.existing ?? '') && !isDurationInvalid(cell?.forecast ?? '');
+      }),
+    );
+
+    const discomfortComplete = discomfortRows.every((row) =>
+      activeModes.every(
+        (modeId) =>
+          validateDiscomfortCell(detail.discomfortExisting.values[row.id]?.[modeId] ?? '') === null &&
+          validateDiscomfortCell(detail.discomfortForecast.values[row.id]?.[modeId] ?? '') === null,
+      ),
+    );
+
+    return travelTimeComplete && discomfortComplete;
+  });
 }
 
 export function isFinalIndicatorsComplete(draft: Pz1Draft) {
@@ -2505,12 +2529,6 @@ function mergeDiscomfortMatrix(
       return rowMap;
     }, {}),
   };
-}
-
-function isDiscomfortMatrixComplete(matrix: Pz1DiscomfortMatrix) {
-  return discomfortRows.every((row) =>
-    transportColumns.every((column) => validateDiscomfortCell(matrix.values[row.id]?.[column.id] ?? '') === null),
-  );
 }
 
 function createEmptyConsumerValues() {

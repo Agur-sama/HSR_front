@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   countFilledConsumerCells,
+  isConsumerPropertiesComplete,
   validatePassportTeam,
   createInitialPz1Draft,
   createPz1Result,
@@ -227,6 +228,50 @@ describe('pz1 model', () => {
     expect(consumerProperties).toBeDefined();
     expect(consumerProperties?.['А-Г'].activeModes).not.toContain('airplane');
     expect(consumerProperties?.['А-Г'].activeModes).toContain('hSR');
+  });
+
+  it('признак заполненности потребительских свойств зависит от корреспонденций', () => {
+    // Регресс: проверялись correspondenceTables и discomfortMatrix от экрана,
+    // которого больше нет, и в мосте всегда лежал false.
+    const draft = createInitialPz1Draft();
+    const [detail] = getSyncedCorrespondenceDetails(draft);
+
+    const filled = {
+      ...draft,
+      correspondenceDetails: {
+        ...draft.correspondenceDetails,
+        [detail.pairKey]: {
+          ...detail,
+          travelTime: Object.fromEntries(
+            correspondenceTravelTimeRows.map((row) => [
+              row.id,
+              Object.fromEntries(transportColumns.map((column) => [column.id, { existing: '00:40', forecast: '00:40' }])),
+            ]),
+          ) as typeof detail.travelTime,
+        },
+      },
+    };
+
+    expect(isConsumerPropertiesComplete(filled)).toBe(true);
+
+    const broken = {
+      ...filled,
+      correspondenceDetails: {
+        ...filled.correspondenceDetails,
+        [detail.pairKey]: {
+          ...filled.correspondenceDetails[detail.pairKey],
+          travelTime: {
+            ...filled.correspondenceDetails[detail.pairKey].travelTime,
+            cleanTravel: {
+              ...filled.correspondenceDetails[detail.pairKey].travelTime.cleanTravel,
+              bus: { existing: '01:99', forecast: '00:40' },
+            },
+          },
+        },
+      },
+    };
+
+    expect(isConsumerPropertiesComplete(broken)).toBe(false);
   });
 
   it('счётчик заполненных ячеек смотрит в таблицы, которые заполняет студент', () => {
