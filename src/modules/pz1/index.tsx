@@ -11,8 +11,6 @@ import {
   YAxis,
 } from 'recharts';
 import type {
-  Pz1PassengerFlowModeInputs,
-  Pz1PassengerFlowRegionalInputs,
   Pz1PassengerFlowResult,
   Pz1RegionalCharacteristicInputs,
   Pz1RegionalParameterInputs,
@@ -22,7 +20,6 @@ import { ModuleStateProvider, useModuleState } from '../../bridge/context';
 import { jsonFileDraftStorage } from '../../bridge/storage';
 import { ModuleShell } from '../../shared/ui/ModuleShell';
 import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
-import { DataEntryTable } from '../../shared/ui/DataEntryTable';
 import { DurationInput } from '../../shared/ui/DurationInput';
 import { isDurationInvalid, parseDurationToMinutes } from '../../shared/lib/durationInput';
 import { FieldWithHint } from '../../shared/ui/FieldWithHint';
@@ -33,7 +30,6 @@ import { OsmStationMap } from './OsmStationMap';
 import {
   countFilledConsumerCells,
   correspondenceTravelTimeRows,
-  consumerRows,
   createInitialPz1Draft,
   createPz1Bridge,
   createPz1Result,
@@ -45,9 +41,7 @@ import {
   getEffectiveFareValues,
   getDuplicateStationNames,
   getEnabledStationRegions,
-  getEffectivePassengerFlowInputs,
   getHsrTravelTimeResult,
-  getPz1PassengerFlowForecast,
   getPz1CorrespondencePassengerFlowForecast,
   getPz1CorrespondenceScenarios,
   getPz1TaskStepCount,
@@ -68,8 +62,6 @@ import {
   getActiveTransportColumns,
   getExcludedTransportColumns,
   restoreTransportMode,
-  passengerFlowModeRows,
-  passengerFlowRegionalFields,
   regionalParameterFields,
   russianRegions,
   sanitizeFileName,
@@ -78,7 +70,6 @@ import {
   syncCorrespondenceDetails,
   transportColumns,
   updateCellValue,
-  validateConsumerCell,
   validateDiscomfortCell,
   validateHsrSpeed,
   warnHsrSpeed,
@@ -91,7 +82,7 @@ import {
   validatePassportTeam,
 } from './model';
 import type { Pz1StepId } from './model';
-import type { Pz1CorrespondenceDetailDraft, Pz1CorrespondenceTableDraft, Pz1Draft, Pz1StationDraft } from './types';
+import type { Pz1CorrespondenceDetailDraft, Pz1Draft, Pz1StationDraft } from './types';
 import { getPz1VariantTitle, pz1Variants } from './variants';
 
 export function Pz1Module() {
@@ -1456,276 +1447,6 @@ function CorrespondenceModelStep({ pairKey }: { pairKey: string }) {
   );
 }
 
-function ConsumerPropertiesStep() {
-  const { draft, updateDraft } = useModuleState<Pz1Draft>();
-  const correspondenceTables = getSyncedCorrespondenceTables(draft);
-
-  return (
-    <div className="consumer-tables">
-      {correspondenceTables.length === 0 ? (
-        <section className="empty-state">
-          <h3>Корреспонденции пока не сформированы</h3>
-          <p>Назначьте станции на карте, чтобы появились пары для таблиц потребительских свойств.</p>
-        </section>
-      ) : null}
-      {correspondenceTables.map((table) => {
-        const activeColumns = transportColumns.filter((column) => table.activeModes.includes(column.id));
-        const excludedColumns = transportColumns.filter((column) => !table.activeModes.includes(column.id));
-
-        return (
-          <section className="correspondence-table" key={table.pairKey}>
-            <DataEntryTable
-              caption={`Корреспонденция ${getCorrespondenceTitle(draft, table.fromLabel, table.toLabel)}`}
-              columns={activeColumns}
-              canRemoveColumn={(columnId) => isTransportModeRemovable(columnId as TransportModeId)}
-              getCellMeta={(rowId, columnId) => getConsumerCellMeta(rowId, table.values[rowId]?.[columnId] ?? '')}
-              getError={(rowId, columnId) => validateConsumerCell(rowId, table.values[rowId]?.[columnId] ?? '')}
-              onChange={(rowId, columnId, value) => updateCorrespondenceTable(table.pairKey, { values: updateCellValue(table.values, rowId, columnId, value) })}
-              onRemoveColumn={(columnId) => {
-                const modeId = columnId as TransportModeId;
-                if (!isTransportModeRemovable(modeId)) {
-                  return;
-                }
-
-                updateCorrespondenceTable(table.pairKey, {
-                  activeModes: table.activeModes.filter((activeModeId) => activeModeId !== modeId),
-                });
-              }}
-              rows={consumerRows}
-              values={table.values}
-            />
-            {excludedColumns.length > 0 ? (
-              <div className="excluded-modes">
-                <span>Исключены для этой пары:</span>
-                {excludedColumns.map((column) => (
-                  <button
-                    className="button button--ghost"
-                    key={column.id}
-                    onClick={() =>
-                      updateCorrespondenceTable(table.pairKey, {
-                        activeModes: [...table.activeModes, column.id],
-                      })
-                    }
-                    type="button"
-                  >
-                    Вернуть {column.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        );
-      })}
-      <section className="correspondence-table">
-        <DataEntryTable
-          caption="Коэффициент дискомфорта"
-          columns={transportColumns}
-          getCellMeta={(rowId, columnId) => getDiscomfortCellMeta(draft.discomfortMatrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
-          getError={(rowId, columnId) => validateDiscomfortCell(draft.discomfortMatrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
-          getInputClassName={() => 'discomfort-value'}
-          getInputStyle={(rowId, columnId) =>
-            getDiscomfortInputStyle(draft.discomfortMatrix.values[rowId]?.[columnId as TransportModeId] ?? '')
-          }
-          onChange={(rowId, columnId, value) => updateDiscomfortValue(rowId, columnId as TransportModeId, value)}
-          rows={discomfortRows}
-          values={draft.discomfortMatrix.values}
-        />
-      </section>
-    </div>
-  );
-
-  function updateCorrespondenceTable(pairKey: string, patch: Partial<Pz1CorrespondenceTableDraft>) {
-    updateDraft((currentDraft) => {
-      const syncedTables = syncCorrespondenceTables(currentDraft);
-      const currentTable = syncedTables[pairKey];
-
-      if (!currentTable) {
-        return currentDraft;
-      }
-
-      return {
-        ...currentDraft,
-        correspondenceTables: {
-          ...syncedTables,
-          [pairKey]: {
-            ...currentTable,
-            ...patch,
-          },
-        },
-      };
-    });
-  }
-
-  function updateDiscomfortValue(rowId: string, modeId: TransportModeId, value: string) {
-    updateDraft((currentDraft) => ({
-      ...currentDraft,
-      discomfortMatrix: {
-        values: updateCellValue(currentDraft.discomfortMatrix.values, rowId, modeId, value) as Record<
-          string,
-          Record<TransportModeId, string>
-        >,
-      },
-    }));
-  }
-}
-
-function PassengerFlowForecastStep() {
-  const { draft, updateDraft } = useModuleState<Pz1Draft>();
-  const forecast = getPz1PassengerFlowForecast(draft);
-  const effectiveInputs = getEffectivePassengerFlowInputs(draft);
-  const chartData = forecast ? buildPassengerFlowChartData(forecast) : [];
-  const modeTableValues = passengerFlowModeRows.reduce<Record<string, Record<string, string>>>((values, row) => {
-    values[row.id] = transportColumns.reduce<Record<string, string>>((modeValues, column) => {
-      modeValues[column.id] = effectiveInputs.modes[column.id]?.[row.id] ?? '';
-      return modeValues;
-    }, {});
-    return values;
-  }, {});
-
-  function updateRegionalField(fieldId: keyof Pz1PassengerFlowRegionalInputs, value: string) {
-    updateDraft((currentDraft) => ({
-      ...currentDraft,
-      passengerFlowForecast: {
-        ...currentDraft.passengerFlowForecast,
-        regional: {
-          ...currentDraft.passengerFlowForecast.regional,
-          [fieldId]: value,
-        },
-      },
-    }));
-  }
-
-  function updateModeField(modeId: TransportModeId, fieldId: keyof Pz1PassengerFlowModeInputs, value: string) {
-    updateDraft((currentDraft) => ({
-      ...currentDraft,
-      passengerFlowForecast: {
-        ...currentDraft.passengerFlowForecast,
-        modes: {
-          ...currentDraft.passengerFlowForecast.modes,
-          [modeId]: {
-            ...currentDraft.passengerFlowForecast.modes[modeId],
-            [fieldId]: value,
-          },
-        },
-      },
-    }));
-  }
-
-  return (
-    <div className="passenger-flow-step">
-      <section className="form-section">
-        <p className="eyebrow">Регионы</p>
-        <h3>Параметры роста рынка</h3>
-        <div className="passenger-flow-regions">
-          {passengerFlowRegionalFields.map((field) => (
-            <FieldWithHint
-              hint={field.hint}
-              id={`passenger-flow-${field.id}`}
-              key={field.id}
-              label={field.label}
-              onChange={(value) => updateRegionalField(field.id, value)}
-              value={effectiveInputs.regional[field.id]}
-            />
-          ))}
-        </div>
-      </section>
-
-      <DataEntryTable
-        caption="Параметры по видам транспорта"
-        columns={transportColumns}
-        getError={(rowId, columnId) =>
-          validatePassengerFlowModeInput(
-            rowId as keyof Pz1PassengerFlowModeInputs,
-            effectiveInputs.modes[columnId as TransportModeId]?.[
-              rowId as keyof Pz1PassengerFlowModeInputs
-            ] ?? '',
-          )
-        }
-        onChange={(rowId, columnId, value) =>
-          updateModeField(columnId as TransportModeId, rowId as keyof Pz1PassengerFlowModeInputs, value)
-        }
-        rows={passengerFlowModeRows}
-        values={modeTableValues}
-      />
-
-      <section className="forecast-summary-panel">
-        <p className="eyebrow">Расчёт</p>
-        <h3>Итог прогноза</h3>
-        {forecast ? (
-          <>
-            <dl className="forecast-summary-grid">
-              <div>
-                <dt>Существующий рынок</dt>
-                <dd>{formatPassengerFlowValue(forecast.totalDemand.existingAnnualFlow)}</dd>
-              </div>
-              <div>
-                <dt>Базовый прогноз</dt>
-                <dd>{formatPassengerFlowValue(forecast.totalDemand.baseForecast)}</dd>
-              </div>
-              <div>
-                <dt>Индуцированный спрос</dt>
-                <dd>{formatPassengerFlowValue(forecast.totalDemand.inducedDemand)}</dd>
-              </div>
-              <div>
-                <dt>Итоговый прогноз</dt>
-                <dd>{formatPassengerFlowValue(forecast.totalDemand.totalForecast)}</dd>
-              </div>
-            </dl>
-
-            <div className="forecast-output-grid">
-              <div className="forecast-chart">
-                <ResponsiveContainer height={300} width="100%">
-                  <BarChart data={chartData} margin={{ bottom: 8, left: 10, right: 10, top: 18 }}>
-                    <CartesianGrid stroke="#e4edfa" vertical={false} />
-                    <XAxis dataKey="name" />
-                    <YAxis tickFormatter={(value) => formatCompactPassengerFlowValue(Number(value))} />
-                    <Tooltip />
-                    <Legend />
-                    {transportColumns.map((column) => (
-                      <Bar
-                        dataKey={column.id}
-                        fill={passengerFlowChartColors[column.id]}
-                        key={column.id}
-                        name={column.label}
-                        stackId="flow"
-                      />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="table-scroll">
-                <table className="forecast-result-table">
-                  <thead>
-                    <tr>
-                      <th>Вид транспорта</th>
-                      <th>Прогноз, пасс./год</th>
-                      <th>Доля</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {forecast.modes.map((mode) => (
-                      <tr key={mode.modeId}>
-                        <th scope="row">{getTransportModeLabel(mode.modeId)}</th>
-                        <td>{formatPassengerFlowValue(mode.forecastAnnualFlow)}</td>
-                        <td>{formatPercent(mode.forecastShare)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
-        ) : (
-          <p className="status-note">
-            Заполните числовые поля: существующий поток должен быть больше нуля, TTC и время в пути — положительными.
-          </p>
-        )}
-      </section>
-    </div>
-  );
-}
-
 function FinalIndicatorsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const totalLengthText = formatKm(getRouteMetrics(draft).totalLengthKm);
@@ -2102,43 +1823,6 @@ function SplitDiscomfortEditTable({
   );
 }
 
-function DiscomfortEditTable({
-  aggregates,
-  caption,
-  matrix,
-  onChange,
-  side,
-}: {
-  aggregates?: Record<TransportModeId, { existing: number | null; forecast: number | null }>;
-  caption: string;
-  matrix: Pz1Draft['discomfortMatrix'];
-  onChange: (rowId: string, modeId: TransportModeId, value: string) => void;
-  side: 'existing' | 'forecast';
-}) {
-  return (
-    <section className="form-section correspondence-detail">
-      <DataEntryTable
-        caption={caption}
-        columns={transportColumns}
-        getCellMeta={(rowId, columnId) => getDiscomfortCellMeta(matrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
-        getError={(rowId, columnId) => validateDiscomfortCell(matrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
-        getInputClassName={() => 'discomfort-value'}
-        getInputStyle={(rowId, columnId) => getDiscomfortInputStyle(matrix.values[rowId]?.[columnId as TransportModeId] ?? '')}
-        onChange={(rowId, columnId, value) => onChange(rowId, columnId as TransportModeId, value)}
-        rows={discomfortRows}
-        values={matrix.values}
-      />
-      <div className="aggregate-strip">
-        {transportColumns.map((column) => (
-          <span key={column.id}>
-            {column.label}: {formatNullableDecimal(aggregates?.[column.id]?.[side] ?? null)}
-          </span>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function TransportSplitRows({
   columns,
   getReadOnly,
@@ -2502,24 +2186,6 @@ function getForecastMissingFields(draft: Pz1Draft, pairKey: string) {
   return [...missingFields];
 }
 
-function validatePassengerFlowModeInput(fieldId: keyof Pz1PassengerFlowModeInputs, value: string) {
-  const parsed = parseNumberInput(value);
-
-  if (parsed === null) {
-    return 'Заполните числом';
-  }
-
-  if (parsed < 0) {
-    return 'Значение не может быть отрицательным';
-  }
-
-  if ((fieldId === 'travelTimeHours' || fieldId === 'totalTransportCost') && parsed <= 0) {
-    return 'Значение должно быть больше 0';
-  }
-
-  return null;
-}
-
 function getDetailOrNull(draft: Pz1Draft, pairKey: string) {
   return getSyncedCorrespondenceDetails(draft).find((detail) => detail.pairKey === pairKey) ?? null;
 }
@@ -2576,30 +2242,6 @@ function formatNullableDecimal(value: number | null) {
 
 function isFilled(value: string) {
   return value.trim().length > 0;
-}
-
-function getConsumerCellMeta(rowId: string, value: string) {
-  void rowId;
-  void value;
-
-  return null;
-}
-
-function getDiscomfortCellMeta(value: string) {
-  const parsed = Number(value.replace(',', '.'));
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-
-  if (parsed === 0) {
-    return '0 — комфортнее';
-  }
-
-  if (parsed === 1) {
-    return '1 — менее комфортно';
-  }
-
-  return 'Диапазон 0…1';
 }
 
 function getDiscomfortInputStyle(value: string): CSSProperties | undefined {

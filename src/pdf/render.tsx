@@ -5,8 +5,8 @@ import ptSerifBold from '@fontsource/pt-serif/files/pt-serif-cyrillic-700-normal
 import ralewayMedium from '@fontsource/raleway/files/raleway-cyrillic-500-normal.woff?url';
 import ralewayBold from '@fontsource/raleway/files/raleway-cyrillic-800-normal.woff?url';
 import { downloadTextFile } from '../bridge/io';
-import type { CorrespondenceTable, GeoPoint, Pz1PassengerFlowResult, Pz1Result, RouteLine, TransportModeId } from '../bridge/schema';
-import { correspondenceTravelTimeRows, consumerRows, discomfortRows, finalIndicators, transportColumns } from '../modules/pz1/model';
+import type { GeoPoint, Pz1PassengerFlowResult, Pz1Result, RouteLine, TransportModeId } from '../bridge/schema';
+import { correspondenceTravelTimeRows, finalIndicators, transportColumns } from '../modules/pz1/model';
 import type { StationRouteDistance } from '../modules/pz1/model';
 import { formatGroupedNumber } from '../shared/lib/numberFormat';
 import { buildDisplayRoutePoints, computeRouteLineMetrics } from '../shared/lib/routeGeometry';
@@ -590,75 +590,6 @@ function CorrespondenceScenariosTable({ scenarios }: { scenarios: NonNullable<Pz
         </View>
       ))}
     </>
-  );
-}
-
-function CorrespondenceTables({ tables }: { tables: Record<string, CorrespondenceTable> }) {
-  const tableList = Object.values(tables);
-
-  if (tableList.length === 0) {
-    return <Text style={styles.paragraph}>Таблицы корреспонденций пока не заполнены.</Text>;
-  }
-
-  return (
-    <View>
-      {tableList.map((table) => (
-        <View key={table.pairKey} style={styles.compactTableBlock} wrap={false}>
-          <Text style={styles.compactTableTitle}>Корреспонденция {table.pairKey}</Text>
-          <View style={styles.compactTable}>
-            <View style={styles.compactHeaderRow}>
-              <Text style={styles.metricCell}>Показатель</Text>
-              {table.activeModes.map((modeId) => (
-                <Text key={modeId} style={styles.modeCell}>
-                  {getTransportModeLabel(modeId)}
-                </Text>
-              ))}
-            </View>
-            {consumerRows.map((row) => (
-              <View key={row.id} style={styles.compactRow}>
-                <Text style={styles.metricCell}>{row.label}</Text>
-                {table.activeModes.map((modeId) => (
-                  <Text key={modeId} style={styles.modeCell}>
-                    {formatRequiredValue(table.values[row.id]?.[modeId] ?? '')}
-                  </Text>
-                ))}
-              </View>
-            ))}
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function DiscomfortMatrixTable({ matrix }: { matrix?: Pz1Result['discomfortMatrix'] }) {
-  if (!matrix) {
-    return <Text style={styles.paragraph}>Таблица дискомфорта пока не заполнена.</Text>;
-  }
-
-  return (
-    <View style={styles.compactTableBlock} wrap={false}>
-      <View style={styles.compactTable}>
-        <View style={styles.compactHeaderRow}>
-          <Text style={styles.metricCell}>Критерий</Text>
-          {transportColumns.map((column) => (
-            <Text key={column.id} style={styles.modeCell}>
-              {column.label}
-            </Text>
-          ))}
-        </View>
-        {discomfortRows.map((row) => (
-          <View key={row.id} style={styles.compactRow}>
-            <Text style={styles.metricCell}>{row.label}</Text>
-            {transportColumns.map((column) => (
-              <Text key={column.id} style={styles.modeCell}>
-                {formatRequiredValue(matrix.values[row.id]?.[column.id] ?? '')}
-              </Text>
-            ))}
-          </View>
-        ))}
-      </View>
-    </View>
   );
 }
 

@@ -12,6 +12,7 @@ import type {
   Pz1Result,
   Pz1Station,
   RouteLine,
+  SplitTransportValue,
   StationLabel,
   StationType,
   TransportModeId,
@@ -2504,12 +2505,6 @@ function mergeDiscomfortMatrix(
       return rowMap;
     }, {}),
   };
-}
-
-function countFilledDiscomfortCells(matrix: Pz1DiscomfortMatrix) {
-  return discomfortRows
-    .flatMap((row) => transportColumns.map((column) => matrix.values[row.id]?.[column.id] ?? ''))
-    .filter((value) => value.trim().length > 0).length;
 }
 
 function isDiscomfortMatrixComplete(matrix: Pz1DiscomfortMatrix) {
