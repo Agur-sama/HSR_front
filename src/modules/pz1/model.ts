@@ -23,7 +23,12 @@ import { calculateCarTravelCost } from '../../shared/lib/carTravelCost';
 import { isDurationInvalid, parseDurationToMinutes } from '../../shared/lib/durationInput';
 import { distributePassengerFlowByMode, forecastTotalDemand } from '../../shared/lib/passengerFlow';
 import type { PassengerFlowModeInput, TotalDemandForecastInput } from '../../shared/lib/passengerFlow';
-import { CAR_EXISTING_FLOW_MULTIPLIER, SERVICE_WINDOW_HOURS, passengerFlowModeIds } from '../../shared/lib/passengerFlowWeights';
+import {
+  CAR_EXISTING_FLOW_MULTIPLIER,
+  ROUND_TRIP_MULTIPLIER,
+  SERVICE_WINDOW_HOURS,
+  passengerFlowModeIds,
+} from '../../shared/lib/passengerFlowWeights';
 import { buildDisplayRoutePoints, buildRoutePointsBySegment, computeArcMetrics, computeRouteLineMetrics, computeSagittaFromRadius, haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import type { DataEntryColumn, DataEntryRow } from '../../shared/ui/DataEntryTable';
 import type {
@@ -763,6 +768,7 @@ export function getPz1PassengerFlowForecast(draft: Pz1Draft): Pz1PassengerFlowRe
     const totalDemand = forecastTotalDemand({
       existingAnnualFlow,
       ...regionalInput,
+      tripsPerJourney: ROUND_TRIP_MULTIPLIER,
     });
     const distribution = distributePassengerFlowByMode({
       existingAnnualFlow,
@@ -994,6 +1000,7 @@ export function getPz1CorrespondencePassengerFlowForecast(draft: Pz1Draft, pairK
     const totalDemand = forecastTotalDemand({
       existingAnnualFlow,
       ...regionalInput,
+      tripsPerJourney: ROUND_TRIP_MULTIPLIER,
     });
     const distribution = distributePassengerFlowByMode({
       existingAnnualFlow,

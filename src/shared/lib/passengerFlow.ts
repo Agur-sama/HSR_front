@@ -16,6 +16,13 @@ export interface TotalDemandForecastInput {
   gdpPassengerFlowCoefficientRegionA: number;
   gdpPassengerFlowCoefficientRegionB: number;
   inducedDemandPct: number;
+  /**
+   * Сколько поездок приходится на одну корреспонденцию. По умолчанию 1 —
+   * ровно то, что описано в документе заказчика «Расчет модели»: про
+   * направления там не сказано ни слова. ПЗ1 передаёт 2, см.
+   * ROUND_TRIP_MULTIPLIER.
+   */
+  tripsPerJourney?: number;
 }
 
 export interface TotalDemandForecast {
@@ -104,8 +111,16 @@ export function forecastTotalDemand(input: TotalDemandForecastInput): TotalDeman
     (input.populationCurrentRegionA * input.gdpPassengerFlowCoefficientRegionA +
       input.populationCurrentRegionB * input.gdpPassengerFlowCoefficientRegionB) /
     populationCurrentTotal;
+  // Множитель поездок применяется к базовому прогнозу — единственной величине,
+  // из которой выводится всё остальное. Индуцированный спрос считается от него,
+  // распределение по видам тоже, поэтому итог и разбивка растут согласованно и
+  // доли в процентах не меняются.
   const baseForecast =
-    input.existingAnnualFlow * grpDelta * weightedGdpPassengerFlowCoefficient * populationDelta;
+    input.existingAnnualFlow *
+    grpDelta *
+    weightedGdpPassengerFlowCoefficient *
+    populationDelta *
+    (input.tripsPerJourney ?? 1);
   const inducedDemand = baseForecast * input.inducedDemandPct;
   const totalForecast = baseForecast + inducedDemand;
 

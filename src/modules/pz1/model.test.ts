@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ROUND_TRIP_MULTIPLIER } from '../../shared/lib/passengerFlowWeights';
 import {
   countFilledConsumerCells,
   createPz1Bridge,
@@ -700,7 +701,9 @@ describe('pz1 model', () => {
       },
     };
 
-    const expectedAnnualFlow = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(2_982_140);
+    const expectedAnnualFlow = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(
+      2_982_140 * ROUND_TRIP_MULTIPLIER,
+    );
 
     expect(getComputedFinalIndicators(draft).annualFlow).toBe(expectedAnnualFlow);
     expect(createPz1Result(draft).finalIndicators?.annualFlow).toBe(expectedAnnualFlow);
@@ -826,8 +829,10 @@ describe('pz1 model', () => {
 
     const forecast = getPz1PassengerFlowForecast(draft);
 
-    expect(forecast?.totalDemand.baseForecast).toBeCloseTo(605, 1);
-    expect(forecast?.totalDemand.inducedDemand).toBeCloseTo(211.75, 2);
+    // 605 и 211,75 — величины по документу заказчика, в одну сторону.
+    // Прогноз ПЗ1 считается на поездку туда-обратно (встреча 02.09).
+    expect(forecast?.totalDemand.baseForecast).toBeCloseTo(605 * ROUND_TRIP_MULTIPLIER, 1);
+    expect(forecast?.totalDemand.inducedDemand).toBeCloseTo(211.75 * ROUND_TRIP_MULTIPLIER, 2);
   });
 
   it('keeps regional parameters by unique station region and repeats them for matching stations', () => {
