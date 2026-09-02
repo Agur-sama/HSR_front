@@ -23,6 +23,8 @@ type MapMode = 'view' | 'station' | 'route';
 
 interface OsmStationMapProps {
   activeStationLabel: Pz1StationDraft['label'];
+  /** Есть ли что отменять — от этого зависит подсказка про Ctrl+Z. */
+  canUndo: boolean;
   /** Вид карты варианта: считается из координат его городов в variants.ts. */
   mapCenter: [number, number];
   mapZoom: number;
@@ -42,6 +44,7 @@ interface ScreenPoint {
 
 export function OsmStationMap({
   activeStationLabel,
+  canUndo,
   mapCenter,
   mapZoom,
   onActiveStationChange,
@@ -524,6 +527,7 @@ export function OsmStationMap({
           : mode === 'station'
             ? `Кликните по карте, чтобы поставить станцию. Перетащите поставленную, чтобы подвинуть. Активна станция ${activeStation?.label}. Esc — вернуться в просмотр.`
             : 'Кликните, чтобы добавить точку линии. Ведите линию в обход водоёмов и возвышенностей. Esc — вернуться в просмотр.'}
+        {canUndo ? ' Ctrl+Z — отменить последнее действие на карте.' : ''}
       </p>
     </section>
   );

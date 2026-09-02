@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ChangeEvent, DragEvent, ReactNode } from 'react';
 import {
   Bar,
@@ -26,6 +26,7 @@ import { FieldWithHint } from '../../shared/ui/FieldWithHint';
 import { GroupedNumberInput } from '../../shared/ui/GroupedNumberInput';
 import { reverseGeocodeRegion } from '../../shared/lib/reverseGeocode';
 import { useTouchedFields } from '../../shared/hooks/useTouchedFields';
+import { useUndoHistory } from '../../shared/hooks/useUndoHistory';
 import { OsmStationMap } from './OsmStationMap';
 import {
   countFilledConsumerCells,
@@ -444,6 +445,11 @@ function TheoryStep() {
   );
 }
 
+interface MapSnapshot {
+  routePointDrafts: Pz1Draft['routePointDrafts'];
+  stationDrafts: Pz1Draft['stationDrafts'];
+}
+
 function StationsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
   const [activeStationLabel, setActiveStationLabel] = useState<Pz1StationDraft['label']>('А');
@@ -453,6 +459,27 @@ function StationsStep() {
   // ключ совпадает и запроса нет — поэтому автозаполнение не затирает то, что
   // студент вписал руками, и не срабатывает на восстановлении из файла.
   const resolvedCoordsRef = useRef<Partial<Record<Pz1StationDraft['label'], string>>>({});
+  // Ctrl+Z отменяет последнее действие на карте: поставленную станцию,
+  // перетаскивание, добавленную или удалённую точку трассы.
+  const { canUndo, remember } = useUndoHistory<MapSnapshot>(
+    useCallback(
+      (snapshot: MapSnapshot) =>
+        updateDraft((currentDraft) => ({
+          ...currentDraft,
+          routePointDrafts: snapshot.routePointDrafts,
+          stationDrafts: snapshot.stationDrafts,
+          correspondenceTables: syncCorrespondenceTables({
+            stationDrafts: snapshot.stationDrafts,
+            correspondenceTables: currentDraft.correspondenceTables,
+          }),
+          correspondenceDetails: syncCorrespondenceDetails({
+            stationDrafts: snapshot.stationDrafts,
+            correspondenceDetails: currentDraft.correspondenceDetails,
+          }),
+        })),
+      [updateDraft],
+    ),
+  );
   const routeMetrics = getRouteMetrics(draft);
   const duplicateStationNames = getDuplicateStationNames(draft);
   const stationRouteDistances = getStationRouteDistances(draft);
@@ -534,6 +561,11 @@ function StationsStep() {
       ...currentDraft,
       routePointDrafts,
     }));
+  }
+
+  /** Снимок карты перед правкой — то, к чему вернёт Ctrl+Z. */
+  function rememberMapState() {
+    remember({ routePointDrafts: draft.routePointDrafts, stationDrafts: draft.stationDrafts });
   }
 
   return (
@@ -650,6 +682,7 @@ function StationsStep() {
       ) : null}
       <OsmStationMap
         activeStationLabel={activeStationLabel}
+        canUndo={canUndo}
         mapCenter={selectedVariant.mapCenter}
         mapZoom={selectedVariant.mapZoom}
         onActiveStationChange={setActiveStationLabel}
@@ -658,8 +691,14 @@ function StationsStep() {
             currentDraft.previewImage === previewImage ? currentDraft : { ...currentDraft, previewImage },
           )
         }
-        onRoutePointDraftsChange={replaceRoutePointDrafts}
-        onStationChange={updateStation}
+        onRoutePointDraftsChange={(routePointDrafts) => {
+          rememberMapState();
+          replaceRoutePointDrafts(routePointDrafts);
+        }}
+        onStationChange={(label, patch) => {
+          rememberMapState();
+          updateStation(label, patch);
+        }}
         routeMetrics={routeMetrics}
         routePointDrafts={draft.routePointDrafts}
         stations={draft.stationDrafts}
