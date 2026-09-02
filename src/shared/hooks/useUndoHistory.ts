@@ -8,11 +8,15 @@ const HISTORY_LIMIT = 50;
  *
  * Снимок кладётся ПЕРЕД изменением — тем, кто это изменение вызывает. Поэтому
  * в историю попадают только действия на карте (клик, перетаскивание точки,
- * удаление), а не ввод координат руками: у текстового поля есть собственная
- * отмена, и перехватывать её нельзя.
+ * удаление), а не ввод координат руками.
  *
- * По той же причине горячая клавиша не срабатывает, когда фокус стоит в поле
- * ввода: там Ctrl+Z должен отменять набор текста, а не последнюю точку трассы.
+ * Клавиша перехватывается всегда, в том числе когда фокус стоит в поле ввода.
+ * Сначала было наоборот — казалось правильным оставить полю его собственную
+ * отмену. На проверке выяснилось, что встроенная отмена браузера в этой форме
+ * откатывает последнюю правку в документе, а не в том поле, где курсор:
+ * Ctrl+Z в поле широты станции А стирал долготу станции Г. Механизм, который
+ * молча портит соседние данные, лучше отключить: студент в этом шаге ждёт от
+ * Ctrl+Z отмены на карте, так и написано в подсказке.
  */
 export function useUndoHistory<TSnapshot>(applySnapshot: (snapshot: TSnapshot) => void) {
   const historyRef = useRef<TSnapshot[]>([]);
@@ -46,13 +50,14 @@ export function useUndoHistory<TSnapshot>(applySnapshot: (snapshot: TSnapshot) =
     function handleKeyDown(event: KeyboardEvent) {
       const isUndoCombo = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === 'z';
 
-      if (!isUndoCombo || isTextEntryTarget(event.target)) {
+      if (!isUndoCombo) {
         return;
       }
 
-      if (undo()) {
-        event.preventDefault();
-      }
+      // preventDefault до проверки истории: даже когда отменять нечего, отдавать
+      // клавишу встроенной отмене нельзя — она правит не то поле.
+      event.preventDefault();
+      undo();
     }
 
     window.addEventListener('keydown', handleKeyDown);
@@ -61,18 +66,4 @@ export function useUndoHistory<TSnapshot>(applySnapshot: (snapshot: TSnapshot) =
   }, [undo]);
 
   return { canUndo, remember, undo };
-}
-
-function isTextEntryTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  if (target.isContentEditable) {
-    return true;
-  }
-
-  const tagName = target.tagName.toLowerCase();
-
-  return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
 }
