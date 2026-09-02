@@ -29,6 +29,7 @@ export interface Pz1PassportDraft {
   team: string;
   lineTitle: string;
   createdAt: string;
+  runId: string;
 }
 
 export interface Pz1StationDraft {

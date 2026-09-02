@@ -208,6 +208,14 @@ export interface Passport {
   lineTitle: string;
   defaultVariant?: number;
   createdAt: string;
+  /**
+   * Идентификатор прохода задания. Заводится один раз при начале работы и
+   * переживает выгрузку и загрузку файла: продолжение своей работы сохраняет
+   * тот же id, а два файла с одинаковым id — это один и тот же проход,
+   * то есть копия. Поле необязательное — файлы, сохранённые раньше, его
+   * не имеют и открываются как обычно.
+   */
+  runId?: string;
 }
 
 /**
@@ -227,6 +235,8 @@ export interface ModulePosition {
 export interface BridgeSchema {
   schemaVersion: BridgeSchemaVersion;
   passport: Passport;
+  /** Когда файл был записан. Вместе с runId показывает, как шла работа. */
+  savedAt?: string;
   progress?: Partial<Record<'pz1' | 'pz2' | 'pz3' | 'pz4' | 'pz5' | 'pz6' | 'pz7' | 'pz8', Record<string, boolean>>>;
   position?: Partial<Record<'pz1' | 'pz2' | 'pz3' | 'pz4' | 'pz5' | 'pz6' | 'pz7' | 'pz8', ModulePosition>>;
   completed: Partial<{

@@ -52,6 +52,7 @@ export interface Pz1PdfSummary {
   routePointCount: number;
   totalLengthKm: number;
   filledConsumerCells: number;
+  runId: string;
   filledIndicatorCount: number;
   createdAt: string;
   correspondenceScenarios?: Pz1Result['correspondenceScenarios'];
@@ -111,6 +112,9 @@ export function createPz1PdfSections(summary: Pz1PdfSummary): Pz1PdfSection[] {
         ['Учебная группа', formatRequiredValue(summary.lineTitle)],
         ['Вариант', formatRequiredValue(summary.variantTitle)],
         ['Дата выполнения', formatDate(summary.createdAt)],
+        // Идентификатор прохода: две работы с одинаковым id — это один и тот же
+        // проход, то есть один файл, переданный из рук в руки.
+        ['Идентификатор работы', formatRequiredValue(summary.runId)],
       ],
     },
     {

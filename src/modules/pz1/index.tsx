@@ -1616,6 +1616,7 @@ function ResultStep() {
           filledConsumerCells,
           filledIndicatorCount,
           createdAt: draft.passport.createdAt,
+          runId: draft.passport.runId,
           correspondenceScenarios: result.correspondenceScenarios,
           consumerProperties: result.consumerProperties,
           discomfortMatrix: result.discomfortMatrix,

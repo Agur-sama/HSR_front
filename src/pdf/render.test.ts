@@ -11,6 +11,7 @@ describe('pdf render', () => {
       routePointCount: 7,
       totalLengthKm: 654.3,
       filledConsumerCells: 25,
+      runId: '20260902-1917-ab12cd',
       filledIndicatorCount: 13,
       createdAt: '2026-07-12T00:00:00.000Z',
     });
@@ -37,6 +38,7 @@ describe('pdf render', () => {
       routePointCount: 2,
       totalLengthKm: 654.3,
       filledConsumerCells: 4,
+      runId: '20260902-1917-ef34gh',
       filledIndicatorCount: 2,
       createdAt: '2026-07-12T00:00:00.000Z',
       consumerProperties: {

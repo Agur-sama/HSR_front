@@ -349,6 +349,9 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
       team: importedBridge?.passport.team ?? '',
       lineTitle: importedBridge?.passport.lineTitle ?? '',
       createdAt: importedBridge?.passport.createdAt ?? new Date().toISOString(),
+      // Свой проход — свой id. Загрузили файл — id берём из него, иначе
+      // продолжение работы считалось бы новым проходом.
+      runId: importedBridge?.passport.runId ?? createRunId(),
     },
     selectedVariantId,
     stationDrafts,
@@ -376,6 +379,23 @@ export function createInitialPz1Draft(importedBridge?: BridgeSchema | null): Pz1
     finalIndicators: mergeFinalIndicators(importedPz1?.finalIndicators),
     notes: importedPz1?.notes ?? '',
   };
+}
+
+/**
+ * Идентификатор прохода задания: дата, время и случайный хвост.
+ *
+ * Заказчик предложил собирать его из времени и названия команды. Название
+ * берём не в id, а рядом в паспорте: команду студент правит в любой момент,
+ * и id, завязанный на неё, менялся бы вместе с ней — именно то, чего от
+ * идентификатора не ждут. Случайный хвост нужен, чтобы два прохода,
+ * начатых в одну и ту же минуту, не совпали.
+ */
+export function createRunId(now = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+  const tail = Math.random().toString(36).slice(2, 8).padEnd(6, '0');
+
+  return `${stamp}-${tail}`;
 }
 
 export function createPz1Bridge(draft: Pz1Draft, position?: ModulePosition): BridgeSchema {
@@ -1664,6 +1684,7 @@ function createPassport(draft: Pz1Draft): Passport {
     lineTitle: draft.passport.lineTitle,
     defaultVariant: Number.isInteger(parsedVariant) ? parsedVariant : undefined,
     createdAt: draft.passport.createdAt,
+    runId: draft.passport.runId,
   };
 }
 

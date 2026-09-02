@@ -232,6 +232,29 @@ describe('pz1 model', () => {
     expect(consumerProperties?.['А-Г'].activeModes).toContain('hSR');
   });
 
+  it('идентификатор прохода заводится один раз и переживает выгрузку с загрузкой', () => {
+    const draft = createInitialPz1Draft();
+    const runId = draft.passport.runId;
+
+    expect(runId).toMatch(/^\d{8}-\d{4}-[a-z0-9]{6}$/);
+
+    const bridge = createPz1Bridge(draft);
+    expect(bridge.passport.runId).toBe(runId);
+
+    // Продолжение своей работы — тот же проход, id не меняется.
+    expect(createInitialPz1Draft(bridge).passport.runId).toBe(runId);
+
+    // Новый проход — новый id, иначе одинаковые работы было бы не различить.
+    expect(createInitialPz1Draft().passport.runId).not.toBe(runId);
+  });
+
+  it('id прохода не завязан на название команды — его правят по ходу работы', () => {
+    const draft = createInitialPz1Draft();
+    const renamed = { ...draft, passport: { ...draft.passport, team: 'Другая команда' } };
+
+    expect(createPz1Bridge(renamed).passport.runId).toBe(draft.passport.runId);
+  });
+
   it('позиция шага в мосте адресуется стабильным id и переживает реордер (ФТ-23, ТЗ v3.6 T-2)', () => {
     const draft = createInitialPz1Draft();
     const bridge = createPz1Bridge(draft, { phase: 'task', stepId: 'station-other-parameters', theorySeen: true });

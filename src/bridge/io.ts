@@ -12,6 +12,7 @@ export function createBridge(
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     passport,
+    savedAt: new Date().toISOString(),
     ...(progress ? { progress } : {}),
     ...(position ? { position } : {}),
     completed,
