@@ -1451,7 +1451,10 @@ function CorrespondenceModelStep({ pairKey }: { pairKey: string }) {
                   <YAxis tickFormatter={(value) => formatCompactPassengerFlowValue(Number(value))} />
                   <Tooltip />
                   <Legend />
-                  {getActiveTransportColumns(draft, pairKey).map((column) => (
+                  {/* ВСМ рисуем последней: recharts складывает столбец снизу
+                      вверх, и линия, ради которой всё считается, должна быть
+                      верхней плашкой, а не теряться в основании. */}
+                  {sortHsrLast(getActiveTransportColumns(draft, pairKey)).map((column) => (
                     <Bar
                       dataKey={column.id}
                       fill={passengerFlowChartColors[column.id]}
@@ -1961,6 +1964,11 @@ function ForecastMissingState({ missingFields }: { missingFields: string[] }) {
       </ul>
     </div>
   );
+}
+
+/** ВСМ — в конец списка, чтобы в столбце с накоплением она легла сверху. */
+function sortHsrLast<T extends { id: TransportModeId }>(columns: T[]) {
+  return [...columns].sort((left, right) => Number(left.id === 'hSR') - Number(right.id === 'hSR'));
 }
 
 const passengerFlowChartColors: Record<TransportModeId, string> = {
