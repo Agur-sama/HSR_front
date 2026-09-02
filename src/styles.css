@@ -1574,8 +1574,10 @@ input.is-invalid {
   /* По верхнему краю, а не по центру: у подписей разное число строк, и при
      центрировании крестики исключения вставали на разной высоте. */
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
+  /* Крестик стоит вплотную к названию вида транспорта, а не у дальнего края
+     столбца: у широких столбцов было не понять, к чему он относится. */
+  justify-content: flex-start;
+  gap: 6px;
 }
 
 /* Шапки столбцов тоже по верхнему краю — иначе однострочные подписи висят
@@ -1636,10 +1638,22 @@ input.is-invalid {
 }
 
 .field-with-hint {
-  grid-template-columns: minmax(180px, 0.9fr) minmax(160px, 0.7fr) minmax(220px, 1.1fr);
+  /* Подпись по содержимому, поле сразу за ней: при долевой колонке поле
+     висело посреди строки, далеко и от подписи, и от таблицы над ним. */
+  grid-template-columns: minmax(180px, max-content) 1fr;
   align-items: center;
   border-bottom: 1px solid var(--border);
   padding: 10px 0;
+}
+
+.field-with-hint__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-with-hint .field-error {
+  grid-column: 2;
 }
 
 /* Под таблицей регионов поле не должно быть вдвое шире её ячеек —
