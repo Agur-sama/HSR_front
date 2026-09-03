@@ -147,8 +147,16 @@ function resolveFontSource(source: string) {
 function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
   const sections = createPz1PdfSections(summary);
 
+  // Свойства файла заполняем сами: без них в «Producer» и «Creator» каждого
+  // студенческого отчёта остаётся название библиотеки, которой он собран.
   return (
-    <Document title="ПЗ1. Технико-экономическое обоснование">
+    <Document
+      author="Школа ВСМ"
+      creator="vsm-simulator.ru"
+      producer="vsm-simulator.ru"
+      subject="Технико-экономическое обоснование проекта ВСМ"
+      title={`Практическое задание № 1 — ${summary.team || 'команда не указана'}`}
+    >
       <Page size={PAGE_SIZE} style={styles.page}>
         <View style={styles.titleBlock}>
           <Text style={styles.assignment}>Практическое задание № 1</Text>
