@@ -8,6 +8,15 @@ import type { RouteRuler } from '../../shared/lib/routeRuler';
 import { formatPz2Km } from './model';
 import type { Pz2RouteSpan, Pz2StationMark } from './types';
 
+/**
+ * Цвета те же, что в ПЗ1: трасса ВСМ красная (--color-route-hsr), а бирюзовый
+ * (--teal) в макете означает «выбранное сейчас» — им и показываем отмеренный
+ * участок. Раньше трасса здесь была синей, и одна и та же линия выглядела в
+ * двух заданиях по-разному.
+ */
+const ROUTE_COLOR = '#e0182d';
+const SPAN_COLOR = '#08a696';
+
 const ROUTE_SOURCE_ID = 'pz2-route';
 const ROUTE_LAYER_ID = 'pz2-route-line';
 const SPAN_SOURCE_ID = 'pz2-span';
@@ -320,7 +329,7 @@ function ensureLayers(map: MapLibreMap) {
     type: 'line',
     source: ROUTE_SOURCE_ID,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#003D84', 'line-width': 5, 'line-opacity': 0.85 },
+    paint: { 'line-color': ROUTE_COLOR, 'line-width': 5, 'line-opacity': 0.9 },
   });
 
   map.addSource(SPAN_SOURCE_ID, { type: 'geojson', data: lineFeature([]) });
@@ -329,7 +338,7 @@ function ensureLayers(map: MapLibreMap) {
     type: 'line',
     source: SPAN_SOURCE_ID,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#E0182D', 'line-width': 7 },
+    paint: { 'line-color': SPAN_COLOR, 'line-width': 8 },
   });
 
   map.addSource(MARK_SOURCE_ID, { type: 'geojson', data: pointFeatures([]) });
@@ -339,7 +348,7 @@ function ensureLayers(map: MapLibreMap) {
     source: MARK_SOURCE_ID,
     paint: {
       'circle-radius': 7,
-      'circle-color': '#E0182D',
+      'circle-color': SPAN_COLOR,
       'circle-stroke-color': '#ffffff',
       'circle-stroke-width': 2,
     },
