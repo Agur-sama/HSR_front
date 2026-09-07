@@ -3,6 +3,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import '../../shared/lib/maplibreWorker';
 import { buildDisplayRoutePoints } from '../../shared/lib/routeGeometry';
 import type { RouteLineMetrics } from '../../shared/lib/routeGeometry';
 import { createRouteLine } from './model';
