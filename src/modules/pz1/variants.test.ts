@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { pz1Variants } from './variants';
 
+/** Карточка карты в вёрстке — те же размеры, из которых считается зум. */
+const MAP_CARD = { widthPx: 678 * 0.75, heightPx: 358 * 0.75 };
+
+/** Широта в меркаторскую координату 0…1. */
+function mercatorY(latitude: number) {
+  const radians = (latitude * Math.PI) / 180;
+
+  return (1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2;
+}
+
+/** Сколько пикселей займёт пара городов на карте MapLibre при данном зуме. */
+function spanPx(zoom: number, from: readonly [number, number], to: readonly [number, number]) {
+  const worldPx = 512 * 2 ** zoom;
+
+  return {
+    widthPx: worldPx * (Math.abs(from[0] - to[0]) / 360),
+    heightPx: worldPx * Math.abs(mercatorY(from[1]) - mercatorY(to[1])),
+  };
+}
+
 describe('варианты ПЗ1', () => {
   it('у каждого варианта свой центр карты', () => {
     const centers = pz1Variants.map((variant) => variant.mapCenter.join(','));
@@ -33,13 +53,27 @@ describe('варианты ПЗ1', () => {
     }
   });
 
-  it('зум подобран под размах пары: дальние города — мельче', () => {
-    const spanDegrees = (variant: (typeof pz1Variants)[number]) =>
-      Math.abs(variant.fromCoords[0] - variant.toCoords[0]);
-    const widest = [...pz1Variants].sort((a, b) => spanDegrees(b) - spanDegrees(a))[0];
-    const narrowest = [...pz1Variants].sort((a, b) => spanDegrees(a) - spanDegrees(b))[0];
+  /**
+   * Прежняя проверка сравнивала зум двух вариантов по размаху долгот, хотя зум
+   * задаёт та сторона, которая упирается первой: у пары Екатеринбург —
+   * Челябинск это широта. Сравнение было ни о чём, поэтому здесь проверяется
+   * то, ради чего зум и считается: оба города видны на карте сразу.
+   */
+  it('на своём зуме оба города помещаются в карточку карты', () => {
+    for (const variant of pz1Variants) {
+      const span = spanPx(variant.mapZoom, variant.fromCoords, variant.toCoords);
 
-    expect(widest.mapZoom).toBeLessThan(narrowest.mapZoom);
+      expect(span.widthPx).toBeLessThanOrEqual(MAP_CARD.widthPx);
+      expect(span.heightPx).toBeLessThanOrEqual(MAP_CARD.heightPx);
+    }
+  });
+
+  it('зум взят самый крупный из подходящих — карта не отъезжает лишнего', () => {
+    for (const variant of pz1Variants) {
+      const closer = spanPx(variant.mapZoom + 1, variant.fromCoords, variant.toCoords);
+
+      expect(closer.widthPx > MAP_CARD.widthPx || closer.heightPx > MAP_CARD.heightPx).toBe(true);
+    }
   });
 
   it('регионы городов взяты из справочника субъектов', async () => {

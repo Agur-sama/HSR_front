@@ -7,6 +7,13 @@ const YAROSLAVL: LonLat = [39.8845, 57.6261];
 const VLADIVOSTOK: LonLat = [131.8855, 43.1155];
 const KHABAROVSK: LonLat = [135.0838, 48.4827];
 
+/** Широта в меркаторскую координату 0…1 — тем же способом, что и в карте. */
+function mercatorY(latitude: number) {
+  const radians = (latitude * Math.PI) / 180;
+
+  return (1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2;
+}
+
 describe('getMapViewForPoints', () => {
   it('центрирует по середине пары городов', () => {
     const view = getMapViewForPoints([MOSCOW, YAROSLAVL]);
@@ -29,12 +36,29 @@ describe('getMapViewForPoints', () => {
     expect(far!.zoom).toBeLessThan(near!.zoom);
   });
 
-  it('обе точки помещаются в область при выбранном зуме', () => {
-    const view = getMapViewForPoints([KHABAROVSK, VLADIVOSTOK], { widthPx: 700, heightPx: 420, padding: 0.25 });
-    const spanLonDegrees = Math.abs(KHABAROVSK[0] - VLADIVOSTOK[0]);
-    const widthPx = 256 * 2 ** view!.zoom * (spanLonDegrees / 360);
+  // Проверка идёт по шкале MapLibre (512 пикселей на тайл), а не по размеру
+  // растрового тайла OSM: раньше здесь стояло 256, и тест подтверждал расчёт
+  // сам себе — зум был на уровень крупнее, а города уезжали за край карты.
+  const spanPx = (view: { zoom: number }, from: LonLat, to: LonLat) => ({
+    widthPx: 512 * 2 ** view.zoom * (Math.abs(from[0] - to[0]) / 360),
+    heightPx: 512 * 2 ** view.zoom * Math.abs(mercatorY(from[1]) - mercatorY(to[1])),
+  });
 
-    expect(widthPx).toBeLessThanOrEqual(700 * 0.75);
+  it('обе точки помещаются в область при выбранном зуме', () => {
+    const size = { widthPx: 700, heightPx: 420, padding: 0.25 };
+    const view = getMapViewForPoints([KHABAROVSK, VLADIVOSTOK], size);
+    const span = spanPx(view!, KHABAROVSK, VLADIVOSTOK);
+
+    expect(span.widthPx).toBeLessThanOrEqual(size.widthPx * (1 - size.padding));
+    expect(span.heightPx).toBeLessThanOrEqual(size.heightPx * (1 - size.padding));
+  });
+
+  it('ближняя пара городов помещается по высоте — на ней и ловился лишний зум', () => {
+    const size = { widthPx: 678, heightPx: 358, padding: 0.25 };
+    const view = getMapViewForPoints([MOSCOW, YAROSLAVL], size);
+    const span = spanPx(view!, MOSCOW, YAROSLAVL);
+
+    expect(span.heightPx).toBeLessThanOrEqual(size.heightPx * (1 - size.padding));
   });
 
   it('одна точка — максимальный зум, центр в ней самой', () => {
