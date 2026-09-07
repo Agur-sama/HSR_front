@@ -1,4 +1,11 @@
 import { useMemo, useState } from 'react';
+import { ModuleStateProvider, useModuleState } from '../../bridge/context';
+import { jsonFileDraftStorage } from '../../bridge/storage';
+import { ModuleShell } from '../../shared/ui/ModuleShell';
+import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
+import { WorkObjectsStep } from './WorkObjectsStep';
+import { createInitialPz2Draft, formatPz2Km, getPz2RouteSource, isPz2WorkObjectsComplete } from './model';
+import type { Pz2Draft } from './types';
 import { CalculationsTable } from '../../components/CalculationsTable/CalculationsTable';
 import { DependencyChart } from '../../components/DependencyChart/DependencyChart';
 import { GanttChart } from '../../components/GanttChart/GanttChart';
@@ -28,7 +35,7 @@ const emptyMetrics: ProjectMetrics = {
   efficiency: 0,
 };
 
-export function Pz2Module() {
+function KsgTrainerStep() {
   const [definitions, setDefinitions] = useState<WorkDefinition[]>(() => cloneDefinitions(defaultWorkDefinitions));
   const [savedDefinitions, setSavedDefinitions] = useState<WorkDefinition[]>(() => cloneDefinitions(defaultWorkDefinitions));
   const [selectedId, setSelectedId] = useState(defaultWorkDefinitions[0]?.id ?? '');
@@ -145,21 +152,7 @@ export function Pz2Module() {
   }
 
   return (
-    <main className="ksg-module">
-      <header className="ksg-header">
-        <div>
-          <p className="eyebrow">ПЗ2</p>
-          <h1>Календарно-сетевой график</h1>
-          <p>{initialScenario.description}</p>
-        </div>
-        <nav className="ksg-nav" aria-label="Практические задания">
-          <a href="/?pz=1">ПЗ1: карта</a>
-          <a aria-current="page" href="/?pz=2">
-            ПЗ2: КСГ
-          </a>
-        </nav>
-      </header>
-
+    <div className="ksg-module">
       <section className="ksg-notice" aria-live="polite">
         {notice}
       </section>
@@ -223,7 +216,7 @@ export function Pz2Module() {
           <CalculationsTable items={model.schedule.items} onSelect={setSelectedId} selectedId={selectedWork.id} />
         </>
       ) : null}
-    </main>
+    </div>
   );
 }
 
@@ -264,4 +257,177 @@ function getNextEventValue(from: string, definitions: WorkDefinition[]) {
   }
 
   return String(Math.max(0, ...numericEvents) + 1);
+}
+
+/**
+ * ПЗ2 — календарно-сетевой график.
+ *
+ * Задание опирается на трассу из ПЗ1: студент приносит сохранённый там файл,
+ * меряет по нему участки и получает список работ. Поэтому модуль устроен так же,
+ * как ПЗ1: интро с загрузкой файла, теория, шаги, итог.
+ */
+export function Pz2Module() {
+  return (
+    <ModuleStateProvider<Pz2Draft> initialDraft={createInitialPz2Draft()}>
+      <Pz2Workspace />
+    </ModuleStateProvider>
+  );
+}
+
+function Pz2Workspace() {
+  const { draft, importedBridge } = useModuleState<Pz2Draft>();
+  const source = getPz2RouteSource(importedBridge);
+
+  const taskSteps: ModuleTaskStep[] = [
+    {
+      id: 'work-objects',
+      title: 'Объекты трассы',
+      goal:
+        'Пройдите линейкой по трассе и перечислите объекты, которые нужно построить: их тип, длину и условия грунта. Сумма участков должна сойтись с длиной маршрута.',
+      content: <WorkObjectsStep />,
+      isComplete: isPz2WorkObjectsComplete(draft),
+      completionHint: 'Добавьте хотя бы один объект и заполните его длину или количество',
+    },
+    {
+      id: 'ksg-trainer',
+      title: 'Выравнивание загрузки',
+      goal: 'Разберитесь, как резервы работ позволяют выровнять число занятых людей во времени.',
+      content: <KsgTrainerStep />,
+    },
+  ];
+
+  return (
+    <ModuleShell
+      intro={<Pz2IntroStep />}
+      introComplete={source.routeLine !== null}
+      introCompletionHint="Загрузите файл, сохранённый в ПЗ1, — из него берутся трасса и длина маршрута"
+      result={<Pz2ResultStep />}
+      subtitle="Практическое задание № 2"
+      taskSteps={taskSteps}
+      theory={<Pz2TheoryStep />}
+      title="Календарно-сетевой график строительства"
+    />
+  );
+}
+
+function Pz2IntroStep() {
+  const { importedBridge, setImportedBridge } = useModuleState<Pz2Draft>();
+  const [importError, setImportError] = useState('');
+  const [importStatus, setImportStatus] = useState('');
+  const source = getPz2RouteSource(importedBridge);
+
+  async function importBridgeFile(file: File) {
+    try {
+      const bridge = await jsonFileDraftStorage.load(file);
+
+      if (!bridge.completed?.pz1?.routeLine) {
+        setImportedBridge(null);
+        setImportStatus('');
+        setImportError('В этом файле нет трассы из ПЗ1. Загрузите файл, сохранённый в первом задании.');
+        return;
+      }
+
+      setImportedBridge(bridge);
+      setImportError('');
+      setImportStatus(`Загружен файл: ${file.name}`);
+    } catch (error) {
+      setImportStatus('');
+      setImportError(error instanceof Error ? error.message : 'Не удалось загрузить файл.');
+    }
+  }
+
+  return (
+    <div className="intro-layout">
+      <section className="form-section">
+        <p className="eyebrow">Исходные данные</p>
+        <h2>Трасса из первого задания</h2>
+        <p>
+          Второе задание продолжает первое: работы считаются по той линии ВСМ, которую вы уже проложили. Загрузите файл,
+          сохранённый в ПЗ1, — из него берутся сама трасса и длина маршрута.
+        </p>
+        <label
+          className="drop-zone"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            const file = event.dataTransfer.files.item(0);
+            if (file) {
+              void importBridgeFile(file);
+            }
+          }}
+        >
+          <input
+            accept="application/json,.json"
+            className="visually-hidden"
+            onChange={(event) => {
+              const file = event.target.files?.item(0);
+              if (file) {
+                void importBridgeFile(file);
+              }
+              event.currentTarget.value = '';
+            }}
+            type="file"
+          />
+          <span>Выберите JSON-файл ПЗ1 или перенесите его сюда</span>
+        </label>
+        {importStatus ? <p className="status-note">{importStatus}</p> : null}
+        {importError ? <p className="status-note status-note--error">{importError}</p> : null}
+      </section>
+
+      <section className="forecast-summary-panel">
+        <p className="eyebrow">Что прочитано из файла</p>
+        <h3>Проверка</h3>
+        {source.routeLine ? (
+          <dl className="forecast-summary-grid forecast-summary-grid--compact">
+            <div>
+              <dt>Длина маршрута</dt>
+              <dd>{formatPz2Km(source.totalLengthKm)}</dd>
+            </div>
+            <div>
+              <dt>Точек линии</dt>
+              <dd>{source.routeLine.vertices.length}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="status-note">Файл пока не загружен.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function Pz2TheoryStep() {
+  return (
+    <div className="theory-layout">
+      <p>
+        Чтобы построить линию, её сначала разбирают на объекты: где-то ремонтируют существующий путь, где-то насыпают
+        земляное полотно, где-то нужны эстакада, мост или тоннель. У каждого объекта есть тип и длина — из них потом
+        складывается список работ.
+      </p>
+      <p>
+        Длину участков меряют по карте. Неточности неизбежны, поэтому в конце сумма участков сверяется с длиной
+        маршрута: расхождение показывает, что часть трассы осталась без объектов или что объекты наложились друг на
+        друга.
+      </p>
+      <p>
+        Отдельно считают объекты, у которых длины нет, — например стрелочные переводы: они меряются штуками.
+      </p>
+    </div>
+  );
+}
+
+function Pz2ResultStep() {
+  const { draft } = useModuleState<Pz2Draft>();
+
+  return (
+    <div className="result-layout">
+      <section className="form-section">
+        <p className="eyebrow">Итог</p>
+        <h2>Объектов на трассе: {draft.workObjects.length}</h2>
+        <p className="status-note">
+          Разбиение на этапы, диаграмма Ганта и отчёт по материалам появятся здесь на следующих шагах разработки.
+        </p>
+      </section>
+    </div>
+  );
 }

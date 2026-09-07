@@ -412,6 +412,68 @@ button:focus-visible {
   line-height: 1.45;
 }
 
+/* Шаг «Объекты трассы» ПЗ2: карта с линейкой, таблица объектов и проверка
+   длины под ними. Раскладка та же, что у экрана карты ПЗ1, — студент попадает
+   в знакомую сетку. */
+.work-objects-step {
+  display: grid;
+  /* Таблице колонка шире, чем карте: в ней пять столбцов с длинными
+     подписями, и при равных долях списки типов обрезались на середине слова. */
+  grid-template-columns: minmax(360px, 1.15fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 22px;
+  align-items: start;
+}
+
+.work-objects-step > .osm-map-card {
+  grid-row: 1 / span 2;
+}
+
+/* Ширины столбцов заданы долями, а не подобраны содержимым: иначе длинное
+   название типа объекта отжимало условия грунта до нечитаемого «Обыч». */
+.work-objects-table {
+  table-layout: fixed;
+}
+
+.work-objects-table th:nth-child(1) {
+  width: 38%;
+}
+
+.work-objects-table th:nth-child(2),
+.work-objects-table th:nth-child(3) {
+  width: 14%;
+}
+
+.work-objects-table th:nth-child(4) {
+  width: 27%;
+}
+
+.work-objects-table th:nth-child(5) {
+  width: 7%;
+}
+
+.work-objects-table select {
+  width: 100%;
+}
+
+.work-objects-table td {
+  vertical-align: top;
+}
+
+/* Крестик удаления — по центру строки, как в таблицах ПЗ1. */
+.work-objects-table .data-entry__remove-column {
+  margin: 2px auto 0;
+}
+
+/* Пояснение под названием типа объекта — подсказка, а не заголовок строки. */
+.work-objects-table tbody th small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .intro-layout,
 .result-layout,
 .stations-step {
@@ -1835,6 +1897,7 @@ input.is-invalid {
 @media (max-width: 1100px) {
   .module-topline,
   .module-workbar,
+  .work-objects-step,
   .intro-layout,
   .result-layout,
   .stations-step,
