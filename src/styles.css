@@ -465,6 +465,49 @@ button:focus-visible {
   margin: 2px auto 0;
 }
 
+/* Строка, участок которой налезает на соседний: подсветка мягкая — это
+   предупреждение, а не ошибка ввода, переход дальше она не запрещает. */
+.work-objects-table tr.is-overlapping td,
+.work-objects-table tr.is-overlapping th {
+  background: var(--danger-bg);
+}
+
+/* Станции ПЗ1 под картой: по ним студент понимает, между какими точками
+   меряет участок, и на каком километре трассы каждая из них стоит. */
+.route-stations-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route-stations-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.route-stations-legend strong {
+  color: var(--primary);
+}
+
+.route-stations-legend__label {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 /* Пояснение под названием типа объекта — подсказка, а не заголовок строки. */
 .work-objects-table tbody th small {
   display: block;

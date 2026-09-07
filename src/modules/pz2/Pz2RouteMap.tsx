@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
-import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
+import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import '../../shared/lib/maplibreWorker';
 import { pointAtDistance, projectOntoRoute } from '../../shared/lib/routeRuler';
 import type { RouteRuler } from '../../shared/lib/routeRuler';
 import { formatPz2Km } from './model';
+import type { Pz2RouteSpan, Pz2StationMark } from './types';
 
 const ROUTE_SOURCE_ID = 'pz2-route';
 const ROUTE_LAYER_ID = 'pz2-route-line';
@@ -15,17 +16,23 @@ const MARK_SOURCE_ID = 'pz2-marks';
 const MARK_LAYER_ID = 'pz2-marks-points';
 /** Поля вокруг вписанной трассы, пикселей. */
 const ROUTE_PADDING_PX = 36;
+/** Сколько тайлов должно не загрузиться, прежде чем говорить о проблеме. */
+const TILE_ERRORS_BEFORE_NOTICE = 3;
 /** Допустимый промах мимо линии — доля длины трассы. */
 const SNAP_LIMIT_SHARE = 0.05;
 const SNAP_LIMIT_MIN_KM = 2;
 
 interface Pz2RouteMapProps {
   ruler: RouteRuler;
+  /** Станции из ПЗ1 с километражом — ориентиры, между которыми меряют участки. */
+  stations: Pz2StationMark[];
   /** Отметки линейки, км от начала трассы. Одна отметка — измерение начато. */
   marksKm: number[];
   onMarksChange: (marksKm: number[]) => void;
   /** Участок измерен: две отметки поставлены. */
-  onMeasured: (lengthKm: number) => void;
+  onMeasured: (lengthKm: number, span: Pz2RouteSpan) => void;
+  /** Участок строки, на которую навели в таблице: показываем вместо текущих отметок. */
+  highlightedSpan?: Pz2RouteSpan | null;
 }
 
 /**
@@ -36,9 +43,17 @@ interface Pz2RouteMapProps {
  * расстояний от начала. Так сумма участков сходится с длиной маршрута — на этом
  * держится проверка длины на шаге.
  */
-export function Pz2RouteMap({ ruler, marksKm, onMarksChange, onMeasured }: Pz2RouteMapProps) {
+export function Pz2RouteMap({
+  ruler,
+  stations,
+  marksKm,
+  highlightedSpan = null,
+  onMarksChange,
+  onMeasured,
+}: Pz2RouteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const markersRef = useRef<Marker[]>([]);
   const rulerRef = useRef(ruler);
   const marksRef = useRef(marksKm);
   const onMarksChangeRef = useRef(onMarksChange);
@@ -46,6 +61,8 @@ export function Pz2RouteMap({ ruler, marksKm, onMarksChange, onMeasured }: Pz2Ro
   const [isMapReady, setIsMapReady] = useState(false);
   const [hoverKm, setHoverKm] = useState<number | null>(null);
   const [missedClick, setMissedClick] = useState(false);
+  const [tilesFailed, setTilesFailed] = useState(false);
+  const tileErrorsRef = useRef(0);
 
   useEffect(() => {
     rulerRef.current = ruler;
@@ -64,7 +81,7 @@ export function Pz2RouteMap({ ruler, marksKm, onMarksChange, onMeasured }: Pz2Ro
       // Вид считает сама MapLibre по реальному размеру контейнера: расчётный
       // зум по предполагаемым размерам карточки промахивался, и трасса
       // уезжала за верхний край карты.
-      bounds: routeBounds(ruler),
+      bounds: routeBounds(ruler, stations),
       fitBoundsOptions: { padding: ROUTE_PADDING_PX, animate: false },
       container: containerRef.current,
       canvasContextAttributes: { contextType: 'webgl2', preserveDrawingBuffer: true },
@@ -90,6 +107,21 @@ export function Pz2RouteMap({ ruler, marksKm, onMarksChange, onMeasured }: Pz2Ro
     map.on('load', () => {
       ensureLayers(map);
       setIsMapReady(true);
+    });
+
+    // Подложка приходит с tile.openstreetmap.org, и в закрытой сети её может
+    // не быть. Молча показывать пустое поле нельзя: студент решит, что сломано
+    // всё задание, хотя трасса и линейка считаются на своих данных.
+    map.on('error', (event) => {
+      if (!isTileError(event.error)) {
+        return;
+      }
+
+      tileErrorsRef.current += 1;
+
+      if (tileErrorsRef.current >= TILE_ERRORS_BEFORE_NOTICE) {
+        setTilesFailed(true);
+      }
     });
 
     map.on('mousemove', (event: MapMouseEvent) => {
@@ -122,7 +154,7 @@ export function Pz2RouteMap({ ruler, marksKm, onMarksChange, onMeasured }: Pz2Ro
 
       const lengthKm = Math.abs(position.distanceKm - current[0]);
       onMarksChangeRef.current([current[0], position.distanceKm]);
-      onMeasuredRef.current(lengthKm);
+      onMeasuredRef.current(lengthKm, { fromKm: current[0], toKm: position.distanceKm });
     });
 
     return () => {
@@ -141,14 +173,38 @@ export function Pz2RouteMap({ ruler, marksKm, onMarksChange, onMeasured }: Pz2Ro
 
     setGeoJson(map, ROUTE_SOURCE_ID, lineFeature(ruler.points.map((point) => [point.lon, point.lat])));
 
-    const markPoints = marksKm
+    const shownMarks = highlightedSpan ? [highlightedSpan.fromKm, highlightedSpan.toKm] : marksKm;
+    const markPoints = shownMarks
       .map((distanceKm) => pointAtDistance(ruler, distanceKm))
       .filter((point): point is NonNullable<typeof point> => point !== null);
     setGeoJson(map, MARK_SOURCE_ID, pointFeatures(markPoints.map((point) => [point.lon, point.lat])));
 
-    const span = marksKm.length === 2 ? sliceRoute(ruler, marksKm[0], marksKm[1]) : [];
+    const span = shownMarks.length === 2 ? sliceRoute(ruler, shownMarks[0], shownMarks[1]) : [];
     setGeoJson(map, SPAN_SOURCE_ID, lineFeature(span.map((point) => [point.lon, point.lat])));
-  }, [isMapReady, marksKm, ruler]);
+  }, [highlightedSpan, isMapReady, marksKm, ruler]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map || !isMapReady) {
+      return;
+    }
+
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = stations.map((station) => {
+      const element = document.createElement('span');
+      element.className = 'maplibre-marker maplibre-marker--station';
+      element.textContent = station.label;
+      element.title = `Станция ${station.label}${station.name ? `: ${station.name}` : ''} — ${formatPz2Km(station.distanceKm)} от начала трассы`;
+
+      return new maplibregl.Marker({ element }).setLngLat([station.lon, station.lat]).addTo(map);
+    });
+
+    return () => {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+    };
+  }, [isMapReady, stations]);
 
   if (ruler.points.length === 0) {
     return (
@@ -167,6 +223,7 @@ export function Pz2RouteMap({ ruler, marksKm, onMarksChange, onMeasured }: Pz2Ro
   }
 
   const measuringKm = marksKm.length === 1 && hoverKm !== null ? Math.abs(hoverKm - marksKm[0]) : null;
+  const highlightedKm = highlightedSpan ? Math.abs(highlightedSpan.toKm - highlightedSpan.fromKm) : null;
 
   return (
     <section className="osm-map-card" aria-label="Карта трассы с линейкой">
@@ -185,13 +242,32 @@ export function Pz2RouteMap({ ruler, marksKm, onMarksChange, onMeasured }: Pz2Ro
         </button>
       </div>
 
+      {tilesFailed ? (
+        <p className="field-warning">
+          Подложка карты не загрузилась: нет доступа к tile.openstreetmap.org. Трасса, станции и линейка работают —
+          они считаются по файлу ПЗ1, — но фон карты будет пустым.
+        </p>
+      ) : null}
+
       <div className="osm-map-stage">
         <div className="maplibre-container" ref={containerRef} />
         <div className="route-length-panel">
-          <span>{marksKm.length === 1 ? 'Меряется' : 'Длина трассы'}</span>
-          <strong>{formatPz2Km(measuringKm ?? ruler.totalKm)}</strong>
+          <span>{panelLabel(highlightedKm, marksKm.length)}</span>
+          <strong>{formatPz2Km(highlightedKm ?? measuringKm ?? ruler.totalKm)}</strong>
         </div>
       </div>
+
+      {stations.length > 0 ? (
+        <ul className="route-stations-legend">
+          {stations.map((station) => (
+            <li key={station.label}>
+              <span className="route-stations-legend__label">{station.label}</span>
+              <span>{station.name || 'без названия'}</span>
+              <strong>{formatPz2Km(station.distanceKm)}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <p className="osm-map-hint">
         {missedClick ? 'Мимо трассы. Кликните ближе к линии — отметка ставится только на ней. ' : null}
@@ -209,15 +285,32 @@ export function Pz2RouteMap({ ruler, marksKm, onMarksChange, onMeasured }: Pz2Ro
  * Порог берём от длины трассы, а не в километрах наотмашь: на трассе в 500 км
  * промах в пару километров — это попадание, а на коротком участке — уже нет.
  */
+/** Ошибка загрузки тайла подложки — в отличие от ошибок стиля или слоёв. */
+function isTileError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+
+  return message.includes('tile.openstreetmap.org') || message.toLowerCase().includes('tile');
+}
+
 function snapLimitKm(ruler: RouteRuler) {
   return Math.max(SNAP_LIMIT_MIN_KM, ruler.totalKm * SNAP_LIMIT_SHARE);
 }
 
-function routeBounds(ruler: RouteRuler): [number, number, number, number] {
-  const lons = ruler.points.map((point) => point.lon);
-  const lats = ruler.points.map((point) => point.lat);
+/** Вписываем трассу вместе со станциями: станция может стоять чуть в стороне. */
+function routeBounds(ruler: RouteRuler, stations: Pz2StationMark[]): [number, number, number, number] {
+  const points = [...ruler.points, ...stations];
+  const lons = points.map((point) => point.lon);
+  const lats = points.map((point) => point.lat);
 
   return [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)];
+}
+
+function panelLabel(highlightedKm: number | null, markCount: number) {
+  if (highlightedKm !== null) {
+    return 'Участок строки';
+  }
+
+  return markCount === 1 ? 'Меряется' : 'Длина трассы';
 }
 
 function ensureLayers(map: MapLibreMap) {

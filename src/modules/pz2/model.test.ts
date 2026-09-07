@@ -5,9 +5,11 @@ import {
   createInitialPz2Draft,
   changePz2WorkObjectKind,
   createPz2Ruler,
+  findPz2OverlappingObjects,
   createPz2WorkObject,
   getPz2LengthCheck,
   getPz2RouteSource,
+  getPz2StationMarks,
   isPz2WorkObjectsComplete,
   parsePz2Number,
   pz2WorkObjectKinds,
@@ -80,6 +82,54 @@ describe('getPz2RouteSource', () => {
   });
 });
 
+describe('станции на трассе', () => {
+  const bridge = {
+    completed: {
+      pz1: {
+        totalLengthKm: 222.39,
+        stations: [
+          { label: 'Г', name: 'Конечная', lat: 0, lng: 2, type: 'terminal' },
+          { label: 'А', name: 'Начальная', lat: 0, lng: 0, type: 'terminal' },
+          { label: 'Б', name: 'Промежуточная', lat: 0.2, lng: 1, type: 'intermediate' },
+        ],
+        routeLine: {
+          vertices: [
+            { id: 'v1', lat: 0, lon: 0 },
+            { id: 'v2', lat: 0, lon: 2 },
+          ],
+          segments: [{ id: 's1', fromVertexId: 'v1', toVertexId: 'v2', sagittaKm: 0 }],
+        },
+      },
+    },
+  } as unknown as BridgeSchema;
+
+  it('километраж считается вдоль трассы, порядок — по трассе, а не по алфавиту', () => {
+    const source = getPz2RouteSource(bridge);
+    const marks = getPz2StationMarks(source, createPz2Ruler(source));
+
+    expect(marks.map((mark) => mark.label)).toEqual(['А', 'Б', 'Г']);
+    expect(marks[0].distanceKm).toBeCloseTo(0, 6);
+    // Градус долготы на экваторе — примерно 111,19 км.
+    expect(marks[1].distanceKm).toBeCloseTo(111.19, 1);
+    expect(marks[2].distanceKm).toBeCloseTo(222.39, 1);
+  });
+
+  it('станция в стороне от линии всё равно получает километраж ближайшей точки', () => {
+    const source = getPz2RouteSource(bridge);
+    const marks = getPz2StationMarks(source, createPz2Ruler(source));
+
+    // Промежуточная стоит в 0,2° севернее линии, но её километраж — по трассе.
+    expect(marks[1].lat).toBeCloseTo(0.2, 6);
+    expect(marks[1].distanceKm).toBeCloseTo(111.19, 1);
+  });
+
+  it('без станций в файле список пустой, а не сломанный', () => {
+    const source = getPz2RouteSource(null);
+
+    expect(getPz2StationMarks(source, createPz2Ruler(source))).toEqual([]);
+  });
+});
+
 describe('проверка длины', () => {
   it('пустая таблица — отдельное состояние, а не расхождение', () => {
     expect(getPz2LengthCheck(createInitialPz2Draft(), 100).status).toBe('empty');
@@ -108,6 +158,39 @@ describe('проверка длины', () => {
     const objects = [lengthObject('earthworks', '100'), { ...createPz2WorkObject('switch'), count: '4' }];
 
     expect(getPz2LengthCheck(draftWith(objects), 100).measuredKm).toBeCloseTo(100, 6);
+  });
+});
+
+describe('наложение участков', () => {
+  const span = (kind: Parameters<typeof createPz2WorkObject>[0], fromKm: number, toKm: number) =>
+    createPz2WorkObject(kind, String(Math.abs(toKm - fromKm)), { fromKm, toKm });
+
+  it('участки встык наложением не считаются', () => {
+    const draft = draftWith([span('earthworks', 0, 50), span('bridge', 50, 80)]);
+
+    expect(findPz2OverlappingObjects(draft)).toEqual([]);
+  });
+
+  it('перекрытие находится с обеих сторон, независимо от порядка строк', () => {
+    const first = span('earthworks', 40, 90);
+    const second = span('bridge', 0, 50);
+    const overlapping = findPz2OverlappingObjects(draftWith([first, second]));
+
+    expect(overlapping).toHaveLength(2);
+    expect(overlapping).toContain(first.id);
+    expect(overlapping).toContain(second.id);
+  });
+
+  it('участок, намеренный в обратную сторону, тоже сравнивается верно', () => {
+    const draft = draftWith([span('earthworks', 90, 40), span('bridge', 0, 50)]);
+
+    expect(findPz2OverlappingObjects(draft)).toHaveLength(2);
+  });
+
+  it('строки без участка молчат — у ручного ввода места на трассе нет', () => {
+    const draft = draftWith([lengthObject('earthworks', '50'), lengthObject('bridge', '50')]);
+
+    expect(findPz2OverlappingObjects(draft)).toEqual([]);
   });
 });
 

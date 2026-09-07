@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useModuleState } from '../../bridge/context';
 import { useTouchedFields } from '../../shared/hooks/useTouchedFields';
 import { GroupedNumberInput } from '../../shared/ui/GroupedNumberInput';
@@ -5,16 +6,18 @@ import { Pz2RouteMap } from './Pz2RouteMap';
 import {
   changePz2WorkObjectKind,
   createPz2Ruler,
+  findPz2OverlappingObjects,
   createPz2WorkObject,
   formatPz2Km,
   getPz2LengthCheck,
   getPz2RouteSource,
+  getPz2StationMarks,
   getPz2WorkObjectKind,
   pz2GroundConditions,
   pz2WorkObjectKinds,
   validatePz2WorkObject,
 } from './model';
-import type { Pz2Draft, Pz2GroundCondition, Pz2WorkObjectDraft, Pz2WorkObjectKind } from './types';
+import type { Pz2Draft, Pz2GroundCondition, Pz2RouteSpan, Pz2WorkObjectDraft, Pz2WorkObjectKind } from './types';
 
 /**
  * Шаг 01 ПЗ2: какие объекты нужно построить на трассе.
@@ -28,6 +31,10 @@ export function WorkObjectsStep() {
   const { markTouched, shouldShowError } = useTouchedFields();
   const source = getPz2RouteSource(importedBridge);
   const ruler = createPz2Ruler(source);
+  const stations = getPz2StationMarks(source, ruler);
+  const [highlightedId, setHighlightedId] = useState('');
+  const overlapping = new Set(findPz2OverlappingObjects(draft));
+  const highlighted = draft.workObjects.find((object) => object.id === highlightedId)?.span ?? null;
   const check = getPz2LengthCheck(draft, source.totalLengthKm || ruler.totalKm);
 
   function patchObject(id: string, patch: Partial<Pz2WorkObjectDraft>) {
@@ -46,10 +53,10 @@ export function WorkObjectsStep() {
     }));
   }
 
-  function addObject(lengthKm = '') {
+  function addObject(lengthKm = '', span?: Pz2RouteSpan) {
     updateDraft((current) => ({
       ...current,
-      workObjects: [...current.workObjects, createPz2WorkObject('existingLineRepair', lengthKm)],
+      workObjects: [...current.workObjects, createPz2WorkObject('existingLineRepair', lengthKm, span)],
     }));
   }
 
@@ -65,8 +72,10 @@ export function WorkObjectsStep() {
       <Pz2RouteMap
         marksKm={draft.rulerMarksKm}
         onMarksChange={(rulerMarksKm) => updateDraft((current) => ({ ...current, rulerMarksKm }))}
-        onMeasured={(lengthKm) => addObject(formatMeasured(lengthKm))}
+        highlightedSpan={highlighted}
+        onMeasured={(lengthKm, span) => addObject(formatMeasured(lengthKm), span)}
         ruler={ruler}
+        stations={stations}
       />
 
       <section className="form-section">
@@ -103,7 +112,14 @@ export function WorkObjectsStep() {
                   const error = shouldShowError(object.id, value) ? validatePz2WorkObject(object) : null;
 
                   return (
-                    <tr key={object.id}>
+                    <tr
+                      className={overlapping.has(object.id) ? 'is-overlapping' : undefined}
+                      key={object.id}
+                      onBlur={() => setHighlightedId('')}
+                      onFocus={() => setHighlightedId(object.id)}
+                      onMouseEnter={() => setHighlightedId(object.id)}
+                      onMouseLeave={() => setHighlightedId('')}
+                    >
                       <th scope="row">
                         <select
                           aria-label={`Тип объекта ${index + 1}`}
@@ -192,6 +208,12 @@ export function WorkObjectsStep() {
           </div>
         </dl>
         <p className={check.status === 'match' ? 'status-note' : 'field-warning'}>{describeCheck(check.status)}</p>
+        {overlapping.size > 0 ? (
+          <p className="field-warning">
+            Участки налезают друг на друга: {overlapping.size} строк{overlapping.size === 1 ? 'а' : 'и'} меряют один и тот
+            же кусок трассы. Наведите на строку — её участок подсветится на карте.
+          </p>
+        ) : null}
       </section>
     </div>
   );
@@ -206,9 +228,11 @@ function describeCheck(status: ReturnType<typeof getPz2LengthCheck>['status']) {
     return 'Сумма участков сошлась с длиной маршрута.';
   }
 
+  // Про наложение отдельно говорит проверка участков — она это знает точно,
+  // а не предполагает по одной лишь сумме.
   return status === 'short'
     ? 'Участков намерено меньше длины маршрута — часть трассы осталась без объектов.'
-    : 'Участков намерено больше длины маршрута — где-то они накладываются друг на друга.';
+    : 'Участков намерено больше длины маршрута — где-то набрались лишние километры.';
 }
 
 /** Линейкой точнее сотни метров не намеряешь, поэтому округляем до двух знаков. */

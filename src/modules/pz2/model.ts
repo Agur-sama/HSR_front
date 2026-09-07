@@ -1,9 +1,11 @@
 import type { BridgeSchema } from '../../bridge/schema';
 import { buildDisplayRoutePoints } from '../../shared/lib/routeGeometry';
-import { createRouteRuler } from '../../shared/lib/routeRuler';
+import { createRouteRuler, projectOntoRoute } from '../../shared/lib/routeRuler';
 import type { RouteRuler } from '../../shared/lib/routeRuler';
 import type {
   Pz2Draft,
+  Pz2RouteSpan,
+  Pz2StationMark,
   Pz2GroundCondition,
   Pz2RouteSource,
   Pz2WorkObjectDraft,
@@ -69,6 +71,8 @@ export const pz2GroundConditions: { id: Pz2GroundCondition; label: string }[] = 
 
 /** Допуск проверки длины: линейкой точнее не намеряешь. */
 export const PZ2_LENGTH_TOLERANCE_KM = 0.5;
+/** Насколько участки могут перекрыться, чтобы это ещё считалось стыком, а не наложением. */
+export const PZ2_SPAN_TOUCH_TOLERANCE_KM = 0.05;
 
 export function getPz2WorkObjectKind(kind: Pz2WorkObjectKind) {
   return pz2WorkObjectKinds.find((item) => item.id === kind) ?? pz2WorkObjectKinds[0];
@@ -78,14 +82,53 @@ export function createInitialPz2Draft(): Pz2Draft {
   return { workObjects: [], rulerMarksKm: [] };
 }
 
-export function createPz2WorkObject(kind: Pz2WorkObjectKind = 'existingLineRepair', lengthKm = ''): Pz2WorkObjectDraft {
+export function createPz2WorkObject(
+  kind: Pz2WorkObjectKind = 'existingLineRepair',
+  lengthKm = '',
+  span?: Pz2RouteSpan,
+): Pz2WorkObjectDraft {
   return {
     id: `work-object-${Math.random().toString(36).slice(2, 10)}`,
     kind,
     lengthKm,
     count: getPz2WorkObjectKind(kind).measure === 'count' ? '1' : '',
     condition: 'none',
+    span,
   };
+}
+
+/**
+ * Строки, участки которых налезают друг на друга.
+ *
+ * Сумма длин может сойтись с маршрутом и при этом быть набрана дважды по одному
+ * куску трассы: тогда часть линии осталась без работ, а проверка длины об этом
+ * молчит. Считаем только намеренные линейкой участки — у ручных строк места на
+ * трассе нет, и сказать о них нечего.
+ */
+export function findPz2OverlappingObjects(draft: Pz2Draft): string[] {
+  const measured = draft.workObjects
+    .filter((object) => object.span && getPz2WorkObjectKind(object.kind).measure === 'length')
+    .map((object) => ({
+      id: object.id,
+      fromKm: Math.min(object.span!.fromKm, object.span!.toKm),
+      toKm: Math.max(object.span!.fromKm, object.span!.toKm),
+    }))
+    .sort((left, right) => left.fromKm - right.fromKm);
+
+  const overlapping = new Set<string>();
+
+  for (let index = 1; index < measured.length; index += 1) {
+    const previous = measured[index - 1];
+    const current = measured[index];
+
+    // Стык встык — не наложение: конец одного участка совпадает с началом другого.
+    if (current.fromKm < previous.toKm - PZ2_SPAN_TOUCH_TOLERANCE_KM) {
+      overlapping.add(previous.id);
+      overlapping.add(current.id);
+    }
+  }
+
+  return [...overlapping];
 }
 
 /**
@@ -111,9 +154,40 @@ export function getPz2RouteSource(bridge: BridgeSchema | null | undefined): Pz2R
 
   return {
     routeLine: pz1?.routeLine ?? null,
+    stations: (pz1?.stations ?? []).filter((station) => Number.isFinite(station.lat) && Number.isFinite(station.lng)),
     totalLengthKm: pz1?.totalLengthKm ?? 0,
     variantTitle: pz1?.variantId ? `Вариант ${pz1.variantId}` : '',
   };
+}
+
+/**
+ * Станции ПЗ1 с километражом от начала трассы.
+ *
+ * Студент меряет участки между станциями, поэтому одной точки на карте мало:
+ * нужно видеть, на каком километре стоит станция. Километраж считается той же
+ * линейкой, что и участки, — иначе цифры на карте и в таблице разошлись бы.
+ * Порядок — по трассе, а не по алфавиту меток.
+ */
+export function getPz2StationMarks(source: Pz2RouteSource, ruler: RouteRuler): Pz2StationMark[] {
+  return source.stations
+    .flatMap((station) => {
+      const position = projectOntoRoute(ruler, { lat: station.lat, lon: station.lng });
+
+      if (!position) {
+        return [];
+      }
+
+      return [
+        {
+          label: station.label,
+          name: station.name,
+          lat: station.lat,
+          lon: station.lng,
+          distanceKm: position.distanceKm,
+        },
+      ];
+    })
+    .sort((left, right) => left.distanceKm - right.distanceKm);
 }
 
 export function createPz2Ruler(source: Pz2RouteSource): RouteRuler {
