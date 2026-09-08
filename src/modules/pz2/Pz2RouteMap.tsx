@@ -361,6 +361,9 @@ export function Pz2RouteMap({
 
       {stations.length > 0 ? (
         <ul className="route-stations-legend">
+          {/* Число рядом со станцией — её километр по трассе, а не расстояние по
+              прямой и не длина участка. Без подписи оно читалось как загадка. */}
+          <li className="route-stations-legend__caption">Станции, км от начала трассы:</li>
           {stations.map((station) => (
             <li key={station.label}>
               <span className="route-stations-legend__label">{station.label}</span>

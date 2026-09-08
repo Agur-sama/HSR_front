@@ -472,6 +472,14 @@ button:focus-visible {
   background: var(--danger-bg);
 }
 
+/* По умолчанию элемент грида не сжимается уже своего содержимого, и таблица с
+   минимальной шириной растягивала бы всю панель шага за край окна. Разрешаем
+   колонке быть уже — прокручивается тогда сама таблица внутри своей рамки. */
+.works-step > *,
+.stages-step > * {
+  min-width: 0;
+}
+
 /* Экран 03: упражнения идут одно под другим — сетевая диаграмма, затем тренажёр. */
 .exercises-step {
   display: grid;
@@ -737,6 +745,12 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.route-stations-legend__caption {
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
@@ -2207,11 +2221,31 @@ input.is-invalid {
     grid-template-rows: none;
   }
 
+  /* Сбросы для карты идут селекторами не слабее тех, что задают раскладку в
+     две колонки: правило вида «.stages-step > .osm-map-card { grid-column: 2 }»
+     специфичнее одиночного класса и в одну колонку не сбрасывалось — колонка 2
+     оставалась, экран разъезжался на две узкие полосы. */
   .map-placeholder,
-  .osm-map-card {
+  .osm-map-card,
+  .works-step > .osm-map-card,
+  .stages-step > .osm-map-card {
     grid-column: auto;
     grid-row: auto;
     position: static;
+  }
+
+  /* Строки двухколоночного режима в одну колонку только мешают. */
+  .works-step,
+  .stages-step {
+    grid-template-rows: none;
+  }
+
+  /* Таблица работ не сжимается дальше читаемого, а прокручивается вбок внутри
+     своей рамки: на узком экране доли столбцов схлопывали заголовки в
+     «КОЛИЧЕСТВОУСЛОВИЯ», а список типа работы обрезался на середине слова.
+     Горизонтальная прокрутка здесь — та же .table-scroll, что и в ПЗ1. */
+  .works-table {
+    min-width: 680px;
   }
 
   .station-grid,
