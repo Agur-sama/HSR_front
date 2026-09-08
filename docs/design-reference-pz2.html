@@ -45,73 +45,76 @@
     /* Цвет линии ВСМ — из палитры проекта, тот же, что на картах ПЗ1 и ПЗ2. */
     --route-hsr: #E0182D;
   }
-  body { font-family: -apple-system, sans-serif; background: #fff; margin: 0; padding: 24px; color: #222; }
+  /* Шрифт тот же, что в приложении: Raleway во всём интерфейсе, без системных
+     подмен. В сборке он лежит локально (@fontsource), здесь подключён ссылкой —
+     это документ, а не страница модуля. */
+  body { font-family: Raleway, Arial, sans-serif; background: #fff; margin: 0; padding: 24px; color: #222; }
   .ref-block { max-width: 680px; margin: 0 auto 40px; }
-  .ref-label { font-family: 'Raleway'; font-weight: 800; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .ref-label { font-weight: 800; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
   .ref-note { font-size: 12.5px; color: #5f5e5a; line-height: 1.55; margin: 10px 0 0; }
   .ref-note b { color: var(--indigo); }
   .card { border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; background: #fff; }
   .card-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--border); }
   .card-head .tag { display: flex; align-items: center; gap: 8px; }
   .card-head .dot { width: 8px; height: 8px; border-radius: 2px; background: var(--indigo); }
-  .card-head .title { font-family: 'Raleway'; font-weight: 600; font-size: 13px; color: var(--indigo); }
-  .card-head .meta { font-size: 12px; color: var(--muted); font-family: 'Raleway'; font-weight: 500; }
+  .card-head .title { font-weight: 600; font-size: 13px; color: var(--indigo); }
+  .card-head .meta { font-size: 12px; color: var(--muted); font-weight: 500; }
   .card-body { padding: 18px 20px; }
 
-  .status { font-family: 'Raleway'; font-weight: 800; font-size: 10px; letter-spacing: .06em; border-radius: 5px; padding: 3px 8px; text-transform: uppercase; }
+  .status { font-weight: 800; font-size: 10px; letter-spacing: .06em; border-radius: 5px; padding: 3px 8px; text-transform: uppercase; }
   .status.done { color: var(--teal-text); background: var(--teal-bg); }
   .status.wait { color: var(--warn-text); background: var(--warn-bg); }
 
   .lede { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 0 0 14px; }
   .states { display: flex; flex-wrap: wrap; gap: 16px; }
   .state { flex: 1 1 200px; min-width: 200px; }
-  .state-title { font-family: 'Raleway'; font-weight: 600; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .state-title { font-weight: 600; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
 
   /* ---------- 1. Карточка работы ---------- */
   .work-card { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-left: 4px solid var(--route-hsr); border-radius: 10px; padding: 8px 10px; background: #fff; cursor: grab; }
   .work-card .grip { color: var(--border-strong); font-size: 14px; line-height: 1; }
   .work-card .body { display: grid; gap: 2px; flex: 1; min-width: 0; }
-  .work-card .name { font-family: 'Raleway'; font-weight: 700; font-size: 13px; color: var(--indigo); }
+  .work-card .name { font-weight: 700; font-size: 13px; color: var(--indigo); }
   .work-card .meta { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
   .work-card .pill { border-radius: 999px; padding: 2px 8px; background: var(--bg-soft); color: var(--indigo); font-size: 11px; font-weight: 600; white-space: nowrap; }
   .work-card.is-ghost { opacity: .35; }
 
   /* ---------- 2. Пул и этапы ---------- */
   .board { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .col-title { font-family: 'Raleway'; font-weight: 800; font-size: 11px; letter-spacing: .06em; color: var(--teal-text); margin-bottom: 8px; text-transform: uppercase; }
+  .col-title { font-weight: 800; font-size: 11px; letter-spacing: .06em; color: var(--teal-text); margin-bottom: 8px; text-transform: uppercase; }
   .stage { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: #fff; margin-bottom: 10px; }
   .stage.is-over { border-color: var(--teal); background: var(--teal-bg); }
   .stage-head { display: flex; align-items: center; gap: 10px; }
   .stage-color { width: 12px; height: 12px; border-radius: 3px; flex: none; }
-  .stage-title { flex: 1; font-family: 'Raleway'; font-weight: 700; font-size: 14px; color: var(--indigo); }
+  .stage-title { flex: 1; font-weight: 700; font-size: 14px; color: var(--indigo); }
   .stage-meta { font-size: 12px; font-weight: 600; color: var(--muted); }
   .remove { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--border-strong); border-radius: 50%; background: #fff; color: var(--error); font-size: 14px; font-weight: 800; }
   .drop-hint { margin: 10px 0 0; border: 1px dashed var(--border-strong); border-radius: 10px; padding: 14px; color: var(--muted); font-size: 12px; font-weight: 600; text-align: center; }
   .stage.is-over .drop-hint { border-color: var(--teal); color: var(--teal-text); }
 
   /* ---------- 3. Добавление этапа ---------- */
-  .add-row { display: flex; align-items: center; gap: 8px; width: 100%; border: 1px dashed var(--border-strong); border-radius: 8px; padding: 10px 12px; background: none; color: var(--indigo); font-family: 'Raleway'; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .add-row { display: flex; align-items: center; gap: 8px; width: 100%; border: 1px dashed var(--border-strong); border-radius: 8px; padding: 10px 12px; background: none; color: var(--indigo); font-size: 14px; font-weight: 600; cursor: pointer; }
   .add-form { border: 1px solid var(--teal); border-radius: 8px; padding: 12px; background: #fff; }
   .add-form label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
-  .add-form input { width: 100%; box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; font-size: 12px; font-family: inherit; }
+  .add-form input { width: 100%; box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; font-size: 12px;  }
   .add-actions { display: flex; gap: 8px; margin-top: 12px; }
-  .btn-primary { font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: #fff; background: var(--indigo); border: none; border-radius: 7px; padding: 7px 14px; cursor: pointer; }
-  .btn-outline { font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: var(--indigo); background: #fff; border: 1px solid var(--border-strong); border-radius: 7px; padding: 7px 14px; cursor: pointer; }
+  .btn-primary { font-weight: 600; font-size: 12px; color: #fff; background: var(--indigo); border: none; border-radius: 7px; padding: 7px 14px; cursor: pointer; }
+  .btn-outline { font-weight: 600; font-size: 12px; color: var(--indigo); background: #fff; border: 1px solid var(--border-strong); border-radius: 7px; padding: 7px 14px; cursor: pointer; }
 
   /* ---------- 4. Линейка ---------- */
   .map { position: relative; height: 220px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: repeating-linear-gradient(0deg, #EEEEE8 0 46px, #E9E9E2 46px 47px), repeating-linear-gradient(90deg, #EEEEE8 0 78px, #E9E9E2 78px 79px); }
   .route-line { position: absolute; height: 5px; border-radius: 3px; background: var(--route-hsr); transform-origin: left center; }
   .span-line { position: absolute; height: 8px; border-radius: 4px; background: var(--teal); transform-origin: left center; }
   .mark { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: var(--teal); border: 2px solid #fff; transform: translate(-50%, -50%); }
-  .marker { position: absolute; display: grid; place-items: center; border-radius: 50%; border: 2px solid #fff; color: #fff; font-family: 'Raleway'; font-weight: 800; transform: translate(-50%, -50%); }
+  .marker { position: absolute; display: grid; place-items: center; border-radius: 50%; border: 2px solid #fff; color: #fff; font-weight: 800; transform: translate(-50%, -50%); }
   .marker.station { width: 30px; height: 30px; background: var(--indigo); font-size: 12px; }
   .marker.point { width: 22px; height: 22px; background: var(--route-hsr); font-size: 11px; }
   .ruler-live { position: absolute; transform: translate(-50%, -150%); border-radius: 999px; padding: 3px 9px; background: var(--teal); color: #fff; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .map-badge { position: absolute; left: 12px; bottom: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; background: var(--teal-bg); }
-  .map-badge span { display: block; font-family: 'Raleway'; font-weight: 800; font-size: 10px; letter-spacing: .06em; color: var(--teal-text); text-transform: uppercase; }
-  .map-badge b { font-family: 'Raleway'; font-size: 15px; color: var(--indigo); font-variant-numeric: tabular-nums; }
+  .map-badge span { display: block; font-weight: 800; font-size: 10px; letter-spacing: .06em; color: var(--teal-text); text-transform: uppercase; }
+  .map-badge b { font-size: 15px; color: var(--indigo); font-variant-numeric: tabular-nums; }
   .modes { position: absolute; right: 12px; top: 12px; display: flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; background: #fff; }
-  .modes button { font-family: 'Raleway'; font-size: 12px; font-weight: 600; padding: 5px 11px; border: 0; border-right: 1px solid var(--border); background: #fff; color: var(--ink); cursor: pointer; }
+  .modes button { font-size: 12px; font-weight: 600; padding: 5px 11px; border: 0; border-right: 1px solid var(--border); background: #fff; color: var(--ink); cursor: pointer; }
   .modes button:last-child { border-right: 0; }
   .modes button[aria-pressed="true"] { background: var(--teal-bg); color: var(--teal-text-dark); }
   .esc-hint { position: absolute; right: 12px; top: 48px; border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 10px; background: rgba(255,255,255,.92); font-size: 11px; font-weight: 600; color: var(--muted); }
@@ -122,8 +125,8 @@
   /* ---------- 5. Сверка длины ---------- */
   .recon { display: flex; flex-wrap: wrap; gap: 12px; }
   .recon div { flex: 1 1 150px; background: var(--bg-soft); border-radius: 10px; padding: 10px 12px; }
-  .recon dt { font-family: 'Raleway'; font-weight: 800; font-size: 10px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
-  .recon dd { margin: 0; font-family: 'Raleway'; font-weight: 800; font-size: 19px; color: var(--indigo); font-variant-numeric: tabular-nums; }
+  .recon dt { font-weight: 800; font-size: 10px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+  .recon dd { margin: 0; font-weight: 800; font-size: 19px; color: var(--indigo); font-variant-numeric: tabular-nums; }
   .recon dd.is-off { color: var(--error); }
   .recon dd.is-matched { color: var(--teal-text); }
   .state-msg { margin: 10px 0 0; font-size: 12px; font-weight: 700; }
@@ -135,7 +138,7 @@
   .answer + .answer { margin-top: 10px; }
   .answer.correct { border-color: var(--teal); background: var(--teal-bg); }
   .answer.wrong { border-color: var(--error-border); background: var(--error-bg); }
-  .verdict { display: flex; align-items: center; gap: 8px; font-family: 'Raleway'; font-weight: 800; font-size: 13px; margin-bottom: 6px; }
+  .verdict { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px; margin-bottom: 6px; }
   .verdict.correct { color: var(--teal-text); }
   .verdict.wrong { color: var(--error); }
   .mark-badge { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 12px; flex: none; }
@@ -159,7 +162,7 @@
   .hist-axis { display: flex; justify-content: space-between; padding: 4px 12px 10px 128px; background: var(--bg-soft); font-size: 10px; color: var(--muted); }
   .ksg-foot { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--border); }
   .metric { font-size: 11px; color: var(--muted); }
-  .metric b { display: block; font-family: 'Raleway'; font-size: 16px; color: var(--indigo); font-variant-numeric: tabular-nums; }
+  .metric b { display: block; font-size: 16px; color: var(--indigo); font-variant-numeric: tabular-nums; }
   .metric.bad b { color: var(--error); }
   .legend { display: flex; gap: 12px; margin-left: auto; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
   .legend span { display: flex; align-items: center; gap: 6px; }
@@ -505,6 +508,66 @@
   </div>
 </div>
 
+<!-- 7б -->
+<div class="ref-block">
+  <div class="ref-label">7б. Ресурсный график и Гант</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="tag"><span class="dot"></span><span class="title">Экран 04 — распределение людей</span></div>
+      <span class="status done">в работе</span>
+    </div>
+    <div class="card-body">
+      <p class="lede">
+        Людей на проект фиксированное число, студент раскладывает их по этапам. Этапы строятся
+        параллельно, поэтому от раскладки зависят и срок, и ровность загрузки.
+      </p>
+
+      <div class="ksg">
+        <div class="ksg-grid">
+          <div class="ksg-label">Северный участок</div>
+          <div class="ksg-track"><div class="bar" style="left:0; width:88%">Земляное полотно</div></div>
+          <div class="ksg-label">Южный участок</div>
+          <div class="ksg-track"><div class="bar movable" style="left:0; width:23%">Мост</div></div>
+        </div>
+        <div class="hist">
+          <i class="over" style="height:100%"></i><i class="over" style="height:100%"></i><i class="over" style="height:100%"></i>
+          <i style="height:66%"></i><i style="height:66%"></i><i style="height:66%"></i><i style="height:66%"></i>
+          <i style="height:66%"></i><i style="height:66%"></i><i style="height:66%"></i>
+        </div>
+        <div class="hist-axis"><span>день 1</span><span>день 1167</span></div>
+        <div class="ksg-foot">
+          <div class="metric"><b>1167</b>срок, дней</div>
+          <div class="metric bad"><b>180</b>пик потребности, чел.</div>
+          <div class="metric"><b>114</b>в среднем занято, чел.</div>
+          <div class="metric bad"><b>317</b>дней с нехваткой</div>
+          <div class="legend">
+            <span><i class="sw" style="background:#003D84"></i> этап 1</span>
+            <span><i class="sw" style="background:#08A696"></i> этап 2</span>
+            <span><i class="sw" style="background:#C0392B"></i> нехватка людей</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="ref-note">
+        <b>Правила.</b> Полоса работы окрашена цветом своего этапа — тем же, каким этап показан на
+        карте и в списке: три экрана говорят об этапе одним цветом. Гистограмма — главный элемент, её
+        студент и выравнивает; нехватка людей красится в её столбцах, а не в полосах работ, потому что
+        виновато совпадение этапов во времени, а не отдельная работа. Столбцов постоянное число, а не
+        по дню на столбец: на проекте в тысячу дней столбец был бы тоньше пикселя и гистограмма
+        исчезала. Внутри столбца берётся пик, а не среднее — нехватка на два дня из десяти это
+        нехватка, усреднение её прячет. Перекос называется словами: сколько людей не распределено или
+        на сколько назначено больше, чем есть.
+      </p>
+      <p class="ref-note">
+        <b>На чём построено.</b> Длительность работы = трудоёмкость ÷ (люди × смена). Трудоёмкость
+        берётся из нормативов, которые заказчик разрешил сгенерировать (ТЗ §9) и передал эксперту на
+        проверку. Экран об этом говорит прямо, а сами нормативы лежат отдельным файлом — заменить их
+        можно, не трогая ни расчёт, ни экраны.
+      </p>
+    </div>
+  </div>
+</div>
+
 <!-- 8 -->
 <div class="ref-block">
   <div class="ref-label">8. Что берётся из основного эталона без изменений</div>
@@ -530,7 +593,8 @@
         <li><b>в-2</b> — формулировка второго условия грунта: «скальные породы» или «скальные основания». Влияет на текст пилюли в §1. Сейчас взято написание из ТЗ.</li>
         <li><b>в-3</b> — мост и тоннель линейные или точечные. Сейчас линейные, как на доске; если точечные — меняется и §1, и набор для сверки в §5.</li>
         <li><b>в-5</b> — допуск сверки длин и блокировать ли переход. Сейчас 0,5 км и переход не блокируется ни при каком расхождении.</li>
-        <li><b>в-6</b> — нормативы трудоёмкости и длительности. До ответа §7 работает только на предустановленных данных.</li>
+        <li><b>в-6</b> — нормативы трудоёмкости и длительности. Экран 04 (§7б) построен на временных сгенерированных нормативах по разрешению из §9 ТЗ; после ответа заменяется содержимое файла нормативов, экраны не трогаются.</li>
+        <li><b>в-7</b> — откуда берётся общее число рабочих: от заказчика, из варианта или вводит студент. Сейчас вводит студент.</li>
         <li><b>в-8</b> — формат ответа в упражнении с критическим путём. Поле ввода в §6 намеренно не нарисовано, счётчик попыток и объяснение не заведены в модели.</li>
       </ul>
     </div>

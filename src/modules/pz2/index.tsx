@@ -4,6 +4,7 @@ import { jsonFileDraftStorage } from '../../bridge/storage';
 import { ModuleShell } from '../../shared/ui/ModuleShell';
 import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
 import { ExercisesStep } from './ExercisesStep';
+import { PlanStep } from './PlanStep';
 import { StagesStep } from './StagesStep';
 import { WorksStep } from './WorksStep';
 import {
@@ -14,10 +15,12 @@ import {
   getPz2RouteSource,
   getPz2SegmentMarks,
   getPz2StageWorks,
+  isPz2PlanComplete,
   isPz2StagesComplete,
   isPz2WorksComplete,
   pz2StepIds,
 } from './model';
+import { getPz2Plan, getPz2Report } from './plan';
 import type { Pz2Draft } from './types';
 import { CalculationsTable } from '../../components/CalculationsTable/CalculationsTable';
 import { DependencyChart } from '../../components/DependencyChart/DependencyChart';
@@ -317,6 +320,15 @@ function Pz2Workspace() {
         'Определите критический путь по сетевой диаграмме и разберитесь, как резервы работ позволяют выровнять число занятых людей во времени.',
       content: <ExercisesStep trainer={<KsgTrainerStep />} />,
     },
+    {
+      id: 'plan',
+      title: 'Ресурсный график',
+      goal:
+        'Распределите рабочих по этапам так, чтобы потребность в людях была ровной: этапы строятся параллельно, и от раскладки зависят и срок, и загрузка.',
+      content: <PlanStep />,
+      isComplete: isPz2PlanComplete(draft),
+      completionHint: 'Укажите общее число рабочих и назначьте людей на каждый этап',
+    },
   ];
 
   return (
@@ -476,6 +488,109 @@ function Pz2TheoryStep() {
   );
 }
 
+/**
+ * Отчёт по проекту (ТЗ ПЗ2 §9): материалы, человеко-часы, машино-часы.
+ *
+ * Считается по тем же нормативам, что и сроки на экране 04, поэтому цифры
+ * отчёта и графика сходятся между собой. Черновой характер нормативов сказан
+ * прямо: заказчик разрешил их сгенерировать и передал на проверку эксперту.
+ */
+function Pz2ReportSection() {
+  const { draft, importedBridge } = useModuleState<Pz2Draft>();
+  const source = getPz2RouteSource(importedBridge);
+  const report = getPz2Report(draft);
+  const plan = getPz2Plan(
+    draft,
+    draft.stages.map((stage) => ({
+      stageId: stage.id,
+      workers: Number(draft.workersByStage[stage.id]?.replace(/[^0-9]/g, '') || 0),
+    })),
+    Number(draft.totalWorkers.replace(/[^0-9]/g, '') || 0),
+  );
+
+  if (report.laborHours === 0) {
+    return (
+      <section className="form-section">
+        <p className="eyebrow">Отчёт</p>
+        <h3>Материалы, человеко-часы и машино-часы</h3>
+        <p className="status-note">
+          Отчёт считается по работам с длиной или количеством. Пока таких работ нет, считать нечего.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="form-section">
+      <p className="eyebrow">Отчёт</p>
+      <h3>Материалы, человеко-часы и машино-часы</h3>
+
+      <dl className="forecast-summary-grid forecast-summary-grid--compact">
+        <div>
+          <dt>Трудоёмкость</dt>
+          <dd>{formatAmount(report.laborHours)} чел.-ч</dd>
+        </div>
+        <div>
+          <dt>Машино-часы</dt>
+          <dd>{formatAmount(report.machineHours)} маш.-ч</dd>
+        </div>
+        <div>
+          <dt>Срок по графику</dt>
+          <dd>{plan.metrics.projectDuration > 0 ? `${plan.metrics.projectDuration} дн.` : 'не рассчитан'}</dd>
+        </div>
+        <div>
+          <dt>Длина маршрута</dt>
+          <dd>{formatPz2Km(source.totalLengthKm)}</dd>
+        </div>
+      </dl>
+
+      <div className="report-columns">
+        <ReportTable caption="Материалы" rows={report.materials} />
+        <ReportTable caption="Машины" rows={report.machines} />
+      </div>
+
+      <p className="status-note">
+        Нормативы расхода — черновые. Заказчик разрешил сгенерировать их, чтобы не задерживать работу (ТЗ §9), и передал
+        на проверку эксперту: числа поменяются, способ расчёта — нет.
+      </p>
+    </section>
+  );
+}
+
+function ReportTable({ caption, rows }: { caption: string; rows: ReturnType<typeof getPz2Report>['materials'] }) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="table-scroll">
+      <table className="input-table">
+        <caption className="eyebrow">{caption}</caption>
+        <thead>
+          <tr>
+            <th>Позиция</th>
+            <th className="numeric">Количество</th>
+            <th>Единица</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.title}>
+              <th scope="row">{row.title}</th>
+              <td className="numeric">{formatAmount(row.amount)}</td>
+              <td>{row.unit}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function formatAmount(value: number) {
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value);
+}
+
 function Pz2ResultStep() {
   const { draft, importedBridge } = useModuleState<Pz2Draft>();
   const source = getPz2RouteSource(importedBridge);
@@ -521,11 +636,9 @@ function Pz2ResultStep() {
         ) : null}
 
         {inPool > 0 ? <p className="field-warning">В пуле осталось работ: {inPool}</p> : null}
-
-        <p className="status-note">
-          Ресурсный график с диаграммой Ганта и отчёт по материалам и машино-часам — следующий этап работ.
-        </p>
       </section>
+
+      <Pz2ReportSection />
     </div>
   );
 }

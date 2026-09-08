@@ -488,6 +488,155 @@ button:focus-visible {
   min-width: 0;
 }
 
+/* Экран 04: слева распределение людей, справа график и загрузка. */
+.plan-step {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.plan-step > * {
+  min-width: 0;
+}
+
+.plan-total {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 16px;
+  max-width: 260px;
+}
+
+.plan-total label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.plan-stages {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-stages li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.plan-stages__title {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plan-stages__title strong {
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.plan-stages li .grouped-number-input,
+.plan-stages li input {
+  max-width: 92px;
+  text-align: right;
+}
+
+/* Гант: строка на этап, внутри работы в порядке выполнения. */
+.gantt {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 16px;
+}
+
+.gantt__row {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.gantt__label {
+  overflow: hidden;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt__track {
+  position: relative;
+  display: block;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--bg-soft);
+}
+
+.gantt__bar {
+  position: absolute;
+  top: 3px;
+  height: 20px;
+  min-width: 3px;
+  overflow: hidden;
+  border-radius: 5px;
+  padding: 0 6px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt__axis {
+  display: flex;
+  justify-content: space-between;
+  padding-left: 142px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Гистограмма загрузки — то, что студент выравнивает. */
+.load-histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 90px;
+  margin: 4px 0 6px;
+  padding-left: 142px;
+}
+
+.load-histogram__bar {
+  flex: 1;
+  min-height: 1px;
+  border-radius: 2px 2px 0 0;
+  background: var(--primary);
+}
+
+.load-histogram__bar.is-over {
+  background: var(--danger);
+}
+
+.report-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.report-columns caption {
+  padding-bottom: 6px;
+  text-align: left;
+}
+
 /* Экран 03: упражнения идут одно под другим — сетевая диаграмма, затем тренажёр. */
 .exercises-step {
   display: grid;
@@ -560,27 +709,11 @@ button:focus-visible {
 }
 
 /* Кнопка превращается в форму на месте, без модального окна: этапы заводят
-   подряд, и закрывать диалог на каждый было бы лишним шагом. */
+   подряд, и закрывать диалог на каждый было бы лишним шагом. Сама кнопка —
+   обычная кнопка проекта: пунктирная строка на её месте выглядела блёкло и
+   выбивалась из остального интерфейса. */
 .stage-add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
   margin: 12px 0 16px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: none;
-  color: var(--primary);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.stage-add-row:hover {
-  border-color: var(--teal);
-  color: var(--teal-text);
 }
 
 .stage-add-form {
@@ -715,12 +848,6 @@ button:focus-visible {
 /* След на прежнем месте: пока карточку тащат, видно, откуда её взяли. */
 .work-card.is-ghost {
   opacity: 0.35;
-}
-
-.work-card__grip {
-  color: var(--border-strong);
-  font-size: 14px;
-  line-height: 1;
 }
 
 .work-card__conditions {
@@ -2340,6 +2467,7 @@ input.is-invalid {
   .module-workbar,
   .works-step,
   .stages-step,
+  .plan-step,
   .intro-layout,
   .result-layout,
   .stations-step,

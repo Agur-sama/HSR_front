@@ -232,10 +232,35 @@ export interface Pz2CriticalPathAnswer {
   correct: boolean;
 }
 
+/** Ресурсный план: как студент разложил людей и что из этого вышло. */
+export interface Pz2PlanResult {
+  totalWorkers: number;
+  /** Сколько людей назначено этапу: id этапа → число. */
+  workersByStage: Record<string, number>;
+  durationDays: number;
+  peakWorkers: number;
+  overloadDays: number;
+}
+
+/**
+ * Отчёт по проекту. Числа посчитаны по временным нормативам (ТЗ ПЗ2 §9):
+ * заказчик разрешил их сгенерировать до проверки экспертом.
+ */
+export interface Pz2ReportResult {
+  laborHours: number;
+  machineHours: number;
+  materials: { title: string; unit: string; amount: number }[];
+  machines: { title: string; unit: string; amount: number }[];
+  /** Нормативы черновые и подлежат замене — признак едет вместе с числами. */
+  normsAreDraft: true;
+}
+
 export interface Pz2Result {
   works: Pz2Work[];
   stages: Pz2Stage[];
   criticalPath: Pz2CriticalPathAnswer[];
+  plan: Pz2PlanResult;
+  report: Pz2ReportResult;
   /** Эталон из ПЗ1, с которым сверялась сумма длин. */
   routeLengthKm: number;
   /** Сумма длин линейных работ на момент сохранения. */

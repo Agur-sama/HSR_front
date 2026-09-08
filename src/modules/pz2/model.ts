@@ -1,9 +1,18 @@
 import { createBridge } from '../../bridge/io';
-import type { BridgeSchema, ModulePosition, Pz2Result, Pz2Stage, Pz2Work } from '../../bridge/schema';
+import type {
+  BridgeSchema,
+  ModulePosition,
+  Pz2PlanResult,
+  Pz2ReportResult,
+  Pz2Result,
+  Pz2Stage,
+  Pz2Work,
+} from '../../bridge/schema';
 import { buildRoutePointsBySegment, computeRouteLineMetrics } from '../../shared/lib/routeGeometry';
 import { createRouteRulerFromSegments, projectOntoRoute } from '../../shared/lib/routeRuler';
 import type { RouteRuler } from '../../shared/lib/routeRuler';
 import { pz2NetworkExercises } from './networkExercises';
+import { getPz2Plan, getPz2Report } from './plan';
 import type {
   Pz2Draft,
   Pz2RouteSpan,
@@ -96,7 +105,7 @@ export function getPz2WorkKind(kind: Pz2WorkKind) {
 }
 
 export function createInitialPz2Draft(): Pz2Draft {
-  return { works: [], stages: [], criticalPathAnswers: {}, rulerMarksKm: [] };
+  return { works: [], stages: [], criticalPathAnswers: {}, totalWorkers: '', workersByStage: {}, rulerMarksKm: [] };
 }
 
 export function createPz2Work(
@@ -464,6 +473,21 @@ export function getPz2StageSpans(draft: Pz2Draft) {
   });
 }
 
+/** Склонение слова «работа» при числе — нужно и на экране этапов, и в графике. */
+export function pluralWorks(count: number) {
+  const tail = count % 100;
+
+  if (tail >= 11 && tail <= 14) {
+    return 'работ';
+  }
+
+  if (count % 10 === 1) {
+    return 'работа';
+  }
+
+  return count % 10 >= 2 && count % 10 <= 4 ? 'работы' : 'работ';
+}
+
 /** Работы этапа в порядке их появления. Пул — этап с id null. */
 export function getPz2StageWorks(draft: Pz2Draft, stageId: string | null) {
   return draft.works.filter((work) => work.stageId === stageId);
@@ -486,8 +510,14 @@ export function assignPz2WorkToStage(draft: Pz2Draft, workId: string, stageId: s
  * Порядок оставшихся этапов пересчитывается, чтобы не осталось дыр.
  */
 export function removePz2Stage(draft: Pz2Draft, stageId: string): Pz2Draft {
+  // Люди, назначенные удалённому этапу, освобождаются вместе с ним: иначе они
+  // остались бы «распределены» в никуда и не сошлись бы с общим числом.
+  const { [stageId]: removedWorkers, ...workersByStage } = draft.workersByStage;
+  void removedWorkers;
+
   return {
     ...draft,
+    workersByStage,
     stages: draft.stages
       .filter((stage) => stage.id !== stageId)
       .map((stage, index) => ({ ...stage, order: index })),
@@ -515,8 +545,24 @@ export function splitPathNodes(answer: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Шаг «Ресурсный график» пройден, когда людей хватило на все этапы.
+ *
+ * Ровность загрузки не проверяется: это предмет упражнения, а не условие
+ * перехода — критерий качества заказчик словами задал, числом нет.
+ */
+export function isPz2PlanComplete(draft: Pz2Draft) {
+  const total = parsePz2Number(draft.totalWorkers) ?? 0;
+
+  if (total <= 0 || draft.stages.length === 0) {
+    return false;
+  }
+
+  return draft.stages.every((stage) => (parsePz2Number(draft.workersByStage[stage.id] ?? '') ?? 0) > 0);
+}
+
 /** Шаги задания стабильными идентификаторами: позиция в файле не зависит от порядка. */
-export const pz2StepIds = ['works', 'stages', 'exercises'] as const;
+export const pz2StepIds = ['works', 'stages', 'exercises', 'plan'] as const;
 
 export type Pz2StepId = (typeof pz2StepIds)[number];
 
@@ -547,8 +593,41 @@ export function createPz2Result(draft: Pz2Draft, routeLengthKm: number): Pz2Resu
       answer: draft.criticalPathAnswers[exercise.id] ?? '',
       correct: checkPz2CriticalPath(draft.criticalPathAnswers[exercise.id] ?? '', exercise.answer),
     })),
+    plan: createPz2PlanResult(draft),
+    report: createPz2ReportResult(draft),
     routeLengthKm,
     measuredLengthKm: getPz2LengthCheck(draft, routeLengthKm).measuredKm,
+  };
+}
+
+/** Раскладка людей и то, что из неё вышло по срокам. */
+function createPz2PlanResult(draft: Pz2Draft): Pz2PlanResult {
+  const totalWorkers = parsePz2Number(draft.totalWorkers) ?? 0;
+  const allocations = draft.stages.map((stage) => ({
+    stageId: stage.id,
+    workers: parsePz2Number(draft.workersByStage[stage.id] ?? '') ?? 0,
+  }));
+  const plan = getPz2Plan(draft, allocations, totalWorkers);
+
+  return {
+    totalWorkers,
+    workersByStage: Object.fromEntries(allocations.map((allocation) => [allocation.stageId, allocation.workers])),
+    durationDays: plan.metrics.projectDuration,
+    peakWorkers: plan.metrics.maxWorkers,
+    overloadDays: plan.metrics.overloadDays,
+  };
+}
+
+/** Отчёт по нормативам. Признак черновых данных едет вместе с числами. */
+function createPz2ReportResult(draft: Pz2Draft): Pz2ReportResult {
+  const report = getPz2Report(draft);
+
+  return {
+    laborHours: report.laborHours,
+    machineHours: report.machineHours,
+    materials: report.materials.map((row) => ({ title: row.title, unit: row.unit, amount: row.amount })),
+    machines: report.machines.map((row) => ({ title: row.title, unit: row.unit, amount: row.amount })),
+    normsAreDraft: true,
   };
 }
 
@@ -577,6 +656,7 @@ export function createPz2Bridge(
       pz2: {
         works: isPz2WorksComplete(draft),
         stages: isPz2StagesComplete(draft),
+        plan: isPz2PlanComplete(draft),
       },
     },
     { ...importedBridge?.position, ...(position ? { pz2: position } : {}) },

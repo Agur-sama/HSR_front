@@ -12,6 +12,7 @@ import {
   getPz2StageColor,
   getPz2StageSpans,
   getPz2StationMarks,
+  pluralWorks,
   getPz2StageWorks,
   getPz2WorkKind,
   parsePz2Number,
@@ -156,8 +157,13 @@ export function StagesStep() {
             </div>
           </div>
         ) : (
-          <button className="stage-add-row" onClick={() => setIsAdding(true)} ref={addButtonRef} type="button">
-            <span aria-hidden="true">＋</span> Добавить этап
+          <button
+            className="button button--outline stage-add-row"
+            onClick={() => setIsAdding(true)}
+            ref={addButtonRef}
+            type="button"
+          >
+            + Добавить этап
           </button>
         )}
 
@@ -297,10 +303,6 @@ function WorkCard({ draft, work, isDragging, onDragStart, onMove }: WorkCardProp
         onDragStart(work.id);
       }}
     >
-      {/* Захват за всю карточку; точки — подсказка, что её можно тащить. */}
-      <span aria-hidden="true" className="work-card__grip">
-        ⠿
-      </span>
       <div>
         <strong>{kind.label}</strong>
         <span className="work-card__meta">{describeWork(work)}</span>
@@ -368,16 +370,3 @@ function describeWorks(works: Pz2WorkDraft[]) {
   return `${works.length} ${pluralWorks(works.length)} · ${formatPz2Km(lengthKm)}`;
 }
 
-function pluralWorks(count: number) {
-  const tail = count % 100;
-
-  if (tail >= 11 && tail <= 14) {
-    return 'работ';
-  }
-
-  if (count % 10 === 1) {
-    return 'работа';
-  }
-
-  return count % 10 >= 2 && count % 10 <= 4 ? 'работы' : 'работ';
-}
