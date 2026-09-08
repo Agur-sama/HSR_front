@@ -10,6 +10,7 @@ import {
   createInitialPz2Draft,
   createPz2Bridge,
   formatPz2Km,
+  getPz2LengthCheck,
   getPz2RouteSource,
   getPz2StageWorks,
   isPz2StagesComplete,
@@ -460,15 +461,53 @@ function Pz2TheoryStep() {
 }
 
 function Pz2ResultStep() {
-  const { draft } = useModuleState<Pz2Draft>();
+  const { draft, importedBridge } = useModuleState<Pz2Draft>();
+  const source = getPz2RouteSource(importedBridge);
+  const check = getPz2LengthCheck(draft, source.totalLengthKm);
+  const inPool = getPz2StageWorks(draft, null).length;
 
   return (
     <div className="result-layout">
       <section className="form-section">
         <p className="eyebrow">Итог</p>
         <h2>Работ по трассе: {draft.works.length}</h2>
+
+        <dl className="forecast-summary-grid forecast-summary-grid--compact">
+          <div>
+            <dt>Намерено</dt>
+            <dd>{formatPz2Km(check.measuredKm)}</dd>
+          </div>
+          <div>
+            <dt>Маршрут из ПЗ1</dt>
+            <dd>{formatPz2Km(check.routeKm)}</dd>
+          </div>
+          <div>
+            <dt>Этапов</dt>
+            <dd>{draft.stages.length}</dd>
+          </div>
+        </dl>
+
+        {draft.stages.length > 0 ? (
+          <ul className="stage-list">
+            {draft.stages.map((stage) => {
+              const works = getPz2StageWorks(draft, stage.id);
+
+              return (
+                <li className="stage-card" key={stage.id}>
+                  <div className="stage-card__head">
+                    <h4>{stage.title}</h4>
+                    <span className="stage-card__meta">Работ: {works.length}</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+
+        {inPool > 0 ? <p className="field-warning">В пуле осталось работ: {inPool}</p> : null}
+
         <p className="status-note">
-          Разбиение на этапы, диаграмма Ганта и отчёт по материалам появятся здесь на следующих шагах разработки.
+          Ресурсный график с диаграммой Ганта и отчёт по материалам и машино-часам — следующий этап работ.
         </p>
       </section>
     </div>
