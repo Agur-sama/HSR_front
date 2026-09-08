@@ -71,9 +71,12 @@ export function Pz2RouteMap({
   const [hoverKm, setHoverKm] = useState<number | null>(null);
   const [missedClick, setMissedClick] = useState(false);
   const [tilesFailed, setTilesFailed] = useState(false);
+  const [mode, setMode] = useState<'view' | 'ruler'>('ruler');
+  const modeRef = useRef(mode);
   const tileErrorsRef = useRef(0);
 
   useEffect(() => {
+    modeRef.current = mode;
     rulerRef.current = ruler;
     marksRef.current = marksKm;
     onMarksChangeRef.current = onMarksChange;
@@ -135,7 +138,8 @@ export function Pz2RouteMap({
 
     map.on('mousemove', (event: MapMouseEvent) => {
       const position = projectOntoRoute(rulerRef.current, { lat: event.lngLat.lat, lon: event.lngLat.lng });
-      const onRoute = position !== null && position.offsetKm <= snapLimitKm(rulerRef.current);
+      const onRoute =
+        modeRef.current === 'ruler' && position !== null && position.offsetKm <= snapLimitKm(rulerRef.current);
       setHoverKm(onRoute ? position.distanceKm : null);
       map.getCanvas().style.cursor = onRoute ? 'crosshair' : '';
     });
@@ -143,6 +147,10 @@ export function Pz2RouteMap({
     map.on('mouseout', () => setHoverKm(null));
 
     map.on('click', (event: MapMouseEvent) => {
+      if (modeRef.current !== 'ruler') {
+        return;
+      }
+
       const position = projectOntoRoute(rulerRef.current, { lat: event.lngLat.lat, lon: event.lngLat.lng });
 
       // Клик далеко от линии — это промах, а не отметка: без порога любая точка
@@ -193,6 +201,20 @@ export function Pz2RouteMap({
   }, [highlightedSpan, isMapReady, marksKm, ruler]);
 
   useEffect(() => {
+    // Esc → «Просмотр»: та же механика, что в ПЗ1 (ТЗ v3.5 §3 П-04), ТЗ ПЗ2 §5.1
+    // требует её здесь же, поэтому поведение повторяется дословно.
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMode('view');
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
     const map = mapRef.current;
 
     if (!map || !isMapReady) {
@@ -241,14 +263,24 @@ export function Pz2RouteMap({
           <p className="eyebrow">Линейка</p>
           <h3>Измерение участка</h3>
         </div>
-        <button
-          className="button button--outline"
-          disabled={marksKm.length === 0}
-          onClick={() => onMarksChange([])}
-          type="button"
-        >
-          Сбросить отметки
-        </button>
+        <div className="osm-map-actions">
+          <div className="segmented-control segmented-control--map-tools" aria-label="Режим карты">
+            <button className={mode === 'view' ? 'is-active' : ''} onClick={() => setMode('view')} type="button">
+              Просмотр
+            </button>
+            <button className={mode === 'ruler' ? 'is-active' : ''} onClick={() => setMode('ruler')} type="button">
+              Линейка
+            </button>
+          </div>
+          <button
+            className="button button--outline"
+            disabled={marksKm.length === 0}
+            onClick={() => onMarksChange([])}
+            type="button"
+          >
+            Сбросить отметки
+          </button>
+        </div>
       </div>
 
       {tilesFailed ? (
@@ -279,8 +311,9 @@ export function Pz2RouteMap({
       ) : null}
 
       <p className="osm-map-hint">
-        {missedClick ? 'Мимо трассы. Кликните ближе к линии — отметка ставится только на ней. ' : null}
-        {marksKm.length === 1
+        {mode === 'view' ? 'Режим просмотра: карту можно двигать и приближать. Включите «Линейку», чтобы мерить. ' : null}
+        {mode === 'ruler' && missedClick ? 'Мимо трассы. Кликните ближе к линии — отметка ставится только на ней. ' : null}
+        {mode === 'view' ? null : marksKm.length === 1
           ? 'Начало участка поставлено. Кликните второй раз — длина посчитается вдоль трассы и подставится в таблицу.'
           : 'Кликните на трассе, чтобы отметить начало участка, затем ещё раз — чтобы отметить конец.'}
       </p>
