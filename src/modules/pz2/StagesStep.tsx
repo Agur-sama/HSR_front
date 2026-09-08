@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useModuleState } from '../../bridge/context';
 import { Pz2RouteMap } from './Pz2RouteMap';
 import {
@@ -40,6 +40,8 @@ export function StagesStep() {
   const stageSpans = getPz2StageSpans(draft);
   const [hoveredStageId, setHoveredStageId] = useState('');
   const [title, setTitle] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const addButtonRef = useRef<HTMLButtonElement | null>(null);
   const [draggedId, setDraggedId] = useState('');
   const [dropTargetId, setDropTargetId] = useState<string | null | undefined>(undefined);
   const poolWorks = getPz2StageWorks(draft, null);
@@ -56,6 +58,13 @@ export function StagesStep() {
       stages: [...current.stages, createPz2Stage(trimmed, current.stages.length)],
     }));
     setTitle('');
+    closeAddForm();
+  }
+
+  /** После закрытия формы фокус возвращается на кнопку: этапы заводят подряд. */
+  function closeAddForm() {
+    setIsAdding(false);
+    window.requestAnimationFrame(() => addButtonRef.current?.focus());
   }
 
   function moveWork(workId: string, stageId: string | null) {
@@ -106,23 +115,51 @@ export function StagesStep() {
           </div>
         </div>
 
-        <div className="stage-add">
-          <input
-            aria-label="Название нового этапа"
-            onChange={(event) => setTitle(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                addStage();
-              }
-            }}
-            placeholder="Например: Участок Хабаровск — Бикин"
-            value={title}
-          />
-          <button className="button button--outline" disabled={!title.trim()} onClick={addStage} type="button">
-            + Добавить этап
+        {isAdding ? (
+          <div className="stage-add-form">
+            <label htmlFor="pz2-stage-title">Название этапа</label>
+            <input
+              autoFocus
+              id="pz2-stage-title"
+              onChange={(event) => setTitle(event.target.value)}
+              onKeyDown={(event) => {
+                // Enter добавляет, Esc отменяет — форма открывается на месте, и
+                // выходить из неё мышью каждый раз не нужно.
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  addStage();
+                }
+
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setTitle('');
+                  closeAddForm();
+                }
+              }}
+              placeholder="Например: Участок Хабаровск — Бикин"
+              value={title}
+            />
+            <div className="stage-add-form__actions">
+              <button className="button button--primary" disabled={!title.trim()} onClick={addStage} type="button">
+                Добавить
+              </button>
+              <button
+                className="button button--outline"
+                onClick={() => {
+                  setTitle('');
+                  closeAddForm();
+                }}
+                type="button"
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="stage-add-row" onClick={() => setIsAdding(true)} ref={addButtonRef} type="button">
+            <span aria-hidden="true">＋</span> Добавить этап
           </button>
-        </div>
+        )}
 
         {worksWithoutSpan > 0 ? (
           <p className="status-note">
@@ -183,6 +220,7 @@ export function StagesStep() {
                       {works.map((work) => (
                         <WorkCard
                           draft={draft}
+                          isDragging={draggedId === work.id}
                           key={work.id}
                           onDragStart={setDraggedId}
                           onMove={moveWork}
@@ -219,7 +257,14 @@ export function StagesStep() {
         ) : (
           <ul className="work-cards">
             {poolWorks.map((work) => (
-              <WorkCard draft={draft} key={work.id} onDragStart={setDraggedId} onMove={moveWork} work={work} />
+              <WorkCard
+                draft={draft}
+                isDragging={draggedId === work.id}
+                key={work.id}
+                onDragStart={setDraggedId}
+                onMove={moveWork}
+                work={work}
+              />
             ))}
           </ul>
         )}
@@ -231,17 +276,19 @@ export function StagesStep() {
 interface WorkCardProps {
   draft: Pz2Draft;
   work: Pz2WorkDraft;
+  /** Карточка сейчас переносится: на прежнем месте от неё остаётся след. */
+  isDragging: boolean;
   onDragStart: (workId: string) => void;
   onMove: (workId: string, stageId: string | null) => void;
 }
 
-function WorkCard({ draft, work, onDragStart, onMove }: WorkCardProps) {
+function WorkCard({ draft, work, isDragging, onDragStart, onMove }: WorkCardProps) {
   const kind = getPz2WorkKind(work.kind);
   const conditions = pz2SoilConditions.filter((item) => work.conditions.includes(item.id));
 
   return (
     <li
-      className="work-card"
+      className={`work-card${isDragging ? ' is-ghost' : ''}`}
       draggable
       onDragEnd={() => onDragStart('')}
       onDragStart={(event) => {
@@ -250,14 +297,25 @@ function WorkCard({ draft, work, onDragStart, onMove }: WorkCardProps) {
         onDragStart(work.id);
       }}
     >
+      {/* Захват за всю карточку; точки — подсказка, что её можно тащить. */}
+      <span aria-hidden="true" className="work-card__grip">
+        ⠿
+      </span>
       <div>
         <strong>{kind.label}</strong>
         <span className="work-card__meta">{describeWork(work)}</span>
         {work.span ? <span className="work-card__meta">{describeSpan(work.span)}</span> : null}
-        {conditions.length > 0 ? (
-          <span className="work-card__meta">{conditions.map((item) => item.label).join(', ')}</span>
-        ) : null}
       </div>
+
+      {conditions.length > 0 ? (
+        <span className="work-card__conditions">
+          {conditions.map((item) => (
+            <span className="work-card__pill" key={item.id} title={item.hint}>
+              {item.label}
+            </span>
+          ))}
+        </span>
+      ) : null}
 
       {/* Запасной путь к тому же действию: мышью в карточку можно и не попасть,
           а с клавиатуры перетаскивание недоступно вовсе. */}

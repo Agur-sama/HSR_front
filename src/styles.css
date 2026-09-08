@@ -465,6 +465,14 @@ button:focus-visible {
   margin: 2px auto 0;
 }
 
+.forecast-summary-grid dd.is-off {
+  color: var(--danger);
+}
+
+.forecast-summary-grid dd.is-matched {
+  color: var(--teal-text);
+}
+
 /* Строка, участок которой налезает на соседний: подсветка мягкая — это
    предупреждение, а не ошибка ввода, переход дальше она не запрещает. */
 .works-table tr.is-overlapping td,
@@ -551,14 +559,54 @@ button:focus-visible {
   min-height: 260px;
 }
 
-.stage-add {
+/* Кнопка превращается в форму на месте, без модального окна: этапы заводят
+   подряд, и закрывать диалог на каждый было бы лишним шагом. */
+.stage-add-row {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
   margin: 12px 0 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.stage-add input {
-  flex: 1;
+.stage-add-row:hover {
+  border-color: var(--teal);
+  color: var(--teal-text);
+}
+
+.stage-add-form {
+  margin: 12px 0 16px;
+  border: 1px solid var(--teal);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.stage-add-form label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stage-add-form input {
+  width: 100%;
+}
+
+.stage-add-form__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .stage-list {
@@ -664,6 +712,36 @@ button:focus-visible {
   cursor: grabbing;
 }
 
+/* След на прежнем месте: пока карточку тащат, видно, откуда её взяли. */
+.work-card.is-ghost {
+  opacity: 0.35;
+}
+
+.work-card__grip {
+  color: var(--border-strong);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.work-card__conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+/* Условия — пилюлей: их немного, они короткие, и в строке карточки читаются
+   быстрее, чем перечисление через запятую под названием. */
+.work-card__pill {
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--bg-soft);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .work-card > div {
   display: grid;
   flex: 1;
@@ -683,6 +761,50 @@ button:focus-visible {
 
 .work-card select {
   max-width: 160px;
+}
+
+/* Накопленная длина у поставленной отметки — она ведёт замер, поэтому висит на
+   карте, а не только в углу. */
+.ruler-live {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -150%);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--teal);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Подсказка про Esc видна прямо на карте: клавиша неочевидна, а в ПЗ1 она
+   уже принята заказчиком как выход из режима. */
+.osm-map-esc-hint {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 3;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.osm-map-esc-hint kbd {
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--bg-soft);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 /* Сегменты трассы из ПЗ1 — справка, поэтому свёрнуты: студенту они нужны,

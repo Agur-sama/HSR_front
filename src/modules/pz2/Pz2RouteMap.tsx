@@ -100,10 +100,13 @@ export function Pz2RouteMap({
   const [isMapReady, setIsMapReady] = useState(false);
   const [hoverKm, setHoverKm] = useState<number | null>(null);
   const [missedClick, setMissedClick] = useState(false);
+  /** Экранная точка первой отметки — у неё висит накопленная длина. */
+  const [markPoint, setMarkPoint] = useState<{ x: number; y: number } | null>(null);
   const [tilesFailed, setTilesFailed] = useState(false);
   const [mode, setMode] = useState<'view' | 'ruler'>(withRuler ? 'ruler' : 'view');
   const modeRef = useRef(mode);
   const anchorsRef = useRef<number[]>([]);
+  const syncMarkPointRef = useRef<(() => void) | null>(null);
   const tileErrorsRef = useRef(0);
 
   useEffect(() => {
@@ -185,6 +188,32 @@ export function Pz2RouteMap({
 
     map.on('mouseout', () => setHoverKm(null));
 
+    const syncMarkPoint = () => {
+      const [firstKm] = marksRef.current;
+      const point = firstKm === undefined ? null : pointAtDistance(rulerRef.current, firstKm);
+      const projected = point ? map.project([point.lon, point.lat]) : null;
+
+      // Новый объект на каждый вызов сбрасывал бы состояние вхолостую, а вызов
+      // идёт в том же эффекте, что рисует слои, — получался бесконечный круг
+      // «эффект → состояние → рендер → эффект». Меняем, только когда сдвинулось.
+      setMarkPoint((previous) => {
+        if (!projected) {
+          return previous === null ? previous : null;
+        }
+
+        if (previous && Math.abs(previous.x - projected.x) < 0.5 && Math.abs(previous.y - projected.y) < 0.5) {
+          return previous;
+        }
+
+        return { x: projected.x, y: projected.y };
+      });
+    };
+
+    map.on('move', syncMarkPoint);
+    map.on('zoom', syncMarkPoint);
+    map.on('resize', syncMarkPoint);
+    syncMarkPointRef.current = syncMarkPoint;
+
     map.on('click', (event: MapMouseEvent) => {
       if (modeRef.current !== 'ruler') {
         return;
@@ -240,6 +269,7 @@ export function Pz2RouteMap({
     const span = shownMarks.length === 2 ? sliceRoute(ruler, shownMarks[0], shownMarks[1]) : [];
     setGeoJson(map, SPAN_SOURCE_ID, lineFeature(span.map((point) => [point.lon, point.lat])));
     setGeoJson(map, STAGE_SOURCE_ID, stageFeatures(ruler, stageSpans, highlightedStageId));
+    syncMarkPointRef.current?.();
   }, [highlightedSpan, highlightedStageId, isMapReady, marksKm, ruler, stageSpans]);
 
   useEffect(() => {
@@ -353,6 +383,16 @@ export function Pz2RouteMap({
 
       <div className="osm-map-stage">
         <div className="maplibre-container" ref={containerRef} />
+        {withRuler && mode === 'ruler' ? <p className="osm-map-esc-hint"><kbd>Esc</kbd> — вернуться к просмотру</p> : null}
+
+        {/* Накопленная длина висит у поставленной отметки: во время замера
+            студент следит именно за ней, и отправлять её в угол нельзя. */}
+        {measuringKm !== null && markPoint ? (
+          <span className="ruler-live" style={{ left: markPoint.x, top: markPoint.y }}>
+            {formatPz2Km(measuringKm)}
+          </span>
+        ) : null}
+
         <div className="route-length-panel">
           <span>{panelLabel(highlightedKm, marksKm.length)}</span>
           <strong>{formatPz2Km(highlightedKm ?? measuringKm ?? ruler.totalKm)}</strong>

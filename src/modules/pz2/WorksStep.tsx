@@ -229,7 +229,11 @@ export function WorksStep() {
           </div>
           <div>
             <dt>Расхождение</dt>
-            <dd>{formatPz2Km(Math.abs(check.differenceKm))}</dd>
+            {/* Красным только само число расхождения: это ожидаемая часть
+                работы, а не ошибка ввода, и ругать экраном за неё нельзя. */}
+            <dd className={check.status === 'match' ? 'is-matched' : 'is-off'}>
+              {formatPz2Km(Math.abs(check.differenceKm))}
+            </dd>
           </div>
         </dl>
         <p className={check.status === 'match' ? 'status-note' : 'field-warning'}>{describeCheck(check.status)}</p>

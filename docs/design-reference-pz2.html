@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<!--
+  ДОПОЛНЕНИЕ К ЭТАЛОНУ ДИЗАЙНА — ПЗ2 «Организация строительства».
+  Читается вместе с docs/design-reference.html, а не вместо него: здесь только
+  паттерны, которых в основном эталоне нет. Всё остальное — поля, маски,
+  разряды, тултипы, шапка, нижняя панель, степпер, таблицы, режимы карты —
+  берётся оттуда без изменений и здесь не дублируется.
+
+  Токены те же, что в основном эталоне и в src/styles.css: indigo #003D84,
+  teal #08A696, teal-подложка #E1F5EE, красная линия ВСМ #E0182D, рамки
+  #E4EDFA / #C9DAF2, приглушённый #6B7A90, шрифт Raleway. Здесь они не
+  выдумываются заново — при правке палитры менять в одном месте, в основном
+  эталоне.
+
+  Статус блоков помечен плашкой в разметке:
+    «в работе»  — сделано на экранах 01–02 ветки wth7;
+    «ждёт данных» — механика описана, но упирается в открытый вопрос ТЗ.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>VSM design reference — дополнение ПЗ2</title>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@500;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Скопировано из docs/design-reference.html — не редактировать поодиночке. */
+    --primary: #003D84;
+    --teal: #08A696;
+    --accent-light: #B9D2FF;
+    --bg-soft: #F3F7FF;
+    --ink: #232323;
+    --teal-bg: #E1F5EE;
+    --teal-text: #0F6E56;
+    --teal-text-dark: #04342C;
+    --border: #E4EDFA;
+    --border-strong: #C9DAF2;
+    --muted: #6B7A90;
+    --indigo: #003D84;
+    --future: #B9D2FF;
+    --error: #C0392B;
+    --error-bg: #FDF3F2;
+    --error-border: #F0C6C0;
+    --warn-bg: #FAEEDA;
+    --warn-text: #412402;
+    /* Цвет линии ВСМ — из палитры проекта, тот же, что на картах ПЗ1 и ПЗ2. */
+    --route-hsr: #E0182D;
+  }
+  body { font-family: -apple-system, sans-serif; background: #fff; margin: 0; padding: 24px; color: #222; }
+  .ref-block { max-width: 680px; margin: 0 auto 40px; }
+  .ref-label { font-family: 'Raleway'; font-weight: 800; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .ref-note { font-size: 12.5px; color: #5f5e5a; line-height: 1.55; margin: 10px 0 0; }
+  .ref-note b { color: var(--indigo); }
+  .card { border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; background: #fff; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .card-head .tag { display: flex; align-items: center; gap: 8px; }
+  .card-head .dot { width: 8px; height: 8px; border-radius: 2px; background: var(--indigo); }
+  .card-head .title { font-family: 'Raleway'; font-weight: 600; font-size: 13px; color: var(--indigo); }
+  .card-head .meta { font-size: 12px; color: var(--muted); font-family: 'Raleway'; font-weight: 500; }
+  .card-body { padding: 18px 20px; }
+
+  .status { font-family: 'Raleway'; font-weight: 800; font-size: 10px; letter-spacing: .06em; border-radius: 5px; padding: 3px 8px; text-transform: uppercase; }
+  .status.done { color: var(--teal-text); background: var(--teal-bg); }
+  .status.wait { color: var(--warn-text); background: var(--warn-bg); }
+
+  .lede { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 0 0 14px; }
+  .states { display: flex; flex-wrap: wrap; gap: 16px; }
+  .state { flex: 1 1 200px; min-width: 200px; }
+  .state-title { font-family: 'Raleway'; font-weight: 600; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+
+  /* ---------- 1. Карточка работы ---------- */
+  .work-card { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-left: 4px solid var(--route-hsr); border-radius: 10px; padding: 8px 10px; background: #fff; cursor: grab; }
+  .work-card .grip { color: var(--border-strong); font-size: 14px; line-height: 1; }
+  .work-card .body { display: grid; gap: 2px; flex: 1; min-width: 0; }
+  .work-card .name { font-family: 'Raleway'; font-weight: 700; font-size: 13px; color: var(--indigo); }
+  .work-card .meta { font-size: 12px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .work-card .pill { border-radius: 999px; padding: 2px 8px; background: var(--bg-soft); color: var(--indigo); font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .work-card.is-ghost { opacity: .35; }
+
+  /* ---------- 2. Пул и этапы ---------- */
+  .board { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .col-title { font-family: 'Raleway'; font-weight: 800; font-size: 11px; letter-spacing: .06em; color: var(--teal-text); margin-bottom: 8px; text-transform: uppercase; }
+  .stage { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: #fff; margin-bottom: 10px; }
+  .stage.is-over { border-color: var(--teal); background: var(--teal-bg); }
+  .stage-head { display: flex; align-items: center; gap: 10px; }
+  .stage-color { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+  .stage-title { flex: 1; font-family: 'Raleway'; font-weight: 700; font-size: 14px; color: var(--indigo); }
+  .stage-meta { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .remove { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--border-strong); border-radius: 50%; background: #fff; color: var(--error); font-size: 14px; font-weight: 800; }
+  .drop-hint { margin: 10px 0 0; border: 1px dashed var(--border-strong); border-radius: 10px; padding: 14px; color: var(--muted); font-size: 12px; font-weight: 600; text-align: center; }
+  .stage.is-over .drop-hint { border-color: var(--teal); color: var(--teal-text); }
+
+  /* ---------- 3. Добавление этапа ---------- */
+  .add-row { display: flex; align-items: center; gap: 8px; width: 100%; border: 1px dashed var(--border-strong); border-radius: 8px; padding: 10px 12px; background: none; color: var(--indigo); font-family: 'Raleway'; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .add-form { border: 1px solid var(--teal); border-radius: 8px; padding: 12px; background: #fff; }
+  .add-form label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+  .add-form input { width: 100%; box-sizing: border-box; border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; font-size: 12px; font-family: inherit; }
+  .add-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .btn-primary { font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: #fff; background: var(--indigo); border: none; border-radius: 7px; padding: 7px 14px; cursor: pointer; }
+  .btn-outline { font-family: 'Raleway'; font-weight: 600; font-size: 12px; color: var(--indigo); background: #fff; border: 1px solid var(--border-strong); border-radius: 7px; padding: 7px 14px; cursor: pointer; }
+
+  /* ---------- 4. Линейка ---------- */
+  .map { position: relative; height: 220px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: repeating-linear-gradient(0deg, #EEEEE8 0 46px, #E9E9E2 46px 47px), repeating-linear-gradient(90deg, #EEEEE8 0 78px, #E9E9E2 78px 79px); }
+  .route-line { position: absolute; height: 5px; border-radius: 3px; background: var(--route-hsr); transform-origin: left center; }
+  .span-line { position: absolute; height: 8px; border-radius: 4px; background: var(--teal); transform-origin: left center; }
+  .mark { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: var(--teal); border: 2px solid #fff; transform: translate(-50%, -50%); }
+  .marker { position: absolute; display: grid; place-items: center; border-radius: 50%; border: 2px solid #fff; color: #fff; font-family: 'Raleway'; font-weight: 800; transform: translate(-50%, -50%); }
+  .marker.station { width: 30px; height: 30px; background: var(--indigo); font-size: 12px; }
+  .marker.point { width: 22px; height: 22px; background: var(--route-hsr); font-size: 11px; }
+  .ruler-live { position: absolute; transform: translate(-50%, -150%); border-radius: 999px; padding: 3px 9px; background: var(--teal); color: #fff; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .map-badge { position: absolute; left: 12px; bottom: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; background: var(--teal-bg); }
+  .map-badge span { display: block; font-family: 'Raleway'; font-weight: 800; font-size: 10px; letter-spacing: .06em; color: var(--teal-text); text-transform: uppercase; }
+  .map-badge b { font-family: 'Raleway'; font-size: 15px; color: var(--indigo); font-variant-numeric: tabular-nums; }
+  .modes { position: absolute; right: 12px; top: 12px; display: flex; border: 1px solid var(--border-strong); border-radius: 7px; overflow: hidden; background: #fff; }
+  .modes button { font-family: 'Raleway'; font-size: 12px; font-weight: 600; padding: 5px 11px; border: 0; border-right: 1px solid var(--border); background: #fff; color: var(--ink); cursor: pointer; }
+  .modes button:last-child { border-right: 0; }
+  .modes button[aria-pressed="true"] { background: var(--teal-bg); color: var(--teal-text-dark); }
+  .esc-hint { position: absolute; right: 12px; top: 48px; border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 10px; background: rgba(255,255,255,.92); font-size: 11px; font-weight: 600; color: var(--muted); }
+  kbd { font: inherit; font-size: 10px; font-weight: 800; background: var(--bg-soft); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+  .legend-line { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--muted); align-items: center; }
+  .legend-line b { color: var(--indigo); }
+
+  /* ---------- 5. Сверка длины ---------- */
+  .recon { display: flex; flex-wrap: wrap; gap: 12px; }
+  .recon div { flex: 1 1 150px; background: var(--bg-soft); border-radius: 10px; padding: 10px 12px; }
+  .recon dt { font-family: 'Raleway'; font-weight: 800; font-size: 10px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+  .recon dd { margin: 0; font-family: 'Raleway'; font-weight: 800; font-size: 19px; color: var(--indigo); font-variant-numeric: tabular-nums; }
+  .recon dd.is-off { color: var(--error); }
+  .recon dd.is-matched { color: var(--teal-text); }
+  .state-msg { margin: 10px 0 0; font-size: 12px; font-weight: 700; }
+  .state-msg.warn { color: var(--warn-text); background: var(--warn-bg); border-radius: 8px; padding: 8px 10px; }
+  .state-msg.ok { color: var(--teal-text); }
+
+  /* ---------- 6. Проверка ответа ---------- */
+  .answer { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .answer + .answer { margin-top: 10px; }
+  .answer.correct { border-color: var(--teal); background: var(--teal-bg); }
+  .answer.wrong { border-color: var(--error-border); background: var(--error-bg); }
+  .verdict { display: flex; align-items: center; gap: 8px; font-family: 'Raleway'; font-weight: 800; font-size: 13px; margin-bottom: 6px; }
+  .verdict.correct { color: var(--teal-text); }
+  .verdict.wrong { color: var(--error); }
+  .mark-badge { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 12px; flex: none; }
+  .mark-badge.correct { background: var(--teal); }
+  .mark-badge.wrong { background: var(--error); }
+  .attempts { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted); }
+  .answer p { font-size: 12.5px; margin: 0; line-height: 1.55; }
+  .diagram { border: 1px dashed var(--border-strong); border-radius: 8px; padding: 18px; text-align: center; color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+
+  /* ---------- 7. Выравнивание ---------- */
+  .ksg { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .ksg-grid { display: grid; grid-template-columns: 128px 1fr; }
+  .ksg-label { padding: 8px 12px; font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); display: flex; align-items: center; }
+  .ksg-track { position: relative; height: 34px; border-bottom: 1px solid var(--border); background: repeating-linear-gradient(90deg, transparent 0 calc(8.33% - 1px), var(--border) calc(8.33% - 1px), var(--border) 8.33%); }
+  .bar { position: absolute; top: 6px; height: 22px; border-radius: 6px; background: var(--indigo); color: #fff; font-size: 11px; font-weight: 600; display: flex; align-items: center; padding: 0 8px; }
+  .bar.movable { background: var(--teal); }
+  .slack { position: absolute; top: 13px; height: 8px; border: 1px dashed var(--teal); border-left: 0; border-radius: 0 4px 4px 0; }
+  .hist { display: flex; align-items: flex-end; gap: 2px; height: 68px; padding: 12px 12px 0 128px; background: var(--bg-soft); }
+  .hist i { flex: 1; background: var(--indigo); border-radius: 2px 2px 0 0; }
+  .hist i.over { background: var(--error); }
+  .hist-axis { display: flex; justify-content: space-between; padding: 4px 12px 10px 128px; background: var(--bg-soft); font-size: 10px; color: var(--muted); }
+  .ksg-foot { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .metric { font-size: 11px; color: var(--muted); }
+  .metric b { display: block; font-family: 'Raleway'; font-size: 16px; color: var(--indigo); font-variant-numeric: tabular-nums; }
+  .metric.bad b { color: var(--error); }
+  .legend { display: flex; gap: 12px; margin-left: auto; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  .reuse { display: flex; flex-wrap: wrap; gap: 8px; }
+  .reuse span { font-size: 12px; font-weight: 600; background: var(--bg-soft); color: var(--indigo); border-radius: 999px; padding: 5px 12px; }
+  ul { margin: 0; padding-left: 1.15em; }
+  li { font-size: 12.5px; margin-bottom: 6px; line-height: 1.55; }
+  code { background: var(--bg-soft); border-radius: 4px; padding: 1px 5px; font-size: .92em; }
+</style>
+</head>
+<body>
+
+<div class="ref-block">
+  <div class="ref-label">Дополнение к эталону — ПЗ2</div>
+  <p class="lede">
+    Здесь только паттерны, которых нет в основном эталоне. Всё остальное берётся из
+    <code>docs/design-reference.html</code> и здесь не повторяется. Цвета и шрифт — те же токены,
+    заново не подбираются. Плашка справа от заголовка показывает, сделан ли блок в коде.
+  </p>
+</div>
+
+<!-- 1 -->
+<div class="ref-block">
+  <div class="ref-label">1. Карточка работы</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="tag"><span class="dot"></span><span class="title">Работа в пуле и в этапе</span></div>
+      <span class="status done">в работе</span>
+    </div>
+    <div class="card-body">
+      <p class="lede">
+        Единица, которую студент заводит на экране работ и переносит в этап. Ширину не фиксирует —
+        живёт и в узкой колонке пула, и в широкой карточке этапа. Красная кромка слева — цвет линии
+        ВСМ, тот же, что у трассы на карте.
+      </p>
+      <div class="states">
+        <div class="state">
+          <div class="state-title">Обычная</div>
+          <div class="work-card">
+            <span class="grip">⠿</span>
+            <span class="body"><span class="name">Эстакада</span><span class="meta">4,20 км</span></span>
+          </div>
+        </div>
+        <div class="state">
+          <div class="state-title">С условиями грунта</div>
+          <div class="work-card">
+            <span class="grip">⠿</span>
+            <span class="body"><span class="name">Земляное полотно</span><span class="meta">12,60 км</span></span>
+            <span class="pill">слабые грунты</span>
+          </div>
+        </div>
+        <div class="state">
+          <div class="state-title">Намеренная линейкой</div>
+          <div class="work-card">
+            <span class="grip">⠿</span>
+            <span class="body"><span class="name">Ремонт существующей линии</span><span class="meta">9,30 км</span><span class="meta">0,00 — 9,30 км трассы</span></span>
+          </div>
+        </div>
+        <div class="state">
+          <div class="state-title">Штучная</div>
+          <div class="work-card">
+            <span class="grip">⠿</span>
+            <span class="body"><span class="name">Стрелочный перевод 1/25</span><span class="meta">4 шт.</span></span>
+          </div>
+        </div>
+        <div class="state">
+          <div class="state-title">След на прежнем месте</div>
+          <div class="work-card is-ghost">
+            <span class="grip">⠿</span>
+            <span class="body"><span class="name">Мост</span><span class="meta">0,85 км</span></span>
+          </div>
+        </div>
+      </div>
+      <p class="ref-note">
+        <b>Правила.</b> Захват — за всю карточку, точки <code>⠿</code> только подсказывают, что её можно
+        тащить. Пока карточку тащат, на прежнем месте остаётся полупрозрачный след — видно, откуда
+        она взята. Ховер-подсветки у карточек нет: их на экране много, и подсветка каждой создаёт шум.
+        Условия — пилюлей справа, а не перечислением под названием: их немного и они короткие.
+        Штучная работа показывает количество, а не «без длины»: количество студент и вводит.
+        Наклон карточки при переносе не делаем — картинку перетаскивания рисует браузер по снимку
+        элемента, и накренить её можно только подменой drag-image; выигрыш не стоит этой механики.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 2 -->
+<div class="ref-block">
+  <div class="ref-label">2. Этапы и пул работ</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="tag"><span class="dot"></span><span class="title">Экран 02 — разбиение на этапы</span></div>
+      <span class="status done">в работе</span>
+    </div>
+    <div class="card-body">
+      <p class="lede">Слева этапы, справа работы без этапа. Перенос — в обе стороны и между этапами.</p>
+      <div class="board">
+        <div>
+          <div class="col-title">Этапы</div>
+          <div class="stage">
+            <div class="stage-head">
+              <span class="stage-color" style="background:#003D84"></span>
+              <span class="stage-title">Выход из Хабаровска</span>
+              <span class="stage-meta">2 работы · 13,50 км</span>
+              <span class="remove">×</span>
+            </div>
+          </div>
+          <div class="stage is-over">
+            <div class="stage-head">
+              <span class="stage-color" style="background:#08A696"></span>
+              <span class="stage-title">Бикинский участок</span>
+              <span class="stage-meta">пусто</span>
+              <span class="remove">×</span>
+            </div>
+            <p class="drop-hint">Отпустите, чтобы добавить в этап</p>
+          </div>
+        </div>
+        <div>
+          <div class="col-title">Пул работ</div>
+          <div class="work-card" style="margin-bottom:8px">
+            <span class="grip">⠿</span>
+            <span class="body"><span class="name">Балластный путь</span><span class="meta">18,40 км</span></span>
+          </div>
+          <div class="work-card">
+            <span class="grip">⠿</span>
+            <span class="body"><span class="name">Тоннель</span><span class="meta">2,10 км</span></span>
+            <span class="pill">скальные породы</span>
+          </div>
+        </div>
+      </div>
+      <p class="ref-note">
+        <b>Правила.</b> Подсвечивается только та цель, над которой курсор: подсветка всех допустимых
+        целей сразу превращает экран в мигающую сетку. Цвет квадрата у названия этапа — тот же, каким
+        его участки закрашены на карте под панелями. Отказов у переноса нет: работа принадлежит ровно
+        одному этапу, и перенос в другой — это замена, а не ошибка. Удаление этапа возвращает его
+        работы в пул, поэтому крестик не требует подтверждения.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 3 -->
+<div class="ref-block">
+  <div class="ref-label">3. Добавление этапа</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="tag"><span class="dot"></span><span class="title">Строка-кнопка раскрывается в форму</span></div>
+      <span class="status done">в работе</span>
+    </div>
+    <div class="card-body">
+      <div class="states">
+        <div class="state">
+          <div class="state-title">Покой</div>
+          <button class="add-row"><span>＋</span> Добавить этап</button>
+        </div>
+        <div class="state">
+          <div class="state-title">Ввод</div>
+          <div class="add-form">
+            <label for="stg">Название этапа</label>
+            <input id="stg" value="Бикинский участок">
+            <div class="add-actions"><button class="btn-primary">Добавить</button><button class="btn-outline">Отмена</button></div>
+          </div>
+        </div>
+      </div>
+      <p class="ref-note">
+        <b>Правила.</b> Форма раскрывается на месте, без модального окна: этапы заводят подряд, и
+        закрывать диалог на каждый — лишний шаг. Enter добавляет, Esc отменяет, после закрытия фокус
+        возвращается на кнопку — следующий этап заводится с клавиатуры. Символ <code>＋</code> скрыт от
+        скринридера: доступное имя кнопки — «Добавить этап».
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 4 -->
+<div class="ref-block">
+  <div class="ref-label">4. Линейка на карте</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="tag"><span class="dot"></span><span class="title">Экран 01 — измерение участка</span></div>
+      <span class="status done">в работе</span>
+    </div>
+    <div class="card-body">
+      <div class="map">
+        <div class="modes"><button aria-pressed="false">Просмотр</button><button aria-pressed="true">Линейка</button></div>
+        <div class="esc-hint"><kbd>Esc</kbd> — вернуться к просмотру</div>
+
+        <div class="route-line" style="left:70px; top:150px; width:120px; transform:rotate(-34deg)"></div>
+        <div class="span-line" style="left:167px; top:83px; width:150px; transform:rotate(-14deg)"></div>
+        <div class="route-line" style="left:312px; top:47px; width:110px; transform:rotate(-6deg)"></div>
+        <div class="mark" style="left:167px; top:83px"></div>
+        <div class="mark" style="left:312px; top:47px"></div>
+        <div class="ruler-live" style="left:167px; top:83px">42,60 км</div>
+        <div class="marker station" style="left:70px; top:150px">А</div>
+        <div class="marker point" style="left:312px; top:47px">2</div>
+        <div class="map-badge"><span>Меряется</span><b>42,60 км</b></div>
+      </div>
+      <div class="legend-line">
+        <span>Станции, км от начала трассы:</span>
+        <span><b>А</b> Хабаровск <b>0,00 км</b></span>
+        <span><b>Г</b> Владивосток <b>512,85 км</b></span>
+      </div>
+      <p class="ref-note">
+        <b>Правила.</b> Трасса — красная, как в ПЗ1: одна и та же линия обязана выглядеть в двух
+        заданиях одинаково. Отмеренный участок и его отметки — бирюзовые: в макете это цвет
+        «выбранного сейчас». Накопленная длина висит у поставленной отметки и обновляется на лету —
+        во время замера студент следит именно за ней, и отправлять её в угол экрана нельзя; плашка в
+        углу повторяет ту же величину в виде «Длины трассы» из ПЗ1. Клик рядом со станцией, точкой
+        трассы или её концом садится ровно на них: на общем виде маршрута один пиксель — это
+        километры, и попасть мышью в конец участка иначе нельзя. Клик далеко от линии — промах, а не
+        отметка. Подпись под картой обязательна: число рядом со станцией — километр по трассе, без
+        неё оно читается как загадка.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 5 -->
+<div class="ref-block">
+  <div class="ref-label">5. Сверка суммы работ с трассой</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="tag"><span class="dot"></span><span class="title">Экран 01 — проверка длины</span></div>
+      <span class="status done">в работе</span>
+    </div>
+    <div class="card-body">
+      <dl class="recon">
+        <div><dt>Намерено</dt><dd>241,90 км</dd></div>
+        <div><dt>Маршрут из ПЗ1</dt><dd>246,18 км</dd></div>
+        <div><dt>Расхождение</dt><dd class="is-off">4,28 км</dd></div>
+      </dl>
+      <p class="state-msg warn">Участков намерено меньше длины маршрута — часть трассы осталась без работ.</p>
+
+      <dl class="recon" style="margin-top:16px">
+        <div><dt>Намерено</dt><dd>246,18 км</dd></div>
+        <div><dt>Маршрут из ПЗ1</dt><dd>246,18 км</dd></div>
+        <div><dt>Расхождение</dt><dd class="is-matched">0,00 км</dd></div>
+      </dl>
+      <p class="state-msg ok">Сумма участков сошлась с длиной маршрута.</p>
+
+      <p class="ref-note">
+        <b>Правила.</b> Формулировки описывают состояние, а не ругают: расхождение — ожидаемая часть
+        работы, а не ошибка ввода. Цветом помечено только само число расхождения. Переход дальше не
+        блокируется — допуск заказчиком не задан (вопрос в-5), до ответа блокировать нельзя. Отдельно
+        от суммы работает проверка наложений: строки, меряющие один и тот же кусок трассы,
+        подсвечиваются в таблице — сумма может сойтись и при дважды намеренном участке.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 6 -->
+<div class="ref-block">
+  <div class="ref-label">6. Проверка ответа — критический путь</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="tag"><span class="dot"></span><span class="title">Экран 03 — упражнение Артёма Глебовича</span></div>
+      <span class="status wait">ждёт данных</span>
+    </div>
+    <div class="card-body">
+      <p class="lede">
+        Первое место, где симулятор сам говорит студенту, что тот ошибся: в ПЗ1 работу оценивает
+        только преподаватель по PDF.
+      </p>
+      <div class="diagram">Сетевая диаграмма — PNG от заказчика</div>
+      <div class="answer wrong">
+        <div class="verdict wrong"><span class="mark-badge wrong">✕</span> Неверно<span class="attempts">Попытка 2 из 3</span></div>
+        <p>Путь 1 → 3 → 6 → 8 не самый длинный. Проверьте длительности работ на ветке через узел 4.</p>
+      </div>
+      <div class="answer correct">
+        <div class="verdict correct"><span class="mark-badge correct">✓</span> Верно<span class="attempts">Попытка 2 из 3</span></div>
+        <p>Критический путь 1 → 4 → 6 → 8, суммарная длительность 34 недели. Работы вне пути имеют запас и могут сдвигаться без ущерба для срока.</p>
+      </div>
+      <p class="ref-note">
+        <b>Правила.</b> Вердикт и объяснение живут в одном блоке: отдельный тост исчезнет раньше, чем
+        студент разберётся, почему ответ неверен. Объяснение указывает, где искать, но не выдаёт
+        решение. Счётчик попыток виден до первой попытки, а не появляется после ошибки. Оба состояния
+        используют одну разметку и различаются классом.
+      </p>
+      <p class="ref-note">
+        <b>Чего ещё нет.</b> В коде сделана механика проверки ответа: поле, сверка с эталоном, вердикт.
+        Ни диаграмм, ни правильных ответов, ни объяснений заказчик не передал (в-8), поэтому список
+        упражнений пуст, а счётчика попыток и текста объяснения в модели пока нет — их формат зависит
+        от того же ответа.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 7 -->
+<div class="ref-block">
+  <div class="ref-label">7. Выравнивание загрузки</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="tag"><span class="dot"></span><span class="title">Экран 03 — упражнение Ольги Владимировны</span></div>
+      <span class="status wait">ждёт данных</span>
+    </div>
+    <div class="card-body">
+      <div class="ksg">
+        <div class="ksg-grid">
+          <div class="ksg-label">Земляное полотно</div>
+          <div class="ksg-track"><div class="bar" style="left:0; width:31%">18 чел.</div></div>
+          <div class="ksg-label">Мост</div>
+          <div class="ksg-track"><div class="bar movable" style="left:25%; width:25%">12 чел.</div><div class="slack" style="left:50%; width:12%"></div></div>
+          <div class="ksg-label">Балластный путь</div>
+          <div class="ksg-track"><div class="bar" style="left:44%; width:37%">24 чел.</div></div>
+        </div>
+        <div class="hist">
+          <i style="height:38%"></i><i style="height:38%"></i><i style="height:62%"></i><i style="height:62%"></i>
+          <i class="over" style="height:96%"></i><i class="over" style="height:96%"></i><i style="height:74%"></i>
+          <i style="height:70%"></i><i style="height:45%"></i><i style="height:26%"></i>
+        </div>
+        <div class="hist-axis"><span>нед. 1</span><span>нед. 12</span></div>
+        <div class="ksg-foot">
+          <div class="metric bad"><b>54</b>пик потребности, чел.</div>
+          <div class="metric"><b>36</b>в наличии, чел.</div>
+          <div class="metric"><b>12</b>срок, недель</div>
+          <div class="legend">
+            <span><i class="sw" style="background:#003D84"></i> без запаса</span>
+            <span><i class="sw" style="background:#08A696"></i> можно двигать</span>
+            <span><i class="sw" style="background:#C0392B"></i> нехватка людей</span>
+          </div>
+        </div>
+      </div>
+      <p class="ref-note">
+        <b>Правила.</b> Гистограмма — главный элемент экрана и единственное место с крупной заливкой:
+        студент выравнивает именно её. Работы без запаса и работы, которые можно двигать, различаются
+        заливкой, а не рамкой — на полосе в несколько миллиметров рамка не читается. Запас показан
+        пунктирным продолжением полосы: границу видно до того, как студент в неё упрётся. Превышение
+        красится в столбцах гистограммы, а не в самих работах — виновато совпадение работ во времени,
+        а не отдельная работа. Срок при выравнивании не пересчитывается: смысл упражнения в том, что
+        ровная загрузка достигается без сдвига конца работ.
+      </p>
+      <p class="ref-note">
+        <b>Чего ещё нет.</b> В коде подключён существующий тренажёр КСГ как есть — ТЗ §7.1 прямо
+        запрещает его переписывать до инвентаризации. Этот блок — эталон стиля для будущей переделки,
+        а не задание на неё. Данные упражнения должны быть предустановленными: длительность работы в
+        проекте нигде не определена, нормативов трудоёмкости на километр нет (в-6).
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- 8 -->
+<div class="ref-block">
+  <div class="ref-label">8. Что берётся из основного эталона без изменений</div>
+  <div class="card">
+    <div class="card-body">
+      <div class="reuse">
+        <span>степпер шагов</span><span>шапка рабочего пространства</span><span>нижняя панель «Назад / Сохранить / Далее»</span>
+        <span>callout с номером-кружком</span><span>поля ввода и маски</span><span>разделение разрядов при наборе</span>
+        <span>тултипы «i»</span><span>таблицы с шапкой</span><span>кнопки режимов карты</span><span>плашка длины на карте</span>
+        <span><kbd>Esc</kbd> → «Просмотр»</span><span>маркеры станций и точек трассы</span><span>скролл-контейнер шага</span>
+      </div>
+      <p class="ref-note">Если паттерн в этом списке — брать из <code>docs/design-reference.html</code>, а не воспроизводить по этому файлу.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 9 -->
+<div class="ref-block">
+  <div class="ref-label">9. Открытые вопросы, влияющие на эти блоки</div>
+  <div class="card">
+    <div class="card-body">
+      <ul>
+        <li><b>в-2</b> — формулировка второго условия грунта: «скальные породы» или «скальные основания». Влияет на текст пилюли в §1. Сейчас взято написание из ТЗ.</li>
+        <li><b>в-3</b> — мост и тоннель линейные или точечные. Сейчас линейные, как на доске; если точечные — меняется и §1, и набор для сверки в §5.</li>
+        <li><b>в-5</b> — допуск сверки длин и блокировать ли переход. Сейчас 0,5 км и переход не блокируется ни при каком расхождении.</li>
+        <li><b>в-6</b> — нормативы трудоёмкости и длительности. До ответа §7 работает только на предустановленных данных.</li>
+        <li><b>в-8</b> — формат ответа в упражнении с критическим путём. Поле ввода в §6 намеренно не нарисовано, счётчик попыток и объяснение не заведены в модели.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
