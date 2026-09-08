@@ -10,10 +10,13 @@ import {
   createPz2Ruler,
   createPz2Stage,
   findPz2OverlappingWorks,
+  getPz2RoutePointMarks,
+  getPz2SegmentMarks,
   getPz2StageWorks,
   isPz2StagesComplete,
   readPz2Position,
   removePz2Stage,
+  setPz2WorkLength,
   createPz2Work,
   getPz2LengthCheck,
   getPz2RouteSource,
@@ -377,5 +380,142 @@ describe('критический путь', () => {
   it('пустой ответ не считается верным даже при пустом эталоне', () => {
     expect(checkPz2CriticalPath('', [])).toBe(false);
     expect(checkPz2CriticalPath('   ', ['1'])).toBe(false);
+  });
+});
+
+describe('точки и сегменты трассы из ПЗ1', () => {
+  // Ломаная с кривой в середине: две прямые вставки и дуга между ними.
+  const bridge = {
+    completed: {
+      pz1: {
+        totalLengthKm: 0,
+        stations: [],
+        routeLine: {
+          vertices: [
+            { id: 'v1', lat: 0, lon: 0 },
+            { id: 'v2', lat: 0, lon: 1 },
+            { id: 'v3', lat: 0, lon: 2 },
+          ],
+          segments: [
+            { id: 's1', fromVertexId: 'v1', toVertexId: 'v2', sagittaKm: 0 },
+            { id: 's2', fromVertexId: 'v2', toVertexId: 'v3', sagittaKm: 5 },
+          ],
+        },
+      },
+    },
+  } as unknown as BridgeSchema;
+
+  it('точки переносятся все и с теми же номерами, что в ПЗ1', () => {
+    const source = getPz2RouteSource(bridge);
+    const marks = getPz2RoutePointMarks(source, createPz2Ruler(source));
+
+    expect(marks.map((mark) => mark.number)).toEqual([1, 2, 3]);
+    expect(marks[0].distanceKm).toBeCloseTo(0, 6);
+    expect(marks[2].distanceKm).toBeGreaterThan(marks[1].distanceKm);
+  });
+
+  it('кривая длиннее своей хорды — дуга переносится, а не спрямляется', () => {
+    const segments = getPz2SegmentMarks(getPz2RouteSource(bridge));
+
+    expect(segments).toHaveLength(2);
+    expect(segments[0].radiusM).toBeNull();
+    expect(segments[1].radiusM).toBeGreaterThan(0);
+    expect(segments[1].lengthKm).toBeGreaterThan(segments[0].lengthKm);
+  });
+
+  it('километры сегментов идут подряд, без разрывов', () => {
+    const segments = getPz2SegmentMarks(getPz2RouteSource(bridge));
+
+    expect(segments[0].fromKm).toBeCloseTo(0, 6);
+    expect(segments[1].fromKm).toBeCloseTo(segments[0].lengthKm, 6);
+  });
+
+  it('линейка считает трассу по дуге, а не по прямой между точками', () => {
+    const source = getPz2RouteSource(bridge);
+    const straight = 2 * 111.19;
+
+    expect(createPz2Ruler(source).totalKm).toBeGreaterThan(straight);
+  });
+
+  it('без файла точек и сегментов нет, а не ноль штук с мусором', () => {
+    const source = getPz2RouteSource(null);
+
+    expect(getPz2RoutePointMarks(source, createPz2Ruler(source))).toEqual([]);
+    expect(getPz2SegmentMarks(source)).toEqual([]);
+  });
+});
+
+describe('правка длины руками', () => {
+  it('снимает привязку к участку на карте: где легли новые километры — неизвестно', () => {
+    const measured = createPz2Work('earthworks', '100', { fromKm: 0, toKm: 100 });
+
+    expect(setPz2WorkLength(measured, '120').span).toBeUndefined();
+    expect(setPz2WorkLength(measured, '120').lengthKm).toBe('120');
+  });
+
+  it('та же самая длина привязку не рвёт — студент ничего не менял', () => {
+    const measured = createPz2Work('earthworks', '100', { fromKm: 0, toKm: 100 });
+
+    expect(setPz2WorkLength(measured, '100').span).toEqual({ fromKm: 0, toKm: 100 });
+  });
+
+  it('строка без участка правится как обычно', () => {
+    expect(setPz2WorkLength(createPz2Work('bridge', '5'), '7').lengthKm).toBe('7');
+  });
+
+  it('исправленная строка уходит из проверки наложений', () => {
+    const first = createPz2Work('earthworks', '100', { fromKm: 0, toKm: 100 });
+    const second = createPz2Work('bridge', '100', { fromKm: 50, toKm: 150 });
+
+    expect(findPz2OverlappingWorks(draftWith([first, second]))).toHaveLength(2);
+    expect(findPz2OverlappingWorks(draftWith([setPz2WorkLength(first, '80'), second]))).toEqual([]);
+  });
+});
+
+describe('линейка сходится с длиной маршрута из ПЗ1', () => {
+  // Сегмент с кривой: именно на дуге ломаная и аналитическая длина расходятся.
+  const bridge = (sagittaKm: number) =>
+    ({
+      completed: {
+        pz1: {
+          totalLengthKm: 0,
+          stations: [],
+          routeLine: {
+            vertices: [
+              { id: 'v1', lat: 47.9, lon: 135.3 },
+              { id: 'v2', lat: 46.2, lon: 133.5 },
+              { id: 'v3', lat: 44.1, lon: 131.6 },
+            ],
+            segments: [
+              { id: 's1', fromVertexId: 'v1', toVertexId: 'v2', sagittaKm },
+              { id: 's2', fromVertexId: 'v2', toVertexId: 'v3', sagittaKm: 0 },
+            ],
+          },
+        },
+      },
+    }) as unknown as BridgeSchema;
+
+  it('на кривой трассе линейка даёт ровно ту же длину, что посчитал ПЗ1', () => {
+    const source = getPz2RouteSource(bridge(60));
+    const expected = getPz2SegmentMarks(source).reduce((sum, segment) => sum + segment.lengthKm, 0);
+
+    // До согласования линейка мерила по ломаной и давала на ~0,25 % больше:
+    // студент, отмеривший всю трассу, всё равно видел расхождение.
+    expect(createPz2Ruler(source).totalKm).toBeCloseTo(expected, 6);
+  });
+
+  it('на прямой трассе поведение не изменилось', () => {
+    const source = getPz2RouteSource(bridge(0));
+    const expected = getPz2SegmentMarks(source).reduce((sum, segment) => sum + segment.lengthKm, 0);
+
+    expect(createPz2Ruler(source).totalKm).toBeCloseTo(expected, 6);
+  });
+
+  it('отметки внутри кривой растут монотонно', () => {
+    const ruler = createPz2Ruler(getPz2RouteSource(bridge(60)));
+
+    for (let index = 1; index < ruler.cumulativeKm.length; index += 1) {
+      expect(ruler.cumulativeKm[index]).toBeGreaterThanOrEqual(ruler.cumulativeKm[index - 1]);
+    }
   });
 });

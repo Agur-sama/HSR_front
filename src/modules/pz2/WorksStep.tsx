@@ -11,7 +11,10 @@ import {
   formatPz2Km,
   getPz2LengthCheck,
   getPz2RouteSource,
+  getPz2RoutePointMarks,
+  getPz2SegmentMarks,
   getPz2StationMarks,
+  setPz2WorkLength,
   togglePz2SoilCondition,
   getPz2WorkKind,
   pz2SoilConditions,
@@ -33,6 +36,8 @@ export function WorksStep() {
   const source = getPz2RouteSource(importedBridge);
   const ruler = createPz2Ruler(source);
   const stations = getPz2StationMarks(source, ruler);
+  const routePoints = getPz2RoutePointMarks(source, ruler);
+  const segments = getPz2SegmentMarks(source);
   const [highlightedId, setHighlightedId] = useState('');
   const overlapping = new Set(findPz2OverlappingWorks(draft));
   const highlighted = draft.works.find((object) => object.id === highlightedId)?.span ?? null;
@@ -42,6 +47,13 @@ export function WorksStep() {
     updateDraft((current) => ({
       ...current,
       works: current.works.map((object) => (object.id === id ? { ...object, ...patch } : object)),
+    }));
+  }
+
+  function setLength(id: string, lengthKm: string) {
+    updateDraft((current) => ({
+      ...current,
+      works: current.works.map((work) => (work.id === id ? setPz2WorkLength(work, lengthKm) : work)),
     }));
   }
 
@@ -82,7 +94,9 @@ export function WorksStep() {
         onMarksChange={(rulerMarksKm) => updateDraft((current) => ({ ...current, rulerMarksKm }))}
         highlightedSpan={highlighted}
         onMeasured={(lengthKm, span) => addObject(formatMeasured(lengthKm), span)}
+        routePoints={routePoints}
         ruler={ruler}
+        segments={segments}
         stations={stations}
       />
 
@@ -147,7 +161,7 @@ export function WorksStep() {
                           ariaLabel={`Длина работы ${index + 1}, км`}
                           error={kind.measure === 'length' ? error : null}
                           onBlur={() => markTouched(object.id)}
-                          onChange={(lengthKm) => patchObject(object.id, { lengthKm })}
+                          onChange={(lengthKm) => setLength(object.id, lengthKm)}
                           readOnly={kind.measure === 'count'}
                           value={kind.measure === 'count' ? '' : object.lengthKm}
                         />

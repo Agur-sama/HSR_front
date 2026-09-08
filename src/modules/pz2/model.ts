@@ -1,7 +1,7 @@
 import { createBridge } from '../../bridge/io';
 import type { BridgeSchema, ModulePosition, Pz2Result, Pz2Stage, Pz2Work } from '../../bridge/schema';
-import { buildDisplayRoutePoints } from '../../shared/lib/routeGeometry';
-import { createRouteRuler, projectOntoRoute } from '../../shared/lib/routeRuler';
+import { buildRoutePointsBySegment, computeRouteLineMetrics } from '../../shared/lib/routeGeometry';
+import { createRouteRulerFromSegments, projectOntoRoute } from '../../shared/lib/routeRuler';
 import type { RouteRuler } from '../../shared/lib/routeRuler';
 import { pz2NetworkExercises } from './networkExercises';
 import type {
@@ -9,7 +9,9 @@ import type {
   Pz2RouteSpan,
   Pz2StationMark,
   Pz2SoilCondition,
+  Pz2RoutePointMark,
   Pz2RouteSource,
+  Pz2SegmentMark,
   Pz2StageDraft,
   Pz2WorkDraft,
   Pz2WorkKind,
@@ -111,6 +113,25 @@ export function createPz2Work(
   };
 }
 
+/**
+ * Правка длины руками.
+ *
+ * Участок на карте привязан к строке и подсвечивается при наведении. Если
+ * студент поправил длину сам, участок ей больше не соответствует: где именно
+ * пролегли исправленные километры, мы не знаем. Поэтому привязка к карте
+ * снимается — лучше не показать участок, чем показать неверный.
+ */
+export function setPz2WorkLength(work: Pz2WorkDraft, lengthKm: string): Pz2WorkDraft {
+  if (work.span && lengthKm !== work.lengthKm) {
+    const { span, ...rest } = work;
+    void span;
+
+    return { ...rest, lengthKm };
+  }
+
+  return { ...work, lengthKm };
+}
+
 /** Условие включают и выключают галочкой, поэтому переключатель, а не замена. */
 export function togglePz2SoilCondition(work: Pz2WorkDraft, condition: Pz2SoilCondition): Pz2WorkDraft {
   const conditions = work.conditions.includes(condition)
@@ -118,6 +139,13 @@ export function togglePz2SoilCondition(work: Pz2WorkDraft, condition: Pz2SoilCon
     : [...work.conditions, condition];
 
   return { ...work, conditions };
+}
+
+export function renamePz2Stage(draft: Pz2Draft, stageId: string, title: string): Pz2Draft {
+  return {
+    ...draft,
+    stages: draft.stages.map((stage) => (stage.id === stageId ? { ...stage, title } : stage)),
+  };
 }
 
 export function createPz2Stage(title: string, order: number): Pz2StageDraft {
@@ -217,8 +245,26 @@ export function getPz2StationMarks(source: Pz2RouteSource, ruler: RouteRuler): P
     .sort((left, right) => left.distanceKm - right.distanceKm);
 }
 
+/**
+ * Линейка по трассе из ПЗ1.
+ *
+ * Длину каждого сегмента берём у ПЗ1, а не пересчитываем по ломаной: иначе
+ * сумма намеренного не сойдётся с эталоном, с которым её же и сверяют.
+ */
 export function createPz2Ruler(source: Pz2RouteSource): RouteRuler {
-  return createRouteRuler(source.routeLine ? buildDisplayRoutePoints(source.routeLine) : []);
+  if (!source.routeLine) {
+    return createRouteRulerFromSegments([]);
+  }
+
+  const metrics = computeRouteLineMetrics(source.routeLine);
+  const pointsBySegment = buildRoutePointsBySegment(source.routeLine);
+
+  return createRouteRulerFromSegments(
+    source.routeLine.segments.map((segment, index) => ({
+      points: pointsBySegment[index] ?? [],
+      lengthKm: metrics.segments.find((item) => item.segmentId === segment.id)?.arcLengthKm ?? 0,
+    })),
+  );
 }
 
 export interface Pz2LengthCheck {
@@ -319,6 +365,101 @@ export function formatPz2Km(value: number) {
  */
 export function isPz2StagesComplete(draft: Pz2Draft) {
   return draft.stages.length > 0 && draft.works.length > 0 && draft.works.every((work) => work.stageId !== null);
+}
+
+/**
+ * Точки линии трассы из ПЗ1 — те же, что студент ставил в первом задании.
+ *
+ * Номер сохраняется по порядку вершин: на карте ПЗ2 точка подписана тем же
+ * числом, что и в ПЗ1, иначе два задания показывали бы одну трассу по-разному.
+ */
+export function getPz2RoutePointMarks(source: Pz2RouteSource, ruler: RouteRuler): Pz2RoutePointMark[] {
+  const vertices = source.routeLine?.vertices ?? [];
+
+  return vertices.flatMap((vertex, index) => {
+    const position = projectOntoRoute(ruler, { lat: vertex.lat, lon: vertex.lon });
+
+    if (!position) {
+      return [];
+    }
+
+    return [
+      {
+        id: vertex.id,
+        number: index + 1,
+        lat: vertex.lat,
+        lon: vertex.lon,
+        distanceKm: position.distanceKm,
+      },
+    ];
+  });
+}
+
+/**
+ * Сегменты трассы из ПЗ1: прямые вставки и кривые с их радиусами.
+ *
+ * Длины и радиусы считает та же функция, что и в ПЗ1, — числа в двух заданиях
+ * обязаны совпадать. Километр начала нужен, чтобы студент понимал, какой
+ * кусок трассы он сейчас меряет.
+ */
+export function getPz2SegmentMarks(source: Pz2RouteSource): Pz2SegmentMark[] {
+  if (!source.routeLine) {
+    return [];
+  }
+
+  const metrics = computeRouteLineMetrics(source.routeLine);
+  let fromKm = 0;
+
+  return source.routeLine.segments.map((segment, index) => {
+    const measured = metrics.segments.find((item) => item.segmentId === segment.id);
+    const lengthKm = measured?.arcLengthKm ?? 0;
+    const mark: Pz2SegmentMark = {
+      id: segment.id,
+      number: index + 1,
+      lengthKm,
+      radiusM: measured?.radiusKm != null ? Math.round(measured.radiusKm * 1000) : null,
+      fromKm,
+    };
+
+    fromKm += lengthKm;
+
+    return mark;
+  });
+}
+
+/**
+ * Цвета этапов на карте.
+ *
+ * Взяты из токенов дизайн-системы, чтобы карта не жила своей палитрой: синий,
+ * бирюзовый и красный — основные цвета проекта, остальные подобраны к ним по
+ * насыщенности. Когда этапов больше, цвета идут по кругу: семь-девять этапов,
+ * о которых говорил заказчик, помещаются без повторов.
+ */
+export const pz2StageColors = ['#003d84', '#08a696', '#e0182d', '#8a5cf5', '#e07b18', '#0f6e56', '#c0392b'];
+
+export function getPz2StageColor(order: number) {
+  return pz2StageColors[order % pz2StageColors.length];
+}
+
+/**
+ * Куски трассы, занятые работами этапа.
+ *
+ * Рисуются только намеренные линейкой работы: у введённых руками места на
+ * трассе нет, и показать их на карте нечем — вместо догадки экран честно
+ * говорит, сколько работ осталось без участка.
+ */
+export function getPz2StageSpans(draft: Pz2Draft) {
+  return draft.stages.map((stage) => {
+    const works = getPz2StageWorks(draft, stage.id);
+
+    return {
+      id: stage.id,
+      title: stage.title,
+      color: getPz2StageColor(stage.order),
+      spans: works.flatMap((work) => (work.span ? [work.span] : [])),
+      worksWithoutSpan: works.filter((work) => !work.span).length,
+    };
+  });
 }
 
 /** Работы этапа в порядке их появления. Пул — этап с id null. */

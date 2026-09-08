@@ -12,6 +12,7 @@ import {
   formatPz2Km,
   getPz2LengthCheck,
   getPz2RouteSource,
+  getPz2SegmentMarks,
   getPz2StageWorks,
   isPz2StagesComplete,
   isPz2WorksComplete,
@@ -344,6 +345,13 @@ function Pz2Workspace() {
   );
 }
 
+/** Сколько сегментов перенеслось и сколько из них кривые — видно сразу на интро. */
+function describeSegments(segments: ReturnType<typeof getPz2SegmentMarks>) {
+  const curves = segments.filter((segment) => segment.radiusM !== null).length;
+
+  return curves > 0 ? `${segments.length}, из них кривых ${curves}` : String(segments.length);
+}
+
 function describeStagesHint(draft: Pz2Draft) {
   if (draft.stages.length === 0) {
     return 'Создайте хотя бы один этап';
@@ -428,8 +436,16 @@ function Pz2IntroStep() {
               <dd>{formatPz2Km(source.totalLengthKm)}</dd>
             </div>
             <div>
+              <dt>Станций</dt>
+              <dd>{source.stations.length}</dd>
+            </div>
+            <div>
               <dt>Точек линии</dt>
               <dd>{source.routeLine.vertices.length}</dd>
+            </div>
+            <div>
+              <dt>Сегментов</dt>
+              <dd>{describeSegments(getPz2SegmentMarks(source))}</dd>
             </div>
           </dl>
         ) : (

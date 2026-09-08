@@ -46,6 +46,57 @@ export function createRouteRuler(points: GeoPoint[]): RouteRuler {
   return { points: valid, cumulativeKm, totalKm: total };
 }
 
+/**
+ * Линейка, согласованная с длинами сегментов из ПЗ1.
+ *
+ * Кривая рисуется ломаной, и сумма её звеньев по хаверсинусу не совпадает с
+ * длиной дуги, которую ПЗ1 считает аналитически: расхождение около четверти
+ * процента, на маршруте в тысячу километров — несколько километров. Для ПЗ2
+ * это не мелочь: студент сверяет сумму намеренного с длиной маршрута из ПЗ1 и
+ * при идеальном замере всё равно получал бы расхождение.
+ *
+ * Поэтому расстояния внутри сегмента раскладываются пропорционально ломаной, а
+ * сам сегмент получает ровно ту длину, которую даёт ПЗ1. Линейка меряет по
+ * трассе, а итог сходится с эталоном.
+ */
+export function createRouteRulerFromSegments(segments: { points: GeoPoint[]; lengthKm: number }[]): RouteRuler {
+  const points: GeoPoint[] = [];
+  const cumulativeKm: number[] = [];
+  let total = 0;
+
+  for (const segment of segments) {
+    const valid = segment.points.filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+
+    if (valid.length === 0) {
+      continue;
+    }
+
+    const chords = valid.slice(1).map((point, index) => haversineDistanceKm(valid[index], point));
+    const polylineKm = chords.reduce((sum, chord) => sum + chord, 0);
+    // Сегмент нулевой длины (точки совпали) делить не на что: он просто не
+    // добавляет расстояния, но точку сохраняет.
+    const scale = polylineKm > 0 ? segment.lengthKm / polylineKm : 0;
+    const segmentStart = total;
+
+    if (points.length === 0) {
+      points.push(valid[0]);
+      cumulativeKm.push(segmentStart);
+    }
+
+    let walked = 0;
+
+    chords.forEach((chord, index) => {
+      walked += chord;
+      points.push(valid[index + 1]);
+      cumulativeKm.push(segmentStart + walked * scale);
+    });
+
+    total = segmentStart + segment.lengthKm;
+  }
+
+  return { points, cumulativeKm, totalKm: total };
+}
+
 /** Ближайшая к точке отметка на трассе. null — если мерить не по чему. */
 export function projectOntoRoute(ruler: RouteRuler, target: GeoPoint): RoutePosition | null {
   if (ruler.points.length === 0) {

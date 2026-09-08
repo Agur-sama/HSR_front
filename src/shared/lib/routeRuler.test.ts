@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createRouteRuler, measureRouteSpanKm, pointAtDistance, projectOntoRoute } from './routeRuler';
+import {
+  createRouteRuler,
+  createRouteRulerFromSegments,
+  measureRouteSpanKm,
+  pointAtDistance,
+  projectOntoRoute,
+} from './routeRuler';
 
 /** Ломаная по экватору: два колена по 1° долготы, ≈111,19 км каждое. */
 const equatorLine = [
@@ -120,5 +126,50 @@ describe('удалённость клика от трассы', () => {
     // Градус широты — примерно 111 км в любой точке земного шара.
     expect(position?.offsetKm).toBeCloseTo(111.19, 1);
     expect(position?.point.lat).toBeCloseTo(0, 6);
+  });
+});
+
+describe('линейка по длинам сегментов', () => {
+  const equatorDegreeKm = 111.19;
+
+  it('итог равен сумме длин сегментов, а не сумме звеньев ломаной', () => {
+    // Ломаная из четырёх звеньев, но сегмент объявлен длиной 100 км.
+    const points = [0, 0.5, 1, 1.5, 2].map((lon) => ({ lat: 0, lon }));
+    const ruler = createRouteRulerFromSegments([{ points, lengthKm: 100 }]);
+
+    expect(ruler.totalKm).toBeCloseTo(100, 6);
+    expect(ruler.cumulativeKm.at(-1)).toBeCloseTo(100, 6);
+  });
+
+  it('внутри сегмента расстояния идут пропорционально ломаной', () => {
+    const points = [0, 1, 2].map((lon) => ({ lat: 0, lon }));
+    const ruler = createRouteRulerFromSegments([{ points, lengthKm: 200 }]);
+
+    expect(ruler.cumulativeKm).toEqual([0, expect.closeTo(100, 6), expect.closeTo(200, 6)]);
+  });
+
+  it('сегменты стыкуются: конец одного — начало следующего', () => {
+    const ruler = createRouteRulerFromSegments([
+      { points: [0, 1].map((lon) => ({ lat: 0, lon })), lengthKm: 50 },
+      { points: [1, 2].map((lon) => ({ lat: 0, lon })), lengthKm: 70 },
+    ]);
+
+    expect(ruler.points).toHaveLength(3);
+    expect(ruler.cumulativeKm).toEqual([0, expect.closeTo(50, 6), expect.closeTo(120, 6)]);
+  });
+
+  it('сегмент нулевой длины не ломает линейку', () => {
+    const ruler = createRouteRulerFromSegments([
+      { points: [{ lat: 0, lon: 0 }, { lat: 0, lon: 0 }], lengthKm: 0 },
+      { points: [0, 1].map((lon) => ({ lat: 0, lon })), lengthKm: equatorDegreeKm },
+    ]);
+
+    expect(Number.isFinite(ruler.totalKm)).toBe(true);
+    expect(ruler.totalKm).toBeCloseTo(equatorDegreeKm, 6);
+  });
+
+  it('без сегментов линейка пустая', () => {
+    expect(createRouteRulerFromSegments([]).totalKm).toBe(0);
+    expect(createRouteRulerFromSegments([]).points).toEqual([]);
   });
 });

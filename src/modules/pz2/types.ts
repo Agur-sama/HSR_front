@@ -68,6 +68,27 @@ export interface Pz2RouteSource {
   variantTitle: string;
 }
 
+/** Точка линии трассы из ПЗ1 с километражом от начала. */
+export interface Pz2RoutePointMark {
+  id: string;
+  /** Номер по порядку — тот же, что видел студент в ПЗ1. */
+  number: number;
+  lat: number;
+  lon: number;
+  distanceKm: number;
+}
+
+/** Сегмент трассы из ПЗ1: прямая вставка или кривая между двумя точками. */
+export interface Pz2SegmentMark {
+  id: string;
+  number: number;
+  lengthKm: number;
+  /** Радиус кривой, м. null — прямая вставка. */
+  radiusM: number | null;
+  /** Километр начала сегмента от начала трассы. */
+  fromKm: number;
+}
+
 /** Станция ПЗ1 на трассе ПЗ2: та же точка, но с километражом от начала. */
 export interface Pz2StationMark {
   label: string;

@@ -519,9 +519,16 @@ button:focus-visible {
 /* Экран 02: этапы слева, пул работ справа — работы перетаскиваются между ними. */
 .stages-step {
   display: grid;
-  grid-template-columns: minmax(360px, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 1.15fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
   gap: 22px;
   align-items: start;
+}
+
+/* Карта во второй колонке на обе строки: этапы и пул идут слева друг под другом. */
+.stages-step > .osm-map-card {
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
 
 .stage-add {
@@ -570,6 +577,14 @@ button:focus-visible {
   text-align: center;
 }
 
+/* Метка цвета этапа — тем же цветом он нарисован на карте. */
+.stage-card__color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+
 .stage-card__head {
   display: flex;
   align-items: center;
@@ -581,6 +596,22 @@ button:focus-visible {
   margin: 0;
   color: var(--primary);
   font-size: 15px;
+}
+
+/* Название этапа правится прямо в карточке — поле не должно выглядеть формой. */
+.stage-card__title {
+  flex: 1;
+  border-color: transparent;
+  background: transparent;
+  color: var(--primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.stage-card__title:hover,
+.stage-card__title:focus {
+  border-color: var(--border-strong);
+  background: #fff;
 }
 
 .stage-card__meta {
@@ -632,6 +663,45 @@ button:focus-visible {
 
 .work-card select {
   max-width: 160px;
+}
+
+/* Сегменты трассы из ПЗ1 — справка, поэтому свёрнуты: студенту они нужны,
+   когда он решает, где заканчивается участок, а не постоянно. */
+.route-segments-summary {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.route-segments-summary summary {
+  color: var(--teal-text-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.route-segments-summary ul {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route-segments-summary li {
+  display: grid;
+  grid-template-columns: 92px 1fr auto auto;
+  gap: 10px;
+  align-items: baseline;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.route-segments-summary strong {
+  color: var(--primary);
+}
+
+.route-segments-summary__from {
+  min-width: 92px;
+  text-align: right;
 }
 
 /* Условия грунта — галочками: у участка их может быть сразу несколько. */

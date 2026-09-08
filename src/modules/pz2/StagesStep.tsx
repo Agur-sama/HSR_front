@@ -1,14 +1,23 @@
 import { useState } from 'react';
 import { useModuleState } from '../../bridge/context';
+import { Pz2RouteMap } from './Pz2RouteMap';
 import {
   assignPz2WorkToStage,
+  createPz2Ruler,
   createPz2Stage,
   formatPz2Km,
+  getPz2RoutePointMarks,
+  getPz2RouteSource,
+  getPz2SegmentMarks,
+  getPz2StageColor,
+  getPz2StageSpans,
+  getPz2StationMarks,
   getPz2StageWorks,
   getPz2WorkKind,
   parsePz2Number,
   pz2SoilConditions,
   removePz2Stage,
+  renamePz2Stage,
 } from './model';
 import type { Pz2Draft, Pz2WorkDraft } from './types';
 
@@ -25,7 +34,11 @@ import type { Pz2Draft, Pz2WorkDraft } from './types';
  * был бы непроходим с клавиатуры.
  */
 export function StagesStep() {
-  const { draft, updateDraft } = useModuleState<Pz2Draft>();
+  const { draft, importedBridge, updateDraft } = useModuleState<Pz2Draft>();
+  const source = getPz2RouteSource(importedBridge);
+  const ruler = createPz2Ruler(source);
+  const stageSpans = getPz2StageSpans(draft);
+  const [hoveredStageId, setHoveredStageId] = useState('');
   const [title, setTitle] = useState('');
   const [draggedId, setDraggedId] = useState('');
   const [dropTargetId, setDropTargetId] = useState<string | null | undefined>(undefined);
@@ -68,8 +81,23 @@ export function StagesStep() {
     };
   }
 
+  const worksWithoutSpan = stageSpans.reduce((sum, stage) => sum + stage.worksWithoutSpan, 0);
+
   return (
     <div className="stages-step">
+      <Pz2RouteMap
+        highlightedStageId={hoveredStageId}
+        marksKm={[]}
+        onMarksChange={() => undefined}
+        onMeasured={() => undefined}
+        routePoints={getPz2RoutePointMarks(source, ruler)}
+        ruler={ruler}
+        segments={getPz2SegmentMarks(source)}
+        stageSpans={stageSpans}
+        stations={getPz2StationMarks(source, ruler)}
+        withRuler={false}
+      />
+
       <section className="form-section">
         <div className="osm-map-card__head">
           <div>
@@ -80,7 +108,7 @@ export function StagesStep() {
 
         <div className="stage-add">
           <input
-            aria-label="Название этапа"
+            aria-label="Название нового этапа"
             onChange={(event) => setTitle(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
@@ -96,6 +124,13 @@ export function StagesStep() {
           </button>
         </div>
 
+        {worksWithoutSpan > 0 ? (
+          <p className="status-note">
+            На карте показаны только работы, намеренные линейкой. Работ, введённых руками, — {worksWithoutSpan}: где они
+            на трассе, неизвестно.
+          </p>
+        ) : null}
+
         {draft.stages.length === 0 ? (
           <p className="status-note">
             Этапов пока нет. Трассу делят на участки, которые строят одновременно: на Москве — Санкт-Петербурге их
@@ -110,10 +145,26 @@ export function StagesStep() {
                 <li
                   className={`stage-card${dropTargetId === stage.id ? ' is-drop-target' : ''}`}
                   key={stage.id}
+                  onMouseEnter={() => setHoveredStageId(stage.id)}
+                  onMouseLeave={() => setHoveredStageId('')}
                   {...dropHandlers(stage.id)}
                 >
                   <div className="stage-card__head">
-                    <h4>{stage.title}</h4>
+                    <span
+                      aria-hidden="true"
+                      className="stage-card__color"
+                      style={{ background: getPz2StageColor(stage.order) }}
+                    />
+                    {/* Название правится на месте: из-за опечатки этап не должен
+                        пересоздаваться — вместе с ним уехали бы и работы. */}
+                    <input
+                      aria-label={`Название этапа ${stage.order + 1}`}
+                      className="stage-card__title"
+                      onChange={(event) =>
+                        updateDraft((current) => renamePz2Stage(current, stage.id, event.target.value))
+                      }
+                      value={stage.title}
+                    />
                     <span className="stage-card__meta">{describeWorks(works)}</span>
                     <button
                       aria-label={`Удалить этап ${stage.title}`}
@@ -199,6 +250,7 @@ function WorkCard({ draft, work, onDragStart, onMove }: WorkCardProps) {
       <div>
         <strong>{kind.label}</strong>
         <span className="work-card__meta">{describeWork(work)}</span>
+        {work.span ? <span className="work-card__meta">{describeSpan(work.span)}</span> : null}
         {conditions.length > 0 ? (
           <span className="work-card__meta">{conditions.map((item) => item.label).join(', ')}</span>
         ) : null}
@@ -220,6 +272,14 @@ function WorkCard({ draft, work, onDragStart, onMove }: WorkCardProps) {
       </select>
     </li>
   );
+}
+
+/** Где работа лежит на трассе — по нему и решают, какому этапу она принадлежит. */
+function describeSpan(span: NonNullable<Pz2WorkDraft['span']>) {
+  const from = Math.min(span.fromKm, span.toKm);
+  const to = Math.max(span.fromKm, span.toKm);
+
+  return `${formatPz2Km(from).replace(' км', '')} — ${formatPz2Km(to)} трассы`;
 }
 
 function describeWork(work: Pz2WorkDraft) {
