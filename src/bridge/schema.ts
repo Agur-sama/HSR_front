@@ -32,7 +32,7 @@ export interface RouteLine {
 }
 
 export type TransportModeId = 'hSR' | 'airplane' | 'suburbanTrain' | 'longDistanceTrain' | 'bus' | 'car';
-export type BridgeSchemaVersion = '1.0' | '1.1';
+export type BridgeSchemaVersion = '1.0' | '1.1' | '1.2';
 
 export interface Pz1DiscomfortMatrix {
   values: Record<string, Record<TransportModeId, string>>;
@@ -189,7 +189,50 @@ export interface Pz1Result {
 }
 
 // TODO: уточнить по методичке при разработке ПЗ2.
-export type Pz2Result = unknown;
+/**
+ * Итог ПЗ2 (ТЗ ПЗ2 §10). Длины и количества здесь уже числа: в черновике они
+ * живут строками, потому что это поля ввода, а в мост уходит посчитанное.
+ */
+export interface Pz2Work {
+  id: string;
+  kind: Pz2WorkKind;
+  /** Длина участка, км. null у штучных работ — у них считается count. */
+  lengthKm: number | null;
+  /** Количество, шт. null у линейных работ. */
+  count: number | null;
+  /** Этап, которому принадлежит работа. null — работа в общем пуле. */
+  stageId: string | null;
+  conditions: Pz2SoilCondition[];
+  /** Где работа стоит на трассе, км от начала. Есть только у намеренных линейкой. */
+  span?: { fromKm: number; toKm: number };
+}
+
+export type Pz2WorkKind =
+  | 'existingLineRepair'
+  | 'earthworks'
+  | 'ballastTrack'
+  | 'viaduct'
+  | 'bridge'
+  | 'tunnel'
+  | 'turnout';
+
+export type Pz2SoilCondition = 'weakSoil' | 'rocky';
+
+/** Пространственный этап: участок трассы, который строится параллельно другим. */
+export interface Pz2Stage {
+  id: string;
+  title: string;
+  order: number;
+}
+
+export interface Pz2Result {
+  works: Pz2Work[];
+  stages: Pz2Stage[];
+  /** Эталон из ПЗ1, с которым сверялась сумма длин. */
+  routeLengthKm: number;
+  /** Сумма длин линейных работ на момент сохранения. */
+  measuredLengthKm: number;
+}
 // TODO: уточнить по методичке при разработке ПЗ3.
 export type Pz3Result = unknown;
 // TODO: уточнить по методичке при разработке ПЗ4.

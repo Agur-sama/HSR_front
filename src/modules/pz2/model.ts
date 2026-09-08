@@ -1,4 +1,5 @@
-import type { BridgeSchema } from '../../bridge/schema';
+import { createBridge } from '../../bridge/io';
+import type { BridgeSchema, ModulePosition, Pz2Result, Pz2Stage, Pz2Work } from '../../bridge/schema';
 import { buildDisplayRoutePoints } from '../../shared/lib/routeGeometry';
 import { createRouteRuler, projectOntoRoute } from '../../shared/lib/routeRuler';
 import type { RouteRuler } from '../../shared/lib/routeRuler';
@@ -299,4 +300,133 @@ export function formatPz2Km(value: number) {
   const format = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return `${format.format(value)} км`;
+}
+
+/**
+ * Шаг «Этапы» пройден, когда этапы созданы и каждая работа куда-то отнесена.
+ *
+ * Пустой пул — и есть смысл разбиения: трасса делится на участки целиком, а не
+ * частично. Заказчик числа этапов не ограничивал (в-9), поэтому проверяется
+ * только то, что они есть и что работы разложены.
+ */
+export function isPz2StagesComplete(draft: Pz2Draft) {
+  return draft.stages.length > 0 && draft.works.length > 0 && draft.works.every((work) => work.stageId !== null);
+}
+
+/** Работы этапа в порядке их появления. Пул — этап с id null. */
+export function getPz2StageWorks(draft: Pz2Draft, stageId: string | null) {
+  return draft.works.filter((work) => work.stageId === stageId);
+}
+
+/**
+ * Перенос работы в этап. Работа принадлежит ровно одному этапу, поэтому это
+ * замена принадлежности, а не добавление в список — двух этапов у неё быть не
+ * может (DoD экрана 2).
+ */
+export function assignPz2WorkToStage(draft: Pz2Draft, workId: string, stageId: string | null): Pz2Draft {
+  return {
+    ...draft,
+    works: draft.works.map((work) => (work.id === workId ? { ...work, stageId } : work)),
+  };
+}
+
+/**
+ * Удаление этапа: его работы возвращаются в пул, а не исчезают вместе с ним.
+ * Порядок оставшихся этапов пересчитывается, чтобы не осталось дыр.
+ */
+export function removePz2Stage(draft: Pz2Draft, stageId: string): Pz2Draft {
+  return {
+    ...draft,
+    stages: draft.stages
+      .filter((stage) => stage.id !== stageId)
+      .map((stage, index) => ({ ...stage, order: index })),
+    works: draft.works.map((work) => (work.stageId === stageId ? { ...work, stageId: null } : work)),
+  };
+}
+
+/** Шаги задания стабильными идентификаторами: позиция в файле не зависит от порядка. */
+export const pz2StepIds = ['works', 'stages', 'exercises'] as const;
+
+export type Pz2StepId = (typeof pz2StepIds)[number];
+
+/**
+ * Итог ПЗ2 для моста.
+ *
+ * Строки ввода превращаются в числа здесь и только здесь: дальше по цепочке
+ * заданий пойдут посчитанные величины, а не то, что студент набрал в поле.
+ */
+export function createPz2Result(draft: Pz2Draft, routeLengthKm: number): Pz2Result {
+  return {
+    works: draft.works.map((work): Pz2Work => {
+      const measure = getPz2WorkKind(work.kind).measure;
+
+      return {
+        id: work.id,
+        kind: work.kind,
+        lengthKm: measure === 'length' ? parsePz2Number(work.lengthKm) : null,
+        count: measure === 'count' ? parsePz2Number(work.count) : null,
+        stageId: work.stageId,
+        conditions: work.conditions,
+        ...(work.span ? { span: work.span } : {}),
+      };
+    }),
+    stages: draft.stages.map((stage): Pz2Stage => ({ id: stage.id, title: stage.title, order: stage.order })),
+    routeLengthKm,
+    measuredLengthKm: getPz2LengthCheck(draft, routeLengthKm).measuredKm,
+  };
+}
+
+/**
+ * Файл ПЗ2. Данные ПЗ1 переносятся из загруженного моста как есть: второе
+ * задание продолжает первое, и сохранение ПЗ2 не должно обнулять то, с чем
+ * студент пришёл.
+ */
+export function createPz2Bridge(
+  draft: Pz2Draft,
+  importedBridge: BridgeSchema | null,
+  position?: ModulePosition,
+): BridgeSchema {
+  const source = getPz2RouteSource(importedBridge);
+  const passport = importedBridge?.passport ?? {
+    team: '',
+    lineTitle: '',
+    createdAt: new Date().toISOString(),
+  };
+
+  return createBridge(
+    passport,
+    { ...importedBridge?.completed, pz2: createPz2Result(draft, source.totalLengthKm) },
+    {
+      ...importedBridge?.progress,
+      pz2: {
+        works: isPz2WorksComplete(draft),
+        stages: isPz2StagesComplete(draft),
+      },
+    },
+    { ...importedBridge?.position, ...(position ? { pz2: position } : {}) },
+  );
+}
+
+/**
+ * Куда открывать задание после загрузки файла — тем же способом, что в ПЗ1:
+ * шаг ищется по стабильному id, незнакомый id и файлы без позиции дают интро.
+ */
+export function readPz2Position(bridge: BridgeSchema | null | undefined) {
+  const position = bridge?.position?.pz2;
+
+  if (!position || !position.phase || position.phase === 'intro') {
+    return null;
+  }
+
+  if (position.phase === 'result') {
+    return { phase: 'result' as const, stepIndex: pz2StepIds.length - 1, theorySeen: true };
+  }
+
+  const stepIndex = position.stepId ? pz2StepIds.indexOf(position.stepId as Pz2StepId) : -1;
+
+  if (stepIndex < 0) {
+    return null;
+  }
+
+  return { phase: 'task' as const, stepIndex, theorySeen: position.theorySeen ?? true };
 }

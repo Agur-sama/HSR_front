@@ -10,7 +10,7 @@ describe('bridge io', () => {
       createdAt: '2026-07-10T00:00:00.000Z',
     });
 
-    expect(bridge.schemaVersion).toBe('1.1');
+    expect(bridge.schemaVersion).toBe('1.2');
     expect(parseBridgeJson(serializeBridge(bridge))).toEqual(bridge);
   });
 
@@ -19,6 +19,18 @@ describe('bridge io', () => {
       schemaVersion: '1.0',
       passport: { team: 'Группа 1', lineTitle: 'Тестовая линия', createdAt: '2026-07-10T00:00:00.000Z' },
       completed: {},
+    };
+
+    expect(parseBridgeJson(JSON.stringify(bridge))).toEqual(bridge);
+  });
+
+  // Файл из ПЗ1, сохранённый до появления ПЗ2, должен открываться как раньше
+  // (ТЗ ПЗ2 §10): версия поднялась, но ломающих изменений в ней нет.
+  it('keeps backward compatibility with schema version 1.1', () => {
+    const bridge = {
+      schemaVersion: '1.1',
+      passport: { team: 'Группа 1', lineTitle: 'Тестовая линия', createdAt: '2026-07-10T00:00:00.000Z' },
+      completed: { pz1: { totalLengthKm: 512.85 } },
     };
 
     expect(parseBridgeJson(JSON.stringify(bridge))).toEqual(bridge);
@@ -37,6 +49,6 @@ describe('bridge io', () => {
           completed: {},
         }),
       ),
-    ).toThrow('schemaVersion 1.0/1.1');
+    ).toThrow('schemaVersion 1.0/1.1/1.2');
   });
 });

@@ -21,9 +21,9 @@ import {
 import type { Pz2Draft, Pz2RouteSpan, Pz2SoilCondition, Pz2WorkDraft, Pz2WorkKind } from './types';
 
 /**
- * Шаг 01 ПЗ2: какие объекты нужно построить на трассе.
+ * Шаг 01 ПЗ2: какие работы нужно выполнить на трассе (ТЗ ПЗ2 §5).
  *
- * Слева карта из ПЗ1 с линейкой, справа таблица объектов. Измеренный участок
+ * Слева карта из ПЗ1 с линейкой, справа таблица работ. Измеренный участок
  * сразу заводится строкой в таблицу — так студенту не приходится переписывать
  * число руками, а сумма длин сходится с длиной маршрута.
  */
@@ -89,24 +89,24 @@ export function WorksStep() {
       <section className="form-section">
         <div className="osm-map-card__head">
           <div>
-            <p className="eyebrow">Объекты трассы</p>
+            <p className="eyebrow">Работы по трассе</p>
             <h3>Что нужно построить</h3>
           </div>
           <button className="button button--outline" onClick={() => addObject()} type="button">
-            + Добавить объект
+            + Добавить работу
           </button>
         </div>
 
         {draft.works.length === 0 ? (
           <p className="status-note">
-            Пока пусто. Измерьте участок линейкой на карте — строка добавится сама, либо добавьте объект вручную.
+            Пока пусто. Измерьте участок линейкой на карте — строка добавится сама, либо добавьте работу вручную.
           </p>
         ) : (
           <div className="table-scroll">
             <table className="input-table works-table">
               <thead>
                 <tr>
-                  <th>Тип объекта</th>
+                  <th>Тип работы</th>
                   <th className="numeric">Длина, км</th>
                   <th className="numeric">Количество, шт.</th>
                   <th>Условия</th>
@@ -130,7 +130,7 @@ export function WorksStep() {
                     >
                       <th scope="row">
                         <select
-                          aria-label={`Тип объекта ${index + 1}`}
+                          aria-label={`Тип работы ${index + 1}`}
                           onChange={(event) => changeKind(object.id, event.target.value as Pz2WorkKind)}
                           value={object.kind}
                         >
@@ -144,7 +144,7 @@ export function WorksStep() {
                       </th>
                       <td>
                         <GroupedNumberInput
-                          ariaLabel={`Длина объекта ${index + 1}, км`}
+                          ariaLabel={`Длина работы ${index + 1}, км`}
                           error={kind.measure === 'length' ? error : null}
                           onBlur={() => markTouched(object.id)}
                           onChange={(lengthKm) => patchObject(object.id, { lengthKm })}
@@ -155,7 +155,7 @@ export function WorksStep() {
                       </td>
                       <td>
                         <GroupedNumberInput
-                          ariaLabel={`Количество объектов ${index + 1}, шт.`}
+                          ariaLabel={`Количество для работы ${index + 1}, шт.`}
                           error={kind.measure === 'count' ? error : null}
                           onBlur={() => markTouched(object.id)}
                           onChange={(count) => patchObject(object.id, { count })}
@@ -184,7 +184,7 @@ export function WorksStep() {
                       </td>
                       <td>
                         <button
-                          aria-label={`Удалить объект ${index + 1}`}
+                          aria-label={`Удалить работу ${index + 1}`}
                           className="data-entry__remove-column"
                           onClick={() => removeObject(object.id)}
                           type="button"
@@ -232,7 +232,7 @@ export function WorksStep() {
 
 function describeCheck(status: ReturnType<typeof getPz2LengthCheck>['status']) {
   if (status === 'empty') {
-    return 'Добавьте объекты — тогда сумму будет с чем сверять.';
+    return 'Добавьте работы — тогда сумму будет с чем сверять.';
   }
 
   if (status === 'match') {
@@ -242,7 +242,7 @@ function describeCheck(status: ReturnType<typeof getPz2LengthCheck>['status']) {
   // Про наложение отдельно говорит проверка участков — она это знает точно,
   // а не предполагает по одной лишь сумме.
   return status === 'short'
-    ? 'Участков намерено меньше длины маршрута — часть трассы осталась без объектов.'
+    ? 'Участков намерено меньше длины маршрута — часть трассы осталась без работ.'
     : 'Участков намерено больше длины маршрута — где-то набрались лишние километры.';
 }
 

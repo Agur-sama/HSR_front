@@ -472,6 +472,124 @@ button:focus-visible {
   background: var(--danger-bg);
 }
 
+/* Экран 02: этапы слева, пул работ справа — работы перетаскиваются между ними. */
+.stages-step {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.2fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.stage-add {
+  display: flex;
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.stage-add input {
+  flex: 1;
+}
+
+.stage-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stage-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fff;
+}
+
+/* Куда упадёт карточка — видно до того, как отпустишь кнопку мыши. */
+.stage-card.is-drop-target,
+.work-pool.is-drop-target {
+  border-color: var(--teal);
+  background: var(--teal-bg);
+}
+
+/* Пустой этап читается как место, куда кладут: пунктир, а не обычная заметка.
+   Отдельного скролла у списков нет намеренно — панель шага уже прокручивается,
+   второй скролл внутри неё запрещён компоновкой под iSpring. */
+.stage-drop-hint {
+  margin: 10px 0 0;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  padding: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.stage-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stage-card__head h4 {
+  flex: 1;
+  margin: 0;
+  color: var(--primary);
+  font-size: 15px;
+}
+
+.stage-card__meta {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.work-cards {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.work-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--color-route-hsr);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  cursor: grab;
+}
+
+.work-card:active {
+  cursor: grabbing;
+}
+
+.work-card > div {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+}
+
+.work-card strong {
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.work-card__meta {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.work-card select {
+  max-width: 160px;
+}
+
 /* Условия грунта — галочками: у участка их может быть сразу несколько. */
 .soil-conditions {
   display: grid;
@@ -1959,6 +2077,7 @@ input.is-invalid {
   .module-topline,
   .module-workbar,
   .works-step,
+  .stages-step,
   .intro-layout,
   .result-layout,
   .stations-step,

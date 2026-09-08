@@ -3,8 +3,18 @@ import { ModuleStateProvider, useModuleState } from '../../bridge/context';
 import { jsonFileDraftStorage } from '../../bridge/storage';
 import { ModuleShell } from '../../shared/ui/ModuleShell';
 import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
+import { StagesStep } from './StagesStep';
 import { WorksStep } from './WorksStep';
-import { createInitialPz2Draft, formatPz2Km, getPz2RouteSource, isPz2WorksComplete } from './model';
+import {
+  createInitialPz2Draft,
+  createPz2Bridge,
+  formatPz2Km,
+  getPz2RouteSource,
+  getPz2StageWorks,
+  isPz2StagesComplete,
+  isPz2WorksComplete,
+  pz2StepIds,
+} from './model';
 import type { Pz2Draft } from './types';
 import { CalculationsTable } from '../../components/CalculationsTable/CalculationsTable';
 import { DependencyChart } from '../../components/DependencyChart/DependencyChart';
@@ -275,21 +285,30 @@ export function Pz2Module() {
 }
 
 function Pz2Workspace() {
-  const { draft, importedBridge } = useModuleState<Pz2Draft>();
+  const { currentStepIndex, draft, importedBridge, phase, theorySeen } = useModuleState<Pz2Draft>();
   const source = getPz2RouteSource(importedBridge);
 
   const taskSteps: ModuleTaskStep[] = [
     {
-      id: 'work-objects',
-      title: 'Объекты трассы',
+      id: 'works',
+      title: 'Работы по трассе',
       goal:
-        'Пройдите линейкой по трассе и перечислите объекты, которые нужно построить: их тип, длину и условия грунта. Сумма участков должна сойтись с длиной маршрута.',
+        'Пройдите линейкой по трассе и перечислите работы, которые нужно выполнить: их тип, длину и условия грунта. Сумма длин должна сойтись с длиной маршрута.',
       content: <WorksStep />,
       isComplete: isPz2WorksComplete(draft),
-      completionHint: 'Добавьте хотя бы один объект и заполните его длину или количество',
+      completionHint: 'Добавьте хотя бы одну работу и заполните её длину или количество',
     },
     {
-      id: 'ksg-trainer',
+      id: 'stages',
+      title: 'Разбиение на этапы',
+      goal:
+        'Разделите трассу на участки, которые строятся параллельно, и разнесите работы по ним: перетащите карточку работы в этап.',
+      content: <StagesStep />,
+      isComplete: isPz2StagesComplete(draft),
+      completionHint: describeStagesHint(draft),
+    },
+    {
+      id: 'exercises',
       title: 'Выравнивание загрузки',
       goal: 'Разберитесь, как резервы работ позволяют выровнять число занятых людей во времени.',
       content: <KsgTrainerStep />,
@@ -301,6 +320,18 @@ function Pz2Workspace() {
       intro={<Pz2IntroStep />}
       introComplete={source.routeLine !== null}
       introCompletionHint="Загрузите файл, сохранённый в ПЗ1, — из него берутся трасса и длина маршрута"
+      onSaveDraft={() =>
+        jsonFileDraftStorage.save(
+          // Позиция пишется стабильным id шага — как в ПЗ1: файл, сохранённый
+          // до перестановки шагов, откроет тот же экран, а не тот же номер.
+          createPz2Bridge(draft, importedBridge, {
+            phase,
+            stepId: pz2StepIds[currentStepIndex],
+            theorySeen,
+          }),
+          'vsm-pz2-bridge.json',
+        )
+      }
       result={<Pz2ResultStep />}
       subtitle="Практическое задание № 2"
       taskSteps={taskSteps}
@@ -308,6 +339,16 @@ function Pz2Workspace() {
       title="Календарно-сетевой график строительства"
     />
   );
+}
+
+function describeStagesHint(draft: Pz2Draft) {
+  if (draft.stages.length === 0) {
+    return 'Создайте хотя бы один этап';
+  }
+
+  const left = getPz2StageWorks(draft, null).length;
+
+  return left > 0 ? `В пуле осталось работ: ${left}` : 'Добавьте работы на предыдущем шаге';
 }
 
 function Pz2IntroStep() {
@@ -400,17 +441,17 @@ function Pz2TheoryStep() {
   return (
     <div className="theory-layout">
       <p>
-        Чтобы построить линию, её сначала разбирают на объекты: где-то ремонтируют существующий путь, где-то насыпают
-        земляное полотно, где-то нужны эстакада, мост или тоннель. У каждого объекта есть тип и длина — из них потом
+        Чтобы построить линию, её сначала разбирают на работы: где-то ремонтируют существующий путь, где-то насыпают
+        земляное полотно, где-то нужны эстакада, мост или тоннель. У каждой работы есть тип и длина — из них потом
         складывается список работ.
       </p>
       <p>
         Длину участков меряют по карте. Неточности неизбежны, поэтому в конце сумма участков сверяется с длиной
-        маршрута: расхождение показывает, что часть трассы осталась без объектов или что объекты наложились друг на
+        маршрута: расхождение показывает, что часть трассы осталась без работ или что участки наложились друг на
         друга.
       </p>
       <p>
-        Отдельно считают объекты, у которых длины нет, — например стрелочные переводы: они меряются штуками.
+        Отдельно считают работы, у которых длины нет, — например стрелочные переводы: они меряются штуками.
       </p>
     </div>
   );
@@ -423,7 +464,7 @@ function Pz2ResultStep() {
     <div className="result-layout">
       <section className="form-section">
         <p className="eyebrow">Итог</p>
-        <h2>Объектов на трассе: {draft.works.length}</h2>
+        <h2>Работ по трассе: {draft.works.length}</h2>
         <p className="status-note">
           Разбиение на этапы, диаграмма Ганта и отчёт по материалам появятся здесь на следующих шагах разработки.
         </p>

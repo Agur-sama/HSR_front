@@ -1,7 +1,12 @@
 import type { BridgeSchema, BridgeSchemaVersion, Passport } from './schema';
 
-const CURRENT_SCHEMA_VERSION: BridgeSchemaVersion = '1.1';
-const SUPPORTED_SCHEMA_VERSIONS: BridgeSchemaVersion[] = ['1.0', CURRENT_SCHEMA_VERSION];
+const CURRENT_SCHEMA_VERSION: BridgeSchemaVersion = '1.2';
+/**
+ * Читаем и прежние версии: файл, сохранённый до появления ПЗ2, должен
+ * открываться как раньше (ТЗ ПЗ2 §10). Разница только в наличии секции pz2,
+ * ломающих изменений в 1.2 нет.
+ */
+const SUPPORTED_SCHEMA_VERSIONS: BridgeSchemaVersion[] = ['1.0', '1.1', CURRENT_SCHEMA_VERSION];
 
 export function createBridge(
   passport: Passport,
@@ -33,7 +38,7 @@ export function parseBridgeJson(input: string): BridgeSchema {
   }
 
   if (!isBridgeSchema(parsed)) {
-    throw new Error('Файл моста не соответствует schemaVersion 1.0/1.1.');
+    throw new Error(`Файл моста не соответствует schemaVersion ${SUPPORTED_SCHEMA_VERSIONS.join('/')}.`);
   }
 
   return parsed;

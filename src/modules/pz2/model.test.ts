@@ -4,8 +4,15 @@ import {
   PZ2_LENGTH_TOLERANCE_KM,
   createInitialPz2Draft,
   changePz2WorkKind,
+  assignPz2WorkToStage,
+  createPz2Bridge,
   createPz2Ruler,
+  createPz2Stage,
   findPz2OverlappingWorks,
+  getPz2StageWorks,
+  isPz2StagesComplete,
+  readPz2Position,
+  removePz2Stage,
   createPz2Work,
   getPz2LengthCheck,
   getPz2RouteSource,
@@ -248,5 +255,104 @@ describe('parsePz2Number', () => {
     expect(parsePz2Number('')).toBeNull();
     expect(parsePz2Number('   ')).toBeNull();
     expect(parsePz2Number('абв')).toBeNull();
+  });
+});
+
+describe('этапы', () => {
+  const draftWithStages = () => {
+    const stage = createPz2Stage('Первый участок', 0);
+    const work = createPz2Work('bridge', '12');
+
+    return { ...createInitialPz2Draft(), stages: [stage], works: [work] };
+  };
+
+  it('работа по умолчанию лежит в пуле, а не в этапе', () => {
+    expect(createPz2Work('bridge', '12').stageId).toBeNull();
+    expect(getPz2StageWorks(draftWithStages(), null)).toHaveLength(1);
+  });
+
+  it('перенос в этап заменяет принадлежность, а не добавляет вторую', () => {
+    const draft = draftWithStages();
+    const second = createPz2Stage('Второй участок', 1);
+    const withStages = { ...draft, stages: [...draft.stages, second] };
+
+    const assigned = assignPz2WorkToStage(withStages, draft.works[0].id, draft.stages[0].id);
+    const moved = assignPz2WorkToStage(assigned, draft.works[0].id, second.id);
+
+    expect(getPz2StageWorks(moved, draft.stages[0].id)).toHaveLength(0);
+    expect(getPz2StageWorks(moved, second.id)).toHaveLength(1);
+  });
+
+  it('работу можно вернуть обратно в пул', () => {
+    const draft = draftWithStages();
+    const assigned = assignPz2WorkToStage(draft, draft.works[0].id, draft.stages[0].id);
+
+    expect(getPz2StageWorks(assignPz2WorkToStage(assigned, draft.works[0].id, null), null)).toHaveLength(1);
+  });
+
+  it('удаление этапа возвращает его работы в пул, а не стирает их', () => {
+    const draft = draftWithStages();
+    const assigned = assignPz2WorkToStage(draft, draft.works[0].id, draft.stages[0].id);
+    const removed = removePz2Stage(assigned, draft.stages[0].id);
+
+    expect(removed.stages).toHaveLength(0);
+    expect(removed.works).toHaveLength(1);
+    expect(removed.works[0].stageId).toBeNull();
+  });
+
+  it('после удаления порядок этапов идёт без дыр', () => {
+    const draft = {
+      ...createInitialPz2Draft(),
+      stages: [createPz2Stage('А', 0), createPz2Stage('Б', 1), createPz2Stage('В', 2)],
+    };
+
+    const removed = removePz2Stage(draft, draft.stages[1].id);
+
+    expect(removed.stages.map((stage) => stage.order)).toEqual([0, 1]);
+  });
+
+  it('шаг завершён, когда этапы есть и ни одна работа не осталась в пуле', () => {
+    const draft = draftWithStages();
+
+    expect(isPz2StagesComplete(draft)).toBe(false);
+    expect(isPz2StagesComplete(assignPz2WorkToStage(draft, draft.works[0].id, draft.stages[0].id))).toBe(true);
+  });
+});
+
+describe('мост ПЗ2', () => {
+  it('сохранение не теряет данные ПЗ1 и поднимает версию схемы', () => {
+    const imported = {
+      schemaVersion: '1.1',
+      passport: { team: 'Юнит-3', lineTitle: '', createdAt: '2026-09-03T00:00:00.000Z' },
+      completed: { pz1: { totalLengthKm: 100, routeLine: null } },
+    } as unknown as BridgeSchema;
+    const draft = { ...createInitialPz2Draft(), works: [createPz2Work('bridge', '40')] };
+
+    const bridge = createPz2Bridge(draft, imported, { phase: 'task', stepId: 'works', theorySeen: true });
+
+    expect(bridge.schemaVersion).toBe('1.2');
+    expect(bridge.passport.team).toBe('Юнит-3');
+    expect(bridge.completed.pz1).toEqual(imported.completed.pz1);
+    expect(bridge.completed.pz2?.works[0].lengthKm).toBe(40);
+    expect(bridge.completed.pz2?.works[0].count).toBeNull();
+    expect(bridge.completed.pz2?.routeLengthKm).toBe(100);
+  });
+
+  it('у штучной работы в мост уходит количество, а не длина', () => {
+    const draft = { ...createInitialPz2Draft(), works: [{ ...createPz2Work('turnout'), count: '4' }] };
+    const result = createPz2Bridge(draft, null).completed.pz2;
+
+    expect(result?.works[0].count).toBe(4);
+    expect(result?.works[0].lengthKm).toBeNull();
+  });
+
+  it('позиция читается по стабильному id, незнакомый шаг даёт интро', () => {
+    const position = (stepId: string) =>
+      readPz2Position({ position: { pz2: { phase: 'task', stepId, theorySeen: true } } } as unknown as BridgeSchema);
+
+    expect(position('stages')?.stepIndex).toBe(1);
+    expect(position('exercises')?.stepIndex).toBe(2);
+    expect(position('чего-то-нет')).toBeNull();
+    expect(readPz2Position(null)).toBeNull();
   });
 });
