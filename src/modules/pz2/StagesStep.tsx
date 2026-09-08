@@ -198,7 +198,10 @@ export function StagesStep() {
         )}
       </section>
 
-      <section className={`form-section work-pool${dropTargetId === null ? ' is-drop-target' : ''}`} {...dropHandlers(null)}>
+      <section
+        className={`form-section work-pool${dropTargetId === null ? ' is-drop-target' : ''}`}
+        {...dropHandlers(null)}
+      >
         <div className="osm-map-card__head">
           <div>
             <p className="eyebrow">Пул работ</p>

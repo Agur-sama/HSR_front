@@ -37,10 +37,11 @@ function lengthObject(kind: Parameters<typeof createPz2Work>[0], lengthKm: strin
 
 describe('справочник работ', () => {
   it('содержит согласованный со встречи 02.09 состав', () => {
+    // Порядок сверен с ТЗ ПЗ2 §4.1 — он же задаёт порядок в выпадающем списке.
     expect(pz2WorkKinds.map((kind) => kind.id)).toEqual([
       'existingLineRepair',
-      'earthworks',
       'ballastTrack',
+      'earthworks',
       'viaduct',
       'bridge',
       'tunnel',
