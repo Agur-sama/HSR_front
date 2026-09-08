@@ -5,6 +5,7 @@ import {
   createInitialPz2Draft,
   changePz2WorkKind,
   assignPz2WorkToStage,
+  checkPz2CriticalPath,
   createPz2Bridge,
   createPz2Ruler,
   createPz2Stage,
@@ -354,5 +355,27 @@ describe('мост ПЗ2', () => {
     expect(position('exercises')?.stepIndex).toBe(2);
     expect(position('чего-то-нет')).toBeNull();
     expect(readPz2Position(null)).toBeNull();
+  });
+});
+
+describe('критический путь', () => {
+  it('разделители не важны — важны номера и их порядок', () => {
+    expect(checkPz2CriticalPath('1-3-5-7', ['1', '3', '5', '7'])).toBe(true);
+    expect(checkPz2CriticalPath('1, 3, 5, 7', ['1', '3', '5', '7'])).toBe(true);
+    expect(checkPz2CriticalPath(' 1 3 5 7 ', ['1', '3', '5', '7'])).toBe(true);
+  });
+
+  it('порядок значим: путь идёт от начала к концу', () => {
+    expect(checkPz2CriticalPath('7-5-3-1', ['1', '3', '5', '7'])).toBe(false);
+  });
+
+  it('лишнее или недостающее событие делает ответ неверным', () => {
+    expect(checkPz2CriticalPath('1-3-5', ['1', '3', '5', '7'])).toBe(false);
+    expect(checkPz2CriticalPath('1-3-4-5-7', ['1', '3', '5', '7'])).toBe(false);
+  });
+
+  it('пустой ответ не считается верным даже при пустом эталоне', () => {
+    expect(checkPz2CriticalPath('', [])).toBe(false);
+    expect(checkPz2CriticalPath('   ', ['1'])).toBe(false);
   });
 });

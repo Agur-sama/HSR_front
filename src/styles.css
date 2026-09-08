@@ -472,6 +472,50 @@ button:focus-visible {
   background: var(--danger-bg);
 }
 
+/* Экран 03: упражнения идут одно под другим — сетевая диаграмма, затем тренажёр. */
+.exercises-step {
+  display: grid;
+  gap: 22px;
+}
+
+.exercise-list {
+  display: grid;
+  gap: 16px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exercise-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+
+.exercise-card h4 {
+  margin: 0 0 10px;
+  color: var(--primary);
+  font-size: 15px;
+}
+
+.exercise-card img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.exercise-answer {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.exercise-answer input {
+  flex: 1;
+}
+
 /* Экран 02: этапы слева, пул работ справа — работы перетаскиваются между ними. */
 .stages-step {
   display: grid;

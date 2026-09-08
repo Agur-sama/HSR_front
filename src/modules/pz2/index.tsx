@@ -3,6 +3,7 @@ import { ModuleStateProvider, useModuleState } from '../../bridge/context';
 import { jsonFileDraftStorage } from '../../bridge/storage';
 import { ModuleShell } from '../../shared/ui/ModuleShell';
 import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
+import { ExercisesStep } from './ExercisesStep';
 import { StagesStep } from './StagesStep';
 import { WorksStep } from './WorksStep';
 import {
@@ -309,9 +310,10 @@ function Pz2Workspace() {
     },
     {
       id: 'exercises',
-      title: 'Выравнивание загрузки',
-      goal: 'Разберитесь, как резервы работ позволяют выровнять число занятых людей во времени.',
-      content: <KsgTrainerStep />,
+      title: 'Упражнения',
+      goal:
+        'Определите критический путь по сетевой диаграмме и разберитесь, как резервы работ позволяют выровнять число занятых людей во времени.',
+      content: <ExercisesStep trainer={<KsgTrainerStep />} />,
     },
   ];
 

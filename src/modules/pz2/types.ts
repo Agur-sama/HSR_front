@@ -54,6 +54,8 @@ export interface Pz2StageDraft {
 export interface Pz2Draft {
   works: Pz2WorkDraft[];
   stages: Pz2StageDraft[];
+  /** Ответы на упражнения про критический путь: id упражнения → ответ студента. */
+  criticalPathAnswers: Record<string, string>;
   /** Отметки линейки на трассе, км от начала. Незавершённое измерение — одна отметка. */
   rulerMarksKm: number[];
 }

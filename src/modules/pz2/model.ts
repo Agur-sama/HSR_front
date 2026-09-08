@@ -3,6 +3,7 @@ import type { BridgeSchema, ModulePosition, Pz2Result, Pz2Stage, Pz2Work } from 
 import { buildDisplayRoutePoints } from '../../shared/lib/routeGeometry';
 import { createRouteRuler, projectOntoRoute } from '../../shared/lib/routeRuler';
 import type { RouteRuler } from '../../shared/lib/routeRuler';
+import { pz2NetworkExercises } from './networkExercises';
 import type {
   Pz2Draft,
   Pz2RouteSpan,
@@ -84,7 +85,7 @@ export function getPz2WorkKind(kind: Pz2WorkKind) {
 }
 
 export function createInitialPz2Draft(): Pz2Draft {
-  return { works: [], stages: [], rulerMarksKm: [] };
+  return { works: [], stages: [], criticalPathAnswers: {}, rulerMarksKm: [] };
 }
 
 export function createPz2Work(
@@ -344,6 +345,26 @@ export function removePz2Stage(draft: Pz2Draft, stageId: string): Pz2Draft {
   };
 }
 
+/**
+ * Сверка ответа про критический путь с эталоном.
+ *
+ * Путь — это последовательность событий, а как студент их разделит, дело
+ * десятое: «1-3-5», «1, 3, 5» и «1 3 5» — один и тот же ответ. Сравниваются
+ * только сами номера и их порядок, порядок значим: путь идёт от начала к концу.
+ */
+export function checkPz2CriticalPath(answer: string, reference: string[]): boolean {
+  const parsed = splitPathNodes(answer);
+
+  return parsed.length > 0 && parsed.join('-') === reference.map((node) => node.trim()).join('-');
+}
+
+export function splitPathNodes(answer: string): string[] {
+  return answer
+    .split(/[^0-9A-Za-zА-Яа-яЁё]+/)
+    .map((node) => node.trim())
+    .filter(Boolean);
+}
+
 /** Шаги задания стабильными идентификаторами: позиция в файле не зависит от порядка. */
 export const pz2StepIds = ['works', 'stages', 'exercises'] as const;
 
@@ -371,6 +392,11 @@ export function createPz2Result(draft: Pz2Draft, routeLengthKm: number): Pz2Resu
       };
     }),
     stages: draft.stages.map((stage): Pz2Stage => ({ id: stage.id, title: stage.title, order: stage.order })),
+    criticalPath: pz2NetworkExercises.map((exercise) => ({
+      exerciseId: exercise.id,
+      answer: draft.criticalPathAnswers[exercise.id] ?? '',
+      correct: checkPz2CriticalPath(draft.criticalPathAnswers[exercise.id] ?? '', exercise.answer),
+    })),
     routeLengthKm,
     measuredLengthKm: getPz2LengthCheck(draft, routeLengthKm).measuredKm,
   };

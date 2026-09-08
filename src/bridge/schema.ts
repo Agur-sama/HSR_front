@@ -225,9 +225,17 @@ export interface Pz2Stage {
   order: number;
 }
 
+/** Ответ на упражнение «критический путь» (ТЗ ПЗ2 §7.2). */
+export interface Pz2CriticalPathAnswer {
+  exerciseId: string;
+  answer: string;
+  correct: boolean;
+}
+
 export interface Pz2Result {
   works: Pz2Work[];
   stages: Pz2Stage[];
+  criticalPath: Pz2CriticalPathAnswer[];
   /** Эталон из ПЗ1, с которым сверялась сумма длин. */
   routeLengthKm: number;
   /** Сумма длин линейных работ на момент сохранения. */
