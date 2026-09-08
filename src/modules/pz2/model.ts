@@ -6,17 +6,18 @@ import type {
   Pz2Draft,
   Pz2RouteSpan,
   Pz2StationMark,
-  Pz2GroundCondition,
+  Pz2SoilCondition,
   Pz2RouteSource,
-  Pz2WorkObjectDraft,
-  Pz2WorkObjectKind,
-  Pz2WorkObjectMeasure,
+  Pz2StageDraft,
+  Pz2WorkDraft,
+  Pz2WorkKind,
+  Pz2WorkMeasure,
 } from './types';
 
-interface Pz2WorkObjectKindInfo {
-  id: Pz2WorkObjectKind;
+interface Pz2WorkKindInfo {
+  id: Pz2WorkKind;
   label: string;
-  measure: Pz2WorkObjectMeasure;
+  measure: Pz2WorkMeasure;
   /** Короткое пояснение со слов заказчика — студенту, чтобы не гадать по названию. */
   hint: string;
 }
@@ -28,7 +29,7 @@ interface Pz2WorkObjectKindInfo {
  * «они потом будут чуть иначе считаться». Пока разницы в расчёте нет, но
  * порядок в списке сохраняем — по нему потом будет проще расходиться.
  */
-export const pz2WorkObjectKinds: Pz2WorkObjectKindInfo[] = [
+export const pz2WorkKinds: Pz2WorkKindInfo[] = [
   {
     id: 'existingLineRepair',
     label: 'Ремонт существующей линии',
@@ -48,7 +49,7 @@ export const pz2WorkObjectKinds: Pz2WorkObjectKindInfo[] = [
     hint: 'Щебень под шпальной решёткой. Укладывается быстро, но требует постоянного обслуживания.',
   },
   {
-    id: 'overpass',
+    id: 'viaduct',
     label: 'Эстакада',
     measure: 'length',
     hint: 'Путь на опорах — там, где насыпь невозможна или невыгодна.',
@@ -56,17 +57,20 @@ export const pz2WorkObjectKinds: Pz2WorkObjectKindInfo[] = [
   { id: 'bridge', label: 'Мост', measure: 'length', hint: 'Переход через водную преграду.' },
   { id: 'tunnel', label: 'Тоннель', measure: 'length', hint: 'Переход сквозь возвышенность.' },
   {
-    id: 'switch',
+    id: 'turnout',
     label: 'Стрелочный перевод 1/25',
     measure: 'count',
     hint: 'Путевое развитие на подходе к станции. Марка 1/25 — очень пологая, восемь приводов, считается отдельно.',
   },
 ];
 
-export const pz2GroundConditions: { id: Pz2GroundCondition; label: string }[] = [
-  { id: 'none', label: 'Обычные условия' },
-  { id: 'weakSoil', label: 'Слабые грунты' },
-  { id: 'rockyBase', label: 'Скальные основания' },
+export const pz2SoilConditions: { id: Pz2SoilCondition; label: string; hint: string }[] = [
+  {
+    id: 'weakSoil',
+    label: 'Слабые грунты',
+    hint: 'Нужны сваи до твёрдого слоя и ростверк — работ становится больше.',
+  },
+  { id: 'rocky', label: 'Скальные породы', hint: 'Разработка скального грунта: буровзрывные работы.' },
 ];
 
 /** Допуск проверки длины: линейкой точнее не намеряешь. */
@@ -74,27 +78,41 @@ export const PZ2_LENGTH_TOLERANCE_KM = 0.5;
 /** Насколько участки могут перекрыться, чтобы это ещё считалось стыком, а не наложением. */
 export const PZ2_SPAN_TOUCH_TOLERANCE_KM = 0.05;
 
-export function getPz2WorkObjectKind(kind: Pz2WorkObjectKind) {
-  return pz2WorkObjectKinds.find((item) => item.id === kind) ?? pz2WorkObjectKinds[0];
+export function getPz2WorkKind(kind: Pz2WorkKind) {
+  return pz2WorkKinds.find((item) => item.id === kind) ?? pz2WorkKinds[0];
 }
 
 export function createInitialPz2Draft(): Pz2Draft {
-  return { workObjects: [], rulerMarksKm: [] };
+  return { works: [], stages: [], rulerMarksKm: [] };
 }
 
-export function createPz2WorkObject(
-  kind: Pz2WorkObjectKind = 'existingLineRepair',
+export function createPz2Work(
+  kind: Pz2WorkKind = 'existingLineRepair',
   lengthKm = '',
   span?: Pz2RouteSpan,
-): Pz2WorkObjectDraft {
+): Pz2WorkDraft {
   return {
-    id: `work-object-${Math.random().toString(36).slice(2, 10)}`,
+    id: `work-${Math.random().toString(36).slice(2, 10)}`,
     kind,
     lengthKm,
-    count: getPz2WorkObjectKind(kind).measure === 'count' ? '1' : '',
-    condition: 'none',
+    count: getPz2WorkKind(kind).measure === 'count' ? '1' : '',
+    conditions: [],
+    stageId: null,
     span,
   };
+}
+
+/** Условие включают и выключают галочкой, поэтому переключатель, а не замена. */
+export function togglePz2SoilCondition(work: Pz2WorkDraft, condition: Pz2SoilCondition): Pz2WorkDraft {
+  const conditions = work.conditions.includes(condition)
+    ? work.conditions.filter((item) => item !== condition)
+    : [...work.conditions, condition];
+
+  return { ...work, conditions };
+}
+
+export function createPz2Stage(title: string, order: number): Pz2StageDraft {
+  return { id: `stage-${Math.random().toString(36).slice(2, 10)}`, title: title.trim(), order };
 }
 
 /**
@@ -105,9 +123,9 @@ export function createPz2WorkObject(
  * молчит. Считаем только намеренные линейкой участки — у ручных строк места на
  * трассе нет, и сказать о них нечего.
  */
-export function findPz2OverlappingObjects(draft: Pz2Draft): string[] {
-  const measured = draft.workObjects
-    .filter((object) => object.span && getPz2WorkObjectKind(object.kind).measure === 'length')
+export function findPz2OverlappingWorks(draft: Pz2Draft): string[] {
+  const measured = draft.works
+    .filter((object) => object.span && getPz2WorkKind(object.kind).measure === 'length')
     .map((object) => ({
       id: object.id,
       fromKm: Math.min(object.span!.fromKm, object.span!.toKm),
@@ -139,8 +157,8 @@ export function findPz2OverlappingObjects(draft: Pz2Draft): string[] {
  * ошибкой «укажите количество», хотя студент ничего не стирал. Намеренную
  * длину при этом не трогаем: вернёт тип обратно — вернётся и длина.
  */
-export function changePz2WorkObjectKind(object: Pz2WorkObjectDraft, kind: Pz2WorkObjectKind): Pz2WorkObjectDraft {
-  const needsCount = getPz2WorkObjectKind(kind).measure === 'count';
+export function changePz2WorkKind(object: Pz2WorkDraft, kind: Pz2WorkKind): Pz2WorkDraft {
+  const needsCount = getPz2WorkKind(kind).measure === 'count';
 
   return { ...object, kind, count: needsCount && !object.count.trim() ? '1' : object.count };
 }
@@ -212,8 +230,8 @@ export interface Pz2LengthCheck {
  * не укладываются.
  */
 export function getPz2LengthCheck(draft: Pz2Draft, routeKm: number): Pz2LengthCheck {
-  const measuredKm = draft.workObjects.reduce((sum, object) => {
-    if (getPz2WorkObjectKind(object.kind).measure !== 'length') {
+  const measuredKm = draft.works.reduce((sum, object) => {
+    if (getPz2WorkKind(object.kind).measure !== 'length') {
       return sum;
     }
 
@@ -222,7 +240,7 @@ export function getPz2LengthCheck(draft: Pz2Draft, routeKm: number): Pz2LengthCh
 
   const differenceKm = measuredKm - routeKm;
 
-  if (draft.workObjects.length === 0) {
+  if (draft.works.length === 0) {
     return { measuredKm, routeKm, differenceKm, status: 'empty' };
   }
 
@@ -233,8 +251,8 @@ export function getPz2LengthCheck(draft: Pz2Draft, routeKm: number): Pz2LengthCh
   return { measuredKm, routeKm, differenceKm, status: differenceKm < 0 ? 'short' : 'over' };
 }
 
-export function validatePz2WorkObject(object: Pz2WorkObjectDraft): string | null {
-  const measure = getPz2WorkObjectKind(object.kind).measure;
+export function validatePz2Work(object: Pz2WorkDraft): string | null {
+  const measure = getPz2WorkKind(object.kind).measure;
 
   if (measure === 'count') {
     const count = parsePz2Number(object.count);
@@ -255,8 +273,8 @@ export function validatePz2WorkObject(object: Pz2WorkObjectDraft): string | null
   return lengthKm > 0 ? null : 'Длина должна быть больше нуля';
 }
 
-export function isPz2WorkObjectsComplete(draft: Pz2Draft) {
-  return draft.workObjects.length > 0 && draft.workObjects.every((object) => validatePz2WorkObject(object) === null);
+export function isPz2WorksComplete(draft: Pz2Draft) {
+  return draft.works.length > 0 && draft.works.every((object) => validatePz2Work(object) === null);
 }
 
 /** Числовой ввод в стиле проекта: запятая как разделитель, пробелы разрядов игнорируются. */

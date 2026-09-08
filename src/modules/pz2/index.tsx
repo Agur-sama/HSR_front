@@ -3,8 +3,8 @@ import { ModuleStateProvider, useModuleState } from '../../bridge/context';
 import { jsonFileDraftStorage } from '../../bridge/storage';
 import { ModuleShell } from '../../shared/ui/ModuleShell';
 import type { ModuleTaskStep } from '../../shared/ui/ModuleShell';
-import { WorkObjectsStep } from './WorkObjectsStep';
-import { createInitialPz2Draft, formatPz2Km, getPz2RouteSource, isPz2WorkObjectsComplete } from './model';
+import { WorksStep } from './WorksStep';
+import { createInitialPz2Draft, formatPz2Km, getPz2RouteSource, isPz2WorksComplete } from './model';
 import type { Pz2Draft } from './types';
 import { CalculationsTable } from '../../components/CalculationsTable/CalculationsTable';
 import { DependencyChart } from '../../components/DependencyChart/DependencyChart';
@@ -284,8 +284,8 @@ function Pz2Workspace() {
       title: 'Объекты трассы',
       goal:
         'Пройдите линейкой по трассе и перечислите объекты, которые нужно построить: их тип, длину и условия грунта. Сумма участков должна сойтись с длиной маршрута.',
-      content: <WorkObjectsStep />,
-      isComplete: isPz2WorkObjectsComplete(draft),
+      content: <WorksStep />,
+      isComplete: isPz2WorksComplete(draft),
       completionHint: 'Добавьте хотя бы один объект и заполните его длину или количество',
     },
     {
@@ -423,7 +423,7 @@ function Pz2ResultStep() {
     <div className="result-layout">
       <section className="form-section">
         <p className="eyebrow">Итог</p>
-        <h2>Объектов на трассе: {draft.workObjects.length}</h2>
+        <h2>Объектов на трассе: {draft.works.length}</h2>
         <p className="status-note">
           Разбиение на этапы, диаграмма Ганта и отчёт по материалам появятся здесь на следующих шагах разработки.
         </p>

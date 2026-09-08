@@ -3,44 +3,44 @@ import type { BridgeSchema } from '../../bridge/schema';
 import {
   PZ2_LENGTH_TOLERANCE_KM,
   createInitialPz2Draft,
-  changePz2WorkObjectKind,
+  changePz2WorkKind,
   createPz2Ruler,
-  findPz2OverlappingObjects,
-  createPz2WorkObject,
+  findPz2OverlappingWorks,
+  createPz2Work,
   getPz2LengthCheck,
   getPz2RouteSource,
   getPz2StationMarks,
-  isPz2WorkObjectsComplete,
+  isPz2WorksComplete,
   parsePz2Number,
-  pz2WorkObjectKinds,
-  validatePz2WorkObject,
+  pz2WorkKinds,
+  validatePz2Work,
 } from './model';
 
-function draftWith(objects: Parameters<typeof getPz2LengthCheck>[0]['workObjects']) {
-  return { ...createInitialPz2Draft(), workObjects: objects };
+function draftWith(objects: Parameters<typeof getPz2LengthCheck>[0]['works']) {
+  return { ...createInitialPz2Draft(), works: objects };
 }
 
-function lengthObject(kind: Parameters<typeof createPz2WorkObject>[0], lengthKm: string) {
-  return { ...createPz2WorkObject(kind), lengthKm };
+function lengthObject(kind: Parameters<typeof createPz2Work>[0], lengthKm: string) {
+  return { ...createPz2Work(kind), lengthKm };
 }
 
-describe('справочник объектов трассы', () => {
+describe('справочник работ', () => {
   it('содержит согласованный со встречи 02.09 состав', () => {
-    expect(pz2WorkObjectKinds.map((kind) => kind.id)).toEqual([
+    expect(pz2WorkKinds.map((kind) => kind.id)).toEqual([
       'existingLineRepair',
       'earthworks',
       'ballastTrack',
-      'overpass',
+      'viaduct',
       'bridge',
       'tunnel',
-      'switch',
+      'turnout',
     ]);
   });
 
   it('стрелка меряется штуками, остальные — длиной', () => {
-    const byMeasure = Object.fromEntries(pz2WorkObjectKinds.map((kind) => [kind.id, kind.measure]));
+    const byMeasure = Object.fromEntries(pz2WorkKinds.map((kind) => [kind.id, kind.measure]));
 
-    expect(byMeasure.switch).toBe('count');
+    expect(byMeasure.turnout).toBe('count');
     expect(byMeasure.bridge).toBe('length');
     expect(byMeasure.existingLineRepair).toBe('length');
   });
@@ -155,26 +155,26 @@ describe('проверка длины', () => {
   });
 
   it('стрелки в длину трассы не идут — они меряются штуками', () => {
-    const objects = [lengthObject('earthworks', '100'), { ...createPz2WorkObject('switch'), count: '4' }];
+    const objects = [lengthObject('earthworks', '100'), { ...createPz2Work('turnout'), count: '4' }];
 
     expect(getPz2LengthCheck(draftWith(objects), 100).measuredKm).toBeCloseTo(100, 6);
   });
 });
 
 describe('наложение участков', () => {
-  const span = (kind: Parameters<typeof createPz2WorkObject>[0], fromKm: number, toKm: number) =>
-    createPz2WorkObject(kind, String(Math.abs(toKm - fromKm)), { fromKm, toKm });
+  const span = (kind: Parameters<typeof createPz2Work>[0], fromKm: number, toKm: number) =>
+    createPz2Work(kind, String(Math.abs(toKm - fromKm)), { fromKm, toKm });
 
   it('участки встык наложением не считаются', () => {
     const draft = draftWith([span('earthworks', 0, 50), span('bridge', 50, 80)]);
 
-    expect(findPz2OverlappingObjects(draft)).toEqual([]);
+    expect(findPz2OverlappingWorks(draft)).toEqual([]);
   });
 
   it('перекрытие находится с обеих сторон, независимо от порядка строк', () => {
     const first = span('earthworks', 40, 90);
     const second = span('bridge', 0, 50);
-    const overlapping = findPz2OverlappingObjects(draftWith([first, second]));
+    const overlapping = findPz2OverlappingWorks(draftWith([first, second]));
 
     expect(overlapping).toHaveLength(2);
     expect(overlapping).toContain(first.id);
@@ -184,57 +184,57 @@ describe('наложение участков', () => {
   it('участок, намеренный в обратную сторону, тоже сравнивается верно', () => {
     const draft = draftWith([span('earthworks', 90, 40), span('bridge', 0, 50)]);
 
-    expect(findPz2OverlappingObjects(draft)).toHaveLength(2);
+    expect(findPz2OverlappingWorks(draft)).toHaveLength(2);
   });
 
   it('строки без участка молчат — у ручного ввода места на трассе нет', () => {
     const draft = draftWith([lengthObject('earthworks', '50'), lengthObject('bridge', '50')]);
 
-    expect(findPz2OverlappingObjects(draft)).toEqual([]);
+    expect(findPz2OverlappingWorks(draft)).toEqual([]);
   });
 });
 
-describe('валидация объекта', () => {
+describe('валидация работы', () => {
   it('длина обязательна и должна быть положительной', () => {
-    expect(validatePz2WorkObject(lengthObject('bridge', ''))).toBe('Укажите длину');
-    expect(validatePz2WorkObject(lengthObject('bridge', '0'))).toBe('Длина должна быть больше нуля');
-    expect(validatePz2WorkObject(lengthObject('bridge', '1,5'))).toBeNull();
+    expect(validatePz2Work(lengthObject('bridge', ''))).toBe('Укажите длину');
+    expect(validatePz2Work(lengthObject('bridge', '0'))).toBe('Длина должна быть больше нуля');
+    expect(validatePz2Work(lengthObject('bridge', '1,5'))).toBeNull();
   });
 
   it('у стрелки проверяется целое количество, а не длина', () => {
-    const base = createPz2WorkObject('switch');
+    const base = createPz2Work('turnout');
 
-    expect(validatePz2WorkObject({ ...base, count: '' })).toBe('Укажите количество');
-    expect(validatePz2WorkObject({ ...base, count: '1,5' })).toBe('Количество — целое число больше нуля');
-    expect(validatePz2WorkObject({ ...base, count: '2' })).toBeNull();
+    expect(validatePz2Work({ ...base, count: '' })).toBe('Укажите количество');
+    expect(validatePz2Work({ ...base, count: '1,5' })).toBe('Количество — целое число больше нуля');
+    expect(validatePz2Work({ ...base, count: '2' })).toBeNull();
   });
 
-  it('шаг завершён, когда есть объекты и все они корректны', () => {
-    expect(isPz2WorkObjectsComplete(createInitialPz2Draft())).toBe(false);
-    expect(isPz2WorkObjectsComplete(draftWith([lengthObject('bridge', '2')]))).toBe(true);
-    expect(isPz2WorkObjectsComplete(draftWith([lengthObject('bridge', '')]))).toBe(false);
+  it('шаг завершён, когда есть работы и все они корректны', () => {
+    expect(isPz2WorksComplete(createInitialPz2Draft())).toBe(false);
+    expect(isPz2WorksComplete(draftWith([lengthObject('bridge', '2')]))).toBe(true);
+    expect(isPz2WorksComplete(draftWith([lengthObject('bridge', '')]))).toBe(false);
   });
 });
 
-describe('смена типа объекта', () => {
+describe('смена типа работы', () => {
   it('переключение на штучный тип подставляет одну штуку, а не пустое поле', () => {
-    const changed = changePz2WorkObjectKind(lengthObject('bridge', '12,5'), 'switch');
+    const changed = changePz2WorkKind(lengthObject('bridge', '12,5'), 'turnout');
 
     expect(changed.count).toBe('1');
-    expect(validatePz2WorkObject(changed)).toBeNull();
+    expect(validatePz2Work(changed)).toBeNull();
   });
 
   it('намеренная длина переживает переключение туда и обратно', () => {
     const measured = lengthObject('bridge', '12,5');
-    const back = changePz2WorkObjectKind(changePz2WorkObjectKind(measured, 'switch'), 'tunnel');
+    const back = changePz2WorkKind(changePz2WorkKind(measured, 'turnout'), 'tunnel');
 
     expect(back.lengthKm).toBe('12,5');
   });
 
   it('уже заполненное количество не перетирается', () => {
-    const counted = { ...createPz2WorkObject('switch'), count: '7' };
+    const counted = { ...createPz2Work('turnout'), count: '7' };
 
-    expect(changePz2WorkObjectKind(counted, 'switch').count).toBe('7');
+    expect(changePz2WorkKind(counted, 'turnout').count).toBe('7');
   });
 });
 

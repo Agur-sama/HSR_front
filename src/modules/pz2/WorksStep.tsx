@@ -4,20 +4,21 @@ import { useTouchedFields } from '../../shared/hooks/useTouchedFields';
 import { GroupedNumberInput } from '../../shared/ui/GroupedNumberInput';
 import { Pz2RouteMap } from './Pz2RouteMap';
 import {
-  changePz2WorkObjectKind,
+  changePz2WorkKind,
   createPz2Ruler,
-  findPz2OverlappingObjects,
-  createPz2WorkObject,
+  findPz2OverlappingWorks,
+  createPz2Work,
   formatPz2Km,
   getPz2LengthCheck,
   getPz2RouteSource,
   getPz2StationMarks,
-  getPz2WorkObjectKind,
-  pz2GroundConditions,
-  pz2WorkObjectKinds,
-  validatePz2WorkObject,
+  togglePz2SoilCondition,
+  getPz2WorkKind,
+  pz2SoilConditions,
+  pz2WorkKinds,
+  validatePz2Work,
 } from './model';
-import type { Pz2Draft, Pz2GroundCondition, Pz2RouteSpan, Pz2WorkObjectDraft, Pz2WorkObjectKind } from './types';
+import type { Pz2Draft, Pz2RouteSpan, Pz2SoilCondition, Pz2WorkDraft, Pz2WorkKind } from './types';
 
 /**
  * Шаг 01 ПЗ2: какие объекты нужно построить на трассе.
@@ -26,29 +27,36 @@ import type { Pz2Draft, Pz2GroundCondition, Pz2RouteSpan, Pz2WorkObjectDraft, Pz
  * сразу заводится строкой в таблицу — так студенту не приходится переписывать
  * число руками, а сумма длин сходится с длиной маршрута.
  */
-export function WorkObjectsStep() {
+export function WorksStep() {
   const { draft, importedBridge, updateDraft } = useModuleState<Pz2Draft>();
   const { markTouched, shouldShowError } = useTouchedFields();
   const source = getPz2RouteSource(importedBridge);
   const ruler = createPz2Ruler(source);
   const stations = getPz2StationMarks(source, ruler);
   const [highlightedId, setHighlightedId] = useState('');
-  const overlapping = new Set(findPz2OverlappingObjects(draft));
-  const highlighted = draft.workObjects.find((object) => object.id === highlightedId)?.span ?? null;
+  const overlapping = new Set(findPz2OverlappingWorks(draft));
+  const highlighted = draft.works.find((object) => object.id === highlightedId)?.span ?? null;
   const check = getPz2LengthCheck(draft, source.totalLengthKm || ruler.totalKm);
 
-  function patchObject(id: string, patch: Partial<Pz2WorkObjectDraft>) {
+  function patchObject(id: string, patch: Partial<Pz2WorkDraft>) {
     updateDraft((current) => ({
       ...current,
-      workObjects: current.workObjects.map((object) => (object.id === id ? { ...object, ...patch } : object)),
+      works: current.works.map((object) => (object.id === id ? { ...object, ...patch } : object)),
     }));
   }
 
-  function changeKind(id: string, kind: Pz2WorkObjectKind) {
+  function toggleCondition(id: string, condition: Pz2SoilCondition) {
     updateDraft((current) => ({
       ...current,
-      workObjects: current.workObjects.map((object) =>
-        object.id === id ? changePz2WorkObjectKind(object, kind) : object,
+      works: current.works.map((work) => (work.id === id ? togglePz2SoilCondition(work, condition) : work)),
+    }));
+  }
+
+  function changeKind(id: string, kind: Pz2WorkKind) {
+    updateDraft((current) => ({
+      ...current,
+      works: current.works.map((object) =>
+        object.id === id ? changePz2WorkKind(object, kind) : object,
       ),
     }));
   }
@@ -56,19 +64,19 @@ export function WorkObjectsStep() {
   function addObject(lengthKm = '', span?: Pz2RouteSpan) {
     updateDraft((current) => ({
       ...current,
-      workObjects: [...current.workObjects, createPz2WorkObject('existingLineRepair', lengthKm, span)],
+      works: [...current.works, createPz2Work('existingLineRepair', lengthKm, span)],
     }));
   }
 
   function removeObject(id: string) {
     updateDraft((current) => ({
       ...current,
-      workObjects: current.workObjects.filter((object) => object.id !== id),
+      works: current.works.filter((object) => object.id !== id),
     }));
   }
 
   return (
-    <div className="work-objects-step">
+    <div className="works-step">
       <Pz2RouteMap
         marksKm={draft.rulerMarksKm}
         onMarksChange={(rulerMarksKm) => updateDraft((current) => ({ ...current, rulerMarksKm }))}
@@ -89,13 +97,13 @@ export function WorkObjectsStep() {
           </button>
         </div>
 
-        {draft.workObjects.length === 0 ? (
+        {draft.works.length === 0 ? (
           <p className="status-note">
             Пока пусто. Измерьте участок линейкой на карте — строка добавится сама, либо добавьте объект вручную.
           </p>
         ) : (
           <div className="table-scroll">
-            <table className="input-table work-objects-table">
+            <table className="input-table works-table">
               <thead>
                 <tr>
                   <th>Тип объекта</th>
@@ -106,10 +114,10 @@ export function WorkObjectsStep() {
                 </tr>
               </thead>
               <tbody>
-                {draft.workObjects.map((object, index) => {
-                  const kind = getPz2WorkObjectKind(object.kind);
+                {draft.works.map((object, index) => {
+                  const kind = getPz2WorkKind(object.kind);
                   const value = kind.measure === 'count' ? object.count : object.lengthKm;
-                  const error = shouldShowError(object.id, value) ? validatePz2WorkObject(object) : null;
+                  const error = shouldShowError(object.id, value) ? validatePz2Work(object) : null;
 
                   return (
                     <tr
@@ -123,10 +131,10 @@ export function WorkObjectsStep() {
                       <th scope="row">
                         <select
                           aria-label={`Тип объекта ${index + 1}`}
-                          onChange={(event) => changeKind(object.id, event.target.value as Pz2WorkObjectKind)}
+                          onChange={(event) => changeKind(object.id, event.target.value as Pz2WorkKind)}
                           value={object.kind}
                         >
-                          {pz2WorkObjectKinds.map((item) => (
+                          {pz2WorkKinds.map((item) => (
                             <option key={item.id} value={item.id}>
                               {item.label}
                             </option>
@@ -157,19 +165,22 @@ export function WorkObjectsStep() {
                         {kind.measure === 'count' && error ? <small className="field-error">{error}</small> : null}
                       </td>
                       <td>
-                        <select
-                          aria-label={`Условия для объекта ${index + 1}`}
-                          onChange={(event) =>
-                            patchObject(object.id, { condition: event.target.value as Pz2GroundCondition })
-                          }
-                          value={object.condition}
-                        >
-                          {pz2GroundConditions.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.label}
-                            </option>
+                        {/* Условия не исключают друг друга: участок может быть
+                            и в слабых грунтах, и в скальных породах. */}
+                        <ul className="soil-conditions">
+                          {pz2SoilConditions.map((item) => (
+                            <li key={item.id}>
+                              <label title={item.hint}>
+                                <input
+                                  checked={object.conditions.includes(item.id)}
+                                  onChange={() => toggleCondition(object.id, item.id)}
+                                  type="checkbox"
+                                />
+                                <span>{item.label}</span>
+                              </label>
+                            </li>
                           ))}
-                        </select>
+                        </ul>
                       </td>
                       <td>
                         <button
