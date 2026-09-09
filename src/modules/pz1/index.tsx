@@ -36,6 +36,7 @@ import {
   createPz1Result,
   discomfortRows,
   finalIndicators,
+  validateFinalIndicator,
   getCorrespondenceTitle,
   getComputedFinalIndicators,
   getCarExistingFare,
@@ -183,7 +184,9 @@ function Pz1Workspace() {
         'Сведите ключевые параметры линии. У капиталоёмких показателей рядом приведены справочные диапазоны — используйте их, чтобы прикинуть порядок величины.',
       content: <FinalIndicatorsStep />,
       isComplete: isFinalIndicatorsComplete(draft),
-      completionHint: 'Заполните все обязательные поля, чтобы продолжить',
+      // Подсказка называет поля поимённо: тринадцать показателей, и общее
+      // «заполните обязательные поля» не говорит, какое из них не нравится.
+      completionHint: describeFinalIndicatorBlockers(draft),
     },
   ]);
   // Порядок берём из pz1StepIds, а не из порядка литералов выше —
@@ -1515,10 +1518,30 @@ function CorrespondenceModelStep({ pairKey }: { pairKey: string }) {
   );
 }
 
+/** Какие показатели мешают перейти к итогу — для подсказки в нижней панели. */
+function describeFinalIndicatorBlockers(draft: Pz1Draft) {
+  const blocking = finalIndicators.filter(
+    (indicator) => validateFinalIndicator(indicator.id, draft.finalIndicators[indicator.id] ?? '', draft) !== null,
+  );
+
+  if (blocking.length === 0) {
+    return 'Заполните все обязательные поля, чтобы продолжить';
+  }
+
+  return `Поправьте: ${blocking.map((indicator) => indicator.label).join(', ')}`;
+}
+
 function FinalIndicatorsStep() {
   const { draft, updateDraft } = useModuleState<Pz1Draft>();
+  const { markTouched, shouldShowError } = useTouchedFields();
   const totalLengthText = formatKm(getRouteMetrics(draft).totalLengthKm);
   const computedFinalIndicators = getComputedFinalIndicators(draft);
+  const blocking = finalIndicators
+    .map((indicator) => ({
+      indicator,
+      error: validateFinalIndicator(indicator.id, draft.finalIndicators[indicator.id] ?? '', draft),
+    }))
+    .filter((item) => item.error !== null);
 
   return (
     <div className="indicator-step">
@@ -1530,12 +1553,19 @@ function FinalIndicatorsStep() {
             indicator.id === 'annualFlow' ||
             indicator.id === 'travelTime';
 
+          const value = draft.finalIndicators[indicator.id] ?? '';
+          const error = validateFinalIndicator(indicator.id, value, draft);
+
           return (
             <FieldWithHint
+              // Ошибку показываем только после того, как поля коснулись: пустой
+              // экран не должен встречать студента россыпью красного.
+              error={!isComputed && shouldShowError(indicator.id, value) ? error : null}
               hint={indicator.hint}
               id={indicator.id}
               key={indicator.id}
               label={indicator.label}
+              onBlur={() => markTouched(indicator.id)}
               onChange={(value) =>
                 updateDraft((currentDraft) => ({
                   ...currentDraft,
@@ -1559,6 +1589,12 @@ function FinalIndicatorsStep() {
           );
         })}
       </div>
+      {blocking.length > 0 ? (
+        <p className="field-warning">
+          Чтобы перейти к итогу, поправьте: {blocking.map((item) => item.indicator.label).join(', ')}.
+        </p>
+      ) : null}
+
       <label className="notes-field">
         <span>Комментарий к исходным данным</span>
         <textarea

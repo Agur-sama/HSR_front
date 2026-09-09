@@ -18,6 +18,7 @@ import type {
   StationType,
   TransportModeId,
 } from '../../bridge/schema';
+import { stripGroupSeparators } from '../../shared/lib/numberFormat';
 import { createBridge } from '../../bridge/io';
 import { calculateCarTravelCost } from '../../shared/lib/carTravelCost';
 import { isDurationInvalid, parseDurationToMinutes } from '../../shared/lib/durationInput';
@@ -1203,7 +1204,7 @@ export function validateConsumerCell(rowId: string, value: string) {
     return 'Заполните это поле, чтобы продолжить';
   }
 
-  const parsed = parseCoordinate(trimmed);
+  const parsed = parseNumericInput(trimmed);
   if (parsed === null) {
     return 'Значение должно быть числом';
   }
@@ -1233,7 +1234,7 @@ export function validateDiscomfortCell(value: string) {
     return 'Заполните это поле, чтобы продолжить';
   }
 
-  const parsed = parseCoordinate(trimmed);
+  const parsed = parseNumericInput(trimmed);
   if (parsed === null) {
     return 'Значение должно быть числом';
   }
@@ -1417,32 +1418,80 @@ export function isConsumerPropertiesComplete(draft: Pz1Draft) {
   });
 }
 
+/**
+ * Что не так с показателем. null — всё в порядке.
+ *
+ * Одна проверка и для перехода дальше, и для подписи под полем: раньше переход
+ * блокировался молча, и понять, какое из тринадцати полей не нравится, было
+ * нельзя — заказчик именно на это и наткнулся.
+ */
+export function validateFinalIndicator(
+  id: (typeof finalIndicators)[number]['id'],
+  value: string,
+  draft: Pz1Draft,
+): string | null {
+  if (id === 'lineLength') {
+    return getRouteMetrics(draft).totalLengthKm > 0 ? null : 'Проложите линию трассы на шаге со станциями';
+  }
+
+  if (id === 'annualFlow') {
+    return null;
+  }
+
+  if (id === 'stationCount') {
+    return draft.stationDrafts.some((stationDraft) => stationDraft.enabled)
+      ? null
+      : 'Включите хотя бы одну станцию на шаге со станциями';
+  }
+
+  if (id === 'travelTime') {
+    return getHsrTravelTimeResult(draft) !== null ? null : 'Заполните скорости на шаге времени в пути';
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return 'Заполните это поле, чтобы продолжить';
+  }
+
+  if (id === 'riskNotes') {
+    return null;
+  }
+
+  // Билетная выручка — не одно число: подпись под полем просит её по годам
+  // 0, 5, 10, 15, 20. Принимаем список, разделители не важны.
+  if (id === 'ticketRevenue') {
+    const parts = splitNumberList(trimmed);
+
+    if (parts.length === 0 || parts.some((part) => part === null)) {
+      return 'Нужны числа по годам, например: 16; 20; 27; 34; 45';
+    }
+
+    return parts.every((part) => (part ?? 0) > 0) ? null : 'Выручка должна быть больше нуля';
+  }
+
+  const parsed = parseNumericInput(trimmed);
+
+  if (parsed === null) {
+    return 'Нужно число без единиц измерения, например 644';
+  }
+
+  return parsed > 0 ? null : 'Значение должно быть больше нуля';
+}
+
+/** Список чисел через запятую, точку с запятой или пробел. */
+function splitNumberList(value: string): (number | null)[] {
+  return value
+    .split(/[;,\n]+|\s{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => parseNumericInput(part));
+}
+
 export function isFinalIndicatorsComplete(draft: Pz1Draft) {
-  return finalIndicators.every((indicator) => {
-    if (indicator.id === 'lineLength') {
-      return getRouteMetrics(draft).totalLengthKm > 0;
-    }
-
-    if (indicator.id === 'annualFlow') {
-      return true;
-    }
-
-    if (indicator.id === 'stationCount') {
-      return draft.stationDrafts.some((stationDraft) => stationDraft.enabled);
-    }
-
-    if (indicator.id === 'travelTime') {
-      return getHsrTravelTimeResult(draft) !== null;
-    }
-
-    const value = draft.finalIndicators[indicator.id] ?? '';
-    if (indicator.id === 'riskNotes') {
-      return value.trim().length > 0;
-    }
-
-    const parsed = parseCoordinate(value);
-    return value.trim().length > 0 && parsed !== null && parsed > 0;
-  });
+  return finalIndicators.every(
+    (indicator) => validateFinalIndicator(indicator.id, draft.finalIndicators[indicator.id] ?? '', draft) === null,
+  );
 }
 
 export function isPassengerFlowForecastComplete(draft: Pz1Draft) {
@@ -2704,12 +2753,20 @@ function parseLongitude(value: string) {
   return parsed !== null && parsed >= -180 && parsed <= 180 ? parsed : null;
 }
 
+/**
+ * Разбор числа, набранного студентом.
+ *
+ * Поля сами расставляют разделители разрядов, пока в них печатают, поэтому
+ * перед разбором их надо снять — тем же helper-ом, что и ставит. Иначе всё,
+ * что больше 999, перестаёт быть числом для проверок: «3 766 066» превращалось
+ * в NaN, и шаг не считался заполненным, хотя на экране стояло число.
+ */
 function parseNumericInput(value: string) {
   if (!value.trim()) {
     return null;
   }
 
-  const parsed = Number(value.replace(/\s/g, '').replace(',', '.'));
+  const parsed = Number(stripGroupSeparators(value).replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : null;
 }
 

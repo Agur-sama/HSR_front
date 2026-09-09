@@ -6,6 +6,7 @@ import {
   readPz1Position,
   isConsumerPropertiesComplete,
   validatePassportTeam,
+  validateFinalIndicator,
   createInitialPz1Draft,
   createPz1Result,
   getPz1TaskStepCount,
@@ -972,5 +973,71 @@ describe('pz1 model', () => {
 
     expect(baseAirplaneTtc).toBeGreaterThan(1200);
     expect(highAirplaneTtc).toBeGreaterThan(baseAirplaneTtc);
+  });
+});
+
+describe('технико-экономические показатели: почему не пускало к итогу', () => {
+  // Значения с экрана заказчика 09.09: все поля заполнены, а переход закрыт.
+  const filled: Partial<Record<(typeof finalIndicators)[number]['id'], string>> = {
+    maxSpeed: '350',
+    gauge: '1520',
+    dailyTrains: '21',
+    maxCapacity: '3 766 066',
+    rollingStockNeed: '5',
+    constructionCost: '644',
+    rollingStockCost: '26,25',
+    ticketRevenue: '16;20;27;34;45',
+    riskNotes: 'Вместимость состава 460 пасс',
+  };
+
+  it('число с разделителями разрядов больше не ломает проверку', () => {
+    // Поля сами ставят неразрывные пробелы, пока в них печатают: «3 766 066»
+    // разбирался как NaN, и шаг не считался заполненным.
+    expect(validateFinalIndicator('maxCapacity', '3 766 066', createInitialPz1Draft())).toBeNull();
+    expect(validateFinalIndicator('maxCapacity', '3 766 066', createInitialPz1Draft())).toBeNull();
+  });
+
+  it('билетная выручка принимается списком по годам, как и просит подпись поля', () => {
+    const draft = createInitialPz1Draft();
+
+    expect(validateFinalIndicator('ticketRevenue', '16;20;27;34;45', draft)).toBeNull();
+    expect(validateFinalIndicator('ticketRevenue', '16, 20, 27, 34, 45', draft)).toBeNull();
+    expect(validateFinalIndicator('ticketRevenue', '16', draft)).toBeNull();
+  });
+
+  it('единицы измерения словами отклоняются с понятной причиной, а не молча', () => {
+    const message = validateFinalIndicator('constructionCost', '644 млрд', createInitialPz1Draft());
+
+    expect(message).toBe('Нужно число без единиц измерения, например 644');
+  });
+
+  it('пустое поле называет себя незаполненным', () => {
+    expect(validateFinalIndicator('constructionCost', '', createInitialPz1Draft())).toBe(
+      'Заполните это поле, чтобы продолжить',
+    );
+  });
+
+  it('ноль и отрицательное значение не проходят', () => {
+    expect(validateFinalIndicator('gauge', '0', createInitialPz1Draft())).toBe('Значение должно быть больше нуля');
+    expect(validateFinalIndicator('gauge', '-5', createInitialPz1Draft())).toBe('Значение должно быть больше нуля');
+  });
+
+  it('на заполненных значениях заказчика шаг закрывается', () => {
+    const draft = {
+      ...createInitialPz1Draft(),
+      finalIndicators: { ...createInitialPz1Draft().finalIndicators, ...filled },
+    };
+    const blocking = finalIndicators
+      .map((indicator) => ({
+        id: indicator.id,
+        error: validateFinalIndicator(indicator.id, draft.finalIndicators[indicator.id] ?? '', draft),
+      }))
+      .filter((item) => item.error !== null)
+      .map((item) => item.id);
+
+    // Ни одно поле, которое студент вводит руками, больше не блокирует переход.
+    expect(blocking).toEqual(expect.not.arrayContaining(Object.keys(filled)));
+    // Остаются только показатели, которые считаются на других шагах.
+    expect(blocking.every((id) => ['lineLength', 'stationCount', 'travelTime'].includes(id))).toBe(true);
   });
 });
