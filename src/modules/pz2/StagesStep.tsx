@@ -12,6 +12,7 @@ import {
   getPz2StageColor,
   getPz2StageSpans,
   getPz2StationMarks,
+  getPz2WorkMarks,
   pluralWorks,
   getPz2StageWorks,
   getPz2WorkKind,
@@ -105,6 +106,7 @@ export function StagesStep() {
         segments={getPz2SegmentMarks(source)}
         stageSpans={stageSpans}
         stations={getPz2StationMarks(source, ruler)}
+        workMarks={getPz2WorkMarks(draft)}
         withRuler={false}
       />
 

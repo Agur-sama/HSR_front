@@ -1,25 +1,13 @@
-import { Circle, Document, Font, Image, Page, Polyline, Rect, StyleSheet, Svg, Text, View, pdf } from '@react-pdf/renderer';
-import ptSerifRegular from '@fontsource/pt-serif/files/pt-serif-cyrillic-400-normal.woff?url';
-import ptSerifItalic from '@fontsource/pt-serif/files/pt-serif-cyrillic-400-italic.woff?url';
-import ptSerifBold from '@fontsource/pt-serif/files/pt-serif-cyrillic-700-normal.woff?url';
-import ralewayMedium from '@fontsource/raleway/files/raleway-cyrillic-500-normal.woff?url';
-import ralewayBold from '@fontsource/raleway/files/raleway-cyrillic-800-normal.woff?url';
+import { Circle, Document, Font, Image, Page, Polyline, Rect, Svg, Text, View, pdf } from '@react-pdf/renderer';
 import { downloadTextFile } from '../bridge/io';
+import { KeyValueTable, PAGE_SIZE, PDF_MAP_HEIGHT, formatDate, formatRequiredValue, styles } from './common';
 import type { GeoPoint, Pz1PassengerFlowResult, Pz1Result, RouteLine, TransportModeId } from '../bridge/schema';
 import { correspondenceTravelTimeRows, finalIndicators, transportColumns } from '../modules/pz1/model';
 import type { StationRouteDistance } from '../modules/pz1/model';
-import { formatGroupedNumber } from '../shared/lib/numberFormat';
 import { buildDisplayRoutePoints, computeRouteLineMetrics } from '../shared/lib/routeGeometry';
 
-const PAGE_SIZE = 'A4';
-const MARGIN_MM = 20;
 const PDF_MAP_WIDTH = 470;
-/* Высота только для запасной схемы: снимок настоящей карты вставляется по
-   ширине и сам держит свои пропорции. Раньше здесь была полоса 470×80 —
-   в ней и настоящая карта выглядела бы сплющенной. */
-const PDF_MAP_HEIGHT = 282;
 const PDF_MAP_PADDING = 12;
-const runtimeProcess = (globalThis as { process?: { cwd: () => string; versions?: { node?: string } } }).process;
 
 interface PdfStation {
   label: string;
@@ -75,24 +63,7 @@ export interface Pz1PdfSection {
   rows: Array<[string, string]>;
 }
 
-Font.register({
-  family: 'RalewayPdf',
-  fonts: [
-    { src: resolveFontSource(ralewayMedium), fontWeight: 500 },
-    { src: resolveFontSource(ralewayBold), fontWeight: 800 },
-  ],
-});
-
-Font.register({
-  family: 'PtSerifPdf',
-  fonts: [
-    { src: resolveFontSource(ptSerifRegular), fontWeight: 400 },
-    { src: resolveFontSource(ptSerifItalic), fontStyle: 'italic', fontWeight: 400 },
-    { src: resolveFontSource(ptSerifBold), fontWeight: 700 },
-  ],
-});
-
-Font.registerHyphenationCallback((word) => [word]);
+Font.registerHyphenationCallback((word: string) => [word]);
 
 export async function downloadPz1Pdf(summary: Pz1PdfSummary, fileName: string): Promise<void> {
   const blob = await createPz1PdfBlob(summary);
@@ -134,14 +105,6 @@ export function createPz1PdfSections(summary: Pz1PdfSummary): Pz1PdfSection[] {
       ],
     },
   ];
-}
-
-function resolveFontSource(source: string) {
-  if (runtimeProcess?.versions?.node && source.startsWith('/node_modules/')) {
-    return `${runtimeProcess.cwd()}${source}`;
-  }
-
-  return source;
 }
 
 function Pz1ReportDocument({ summary }: { summary: Pz1PdfSummary }) {
@@ -236,19 +199,6 @@ function RunningHeader({ section, summary }: { section: string; summary: Pz1PdfS
         Команда «{formatRequiredValue(summary.team)}» · ПЗ1 · {formatRequiredValue(summary.lineTitle)}
       </Text>
       <Text>{section}</Text>
-    </View>
-  );
-}
-
-function KeyValueTable({ rows }: { rows: Array<[string, string]> }) {
-  return (
-    <View style={styles.table}>
-      {rows.map(([label, value]) => (
-        <View key={label} style={styles.tableRow}>
-          <Text style={styles.tableCellLabel}>{label}</Text>
-          <Text style={styles.tableCellValue}>{value}</Text>
-        </View>
-      ))}
     </View>
   );
 }
@@ -821,16 +771,6 @@ function parseDurationToMinutes(value: string) {
  * на экране: с разделением разрядов (ТЗ v3.5 §3 П-05). Раньше в PDF уходило
  * сырое «14500000», хотя на экране стояло «14 500 000».
  */
-function formatRequiredValue(value: string) {
-  const trimmed = value.trim();
-  return trimmed ? formatGroupedNumber(trimmed) : 'не заполнено';
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'не указана' : date.toLocaleDateString('ru-RU');
-}
-
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 5 }).format(value);
 }
@@ -924,307 +864,3 @@ function formatSvgPoints(points: PdfMapPoint[]) {
   return points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ');
 }
 
-const styles = StyleSheet.create({
-  page: {
-    padding: `${MARGIN_MM}mm`,
-    color: '#111111',
-    fontFamily: 'PtSerifPdf',
-    fontSize: 11.5,
-    lineHeight: 1.35,
-  },
-  titleBlock: {
-    marginBottom: 34,
-    marginTop: 34,
-    textAlign: 'center',
-  },
-  assignment: {
-    fontFamily: 'RalewayPdf',
-    fontSize: 14,
-    fontWeight: 800,
-    marginBottom: 8,
-  },
-  title: {
-    fontFamily: 'RalewayPdf',
-    fontSize: 18,
-    fontWeight: 800,
-  },
-  sectionTitle: {
-    color: '#3a288b',
-    fontFamily: 'RalewayPdf',
-    fontSize: 14,
-    fontWeight: 800,
-    marginBottom: 8,
-    marginTop: 9,
-  },
-  contents: {
-    marginTop: 32,
-  },
-  contentsLine: {
-    marginBottom: 6,
-  },
-  runningHeader: {
-    borderBottom: '1 solid #111111',
-    color: '#3a288b',
-    display: 'flex',
-    flexDirection: 'row',
-    fontFamily: 'RalewayPdf',
-    fontSize: 9,
-    fontWeight: 500,
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    paddingBottom: 6,
-  },
-  paragraph: {
-    marginBottom: 10,
-  },
-  table: {
-    borderLeft: '1 solid #111111',
-    borderTop: '1 solid #111111',
-    marginBottom: 10,
-  },
-  tableRow: {
-    display: 'flex',
-    flexDirection: 'row',
-  },
-  tableHeaderRow: {
-    backgroundColor: '#f4f2fa',
-    display: 'flex',
-    flexDirection: 'row',
-    fontWeight: 700,
-  },
-  tableCellLabel: {
-    backgroundColor: '#f4f2fa',
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    fontWeight: 700,
-    padding: 4,
-    width: '40%',
-  },
-  tableCellValue: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '60%',
-  },
-  /* Ширины столбцов у таблиц с разным числом колонок: общие стили ячеек дают
-     в сумме 78 %, из-за чего подложка шапки уходила правее данных и правый
-     край таблицы выглядел рваным. */
-  halfCell: {
-    width: '50%',
-  },
-  /* «начально-конечная» — самая длинная подпись в таблице станций, ей нужен
-     столбец пошире, иначе слово переносится по дефису. 12+25+21+21+21 = 100 %. */
-  stationTypeWideCell: {
-    width: '25%',
-  },
-  stationNarrowCell: {
-    width: '21%',
-  },
-  /* Таблица времени хода: шесть столбцов, общие стили дают в сумме 136 %,
-     из-за чего «Торможение, мин» наезжало на «Время». 16+17+16+15+20+16 = 100 %. */
-  hsrSegmentCell: {
-    width: '16%',
-  },
-  hsrDistanceCell: {
-    width: '17%',
-  },
-  hsrSpeedCell: {
-    width: '16%',
-  },
-  hsrAccelCell: {
-    width: '15%',
-  },
-  hsrBrakeCell: {
-    width: '20%',
-  },
-  hsrTimeCell: {
-    width: '16%',
-  },
-  segmentIndexCell: {
-    width: '10%',
-  },
-  segmentWideCell: {
-    width: '30%',
-  },
-  stationLabelCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '12%',
-  },
-  stationTypeCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '21%',
-  },
-  stationNameCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '22%',
-  },
-  stationCoordCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '23%',
-  },
-  compactTableBlock: {
-    marginBottom: 10,
-  },
-  compactTableTitle: {
-    fontFamily: 'RalewayPdf',
-    fontSize: 10,
-    fontWeight: 800,
-    marginBottom: 4,
-  },
-  compactTable: {
-    borderLeft: '1 solid #111111',
-    borderTop: '1 solid #111111',
-  },
-  compactHeaderRow: {
-    backgroundColor: '#f4f2fa',
-    display: 'flex',
-    flexDirection: 'row',
-    fontWeight: 700,
-  },
-  compactRow: {
-    display: 'flex',
-    flexDirection: 'row',
-  },
-  metricCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '28%',
-  },
-  modeCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    flexBasis: 0,
-    flexGrow: 1,
-    fontSize: 8.5,
-    padding: 4,
-  },
-  flowModeCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '34%',
-  },
-  flowValueCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '27%',
-  },
-  flowShareCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '12%',
-  },
-  passengerFlowChartImage: {
-    border: '1 solid #111111',
-    height: 170,
-    objectFit: 'contain',
-    width: '100%',
-  },
-  passengerFlowChartFrame: {
-    border: '1 solid #111111',
-    marginBottom: 10,
-    padding: 8,
-  },
-  passengerFlowChartLabels: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 8,
-  },
-  passengerFlowChartLabel: {
-    fontFamily: 'RalewayPdf',
-    fontSize: 9,
-    fontWeight: 800,
-  },
-  passengerFlowLegend: {
-    display: 'flex',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  passengerFlowLegendItem: {
-    alignItems: 'center',
-    display: 'flex',
-    flexDirection: 'row',
-    fontSize: 8,
-    gap: 3,
-    width: '31%',
-  },
-  passengerFlowLegendSwatch: {
-    height: 7,
-    width: 7,
-  },
-  formulaBox: {
-    alignItems: 'center',
-    border: '1 solid #111111',
-    marginBottom: 12,
-    padding: 10,
-  },
-  finalIndexCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '8%',
-  },
-  finalNameCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '52%',
-  },
-  finalValueCell: {
-    borderBottom: '1 solid #111111',
-    borderRight: '1 solid #111111',
-    padding: 4,
-    width: '40%',
-  },
-  caption: {
-    fontSize: 10,
-    fontStyle: 'italic',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  mapFrame: {
-    alignItems: 'center',
-    backgroundColor: '#eef3ec',
-    border: '1 solid #111111',
-    /* Высота рамки не задана: её задаёт сам снимок, вставленный по ширине.
-       Фиксированная высота растягивала бы карту под чужие пропорции —
-       ровно то, из-за чего снимок переставал быть похож на карту. */
-    justifyContent: 'center',
-    overflow: 'hidden',
-    marginBottom: 10,
-    position: 'relative',
-  },
-  mapImage: {
-    width: '100%',
-  },
-  mapFallback: {
-    alignItems: 'center',
-    height: PDF_MAP_HEIGHT,
-    justifyContent: 'center',
-    width: '100%',
-  },
-  mapOverlay: {
-    height: '100%',
-    left: 0,
-    position: 'absolute',
-    top: 0,
-    width: '100%',
-  },
-  mapText: {
-    color: '#555555',
-    textAlign: 'center',
-  },
-});

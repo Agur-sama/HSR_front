@@ -476,6 +476,45 @@ export function getPz2SegmentMarks(source: Pz2RouteSource): Pz2SegmentMark[] {
 }
 
 /**
+ * Работы, которые заказчик просил показывать на карте значками: мост и тоннель.
+ *
+ * «Может не делать, если будет время» — ТЗ §3 относит это к этапу B. Данные для
+ * значка уже есть: у намеренной линейкой работы известен её участок трассы,
+ * значок ставится в его середине. Работы, введённые руками, на карте не
+ * показываются — где они лежат, неизвестно.
+ */
+export const pz2MappedWorkKinds: Record<string, string> = {
+  bridge: 'мост',
+  tunnel: 'тоннель',
+};
+
+export function getPz2WorkMarks(draft: Pz2Draft) {
+  return draft.works.flatMap((work) => {
+    const label = pz2MappedWorkKinds[work.kind];
+
+    if (!label || !work.span) {
+      return [];
+    }
+
+    const from = Math.min(work.span.fromKm, work.span.toKm);
+    const to = Math.max(work.span.fromKm, work.span.toKm);
+
+    return [
+      {
+        id: work.id,
+        kind: work.kind,
+        label,
+        title: `${getPz2WorkKind(work.kind).label}: ${formatPz2Km(to - from)}`,
+        // Значок ставится посередине участка: у концов он налезал бы на отметки
+        // соседних работ и на станции.
+        distanceKm: (from + to) / 2,
+      },
+    ];
+  });
+}
+
+
+/**
  * Цвета этапов на карте.
  *
  * Взяты из токенов дизайн-системы, чтобы карта не жила своей палитрой: синий,

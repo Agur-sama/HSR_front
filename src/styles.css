@@ -1469,6 +1469,16 @@ button:focus-visible {
   box-shadow: 0 0 0 6px var(--teal-bg), 0 5px 14px rgba(8, 166, 150, 0.26);
 }
 
+/* Мост и тоннель на трассе: значок, а не подпись — на общем виде маршрута
+   текст не поместился бы, а форма читается сразу. */
+.maplibre-marker--work {
+  width: 22px;
+  height: 22px;
+  background: var(--teal-text);
+  box-shadow: 0 3px 8px rgba(4, 52, 44, 0.28);
+  font-size: 13px;
+}
+
 .maplibre-marker--route {
   width: 24px;
   height: 24px;

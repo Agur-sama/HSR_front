@@ -9,6 +9,13 @@ import type { RouteRuler } from '../../shared/lib/routeRuler';
 import { formatPz2Km } from './model';
 import type { Pz2RoutePointMark, Pz2RouteSpan, Pz2SegmentMark, Pz2StationMark } from './types';
 
+export interface Pz2WorkMark {
+  id: string;
+  label: string;
+  title: string;
+  distanceKm: number;
+}
+
 export interface Pz2StageSpanGroup {
   id: string;
   title: string;
@@ -51,6 +58,8 @@ interface Pz2RouteMapProps {
   routePoints: Pz2RoutePointMark[];
   /** Прямые вставки и кривые из ПЗ1 — справочно, менять их здесь нельзя. */
   segments: Pz2SegmentMark[];
+  /** Мосты и тоннели, отмеченные на трассе значком. */
+  workMarks?: Pz2WorkMark[];
   /**
    * Куски трассы по этапам — раскраска для экрана 02. Линейка там не нужна:
    * трасса уже размечена, этот экран только распределяет работы.
@@ -82,6 +91,7 @@ export function Pz2RouteMap({
   stations,
   routePoints,
   segments,
+  workMarks = [],
   marksKm,
   highlightedSpan = null,
   stageSpans = [],
@@ -306,6 +316,13 @@ export function Pz2RouteMap({
           `Точка трассы ${point.number} — ${formatPz2Km(point.distanceKm)} от начала`,
         ),
       ),
+      ...workMarks.flatMap((mark) => {
+        const point = pointAtDistance(ruler, mark.distanceKm);
+
+        return point
+          ? [createMarker(map, [point.lon, point.lat], 'maplibre-marker--work', mark.label === 'мост' ? '≋' : '◠', mark.title)]
+          : [];
+      }),
       ...stations.map((station) =>
         createMarker(
           map,
@@ -321,7 +338,7 @@ export function Pz2RouteMap({
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
     };
-  }, [isMapReady, routePoints, stations]);
+  }, [isMapReady, routePoints, stations, workMarks, ruler]);
 
   if (ruler.points.length === 0) {
     return (

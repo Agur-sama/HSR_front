@@ -18,7 +18,9 @@ import {
   isPz2PlanComplete,
   isPz2StagesComplete,
   isPz2WorksComplete,
+  pz2SoilConditions,
   pz2StepIds,
+  pz2WorkKinds,
   readPz2Position,
 } from './model';
 import { getPz2Plan, getPz2Report } from './plan';
@@ -612,9 +614,36 @@ function formatAmount(value: number) {
 
 function Pz2ResultStep() {
   const { draft, importedBridge } = useModuleState<Pz2Draft>();
+  const [exportStatus, setExportStatus] = useState('');
   const source = getPz2RouteSource(importedBridge);
   const check = getPz2LengthCheck(draft, source.totalLengthKm);
   const inPool = getPz2StageWorks(draft, null).length;
+
+  async function downloadPdf() {
+    try {
+      // Отчёт грузится по требованию: библиотека PDF весит больше самого
+      // модуля, и тянуть её ради экрана, до которого дошли не все, незачем.
+      const { downloadPz2Pdf } = await import('../../pdf/pz2Report');
+      const bridge = createPz2Bridge(draft, importedBridge);
+
+      await downloadPz2Pdf(
+        {
+          team: bridge.passport.team,
+          lineTitle: bridge.passport.lineTitle,
+          createdAt: bridge.passport.createdAt,
+          runId: bridge.passport.runId,
+          routeLengthKm: source.totalLengthKm,
+          result: bridge.completed.pz2!,
+          workKindLabels: Object.fromEntries(pz2WorkKinds.map((kind) => [kind.id, kind.label])),
+          conditionLabels: Object.fromEntries(pz2SoilConditions.map((item) => [item.id, item.label])),
+        },
+        'vsm-pz2-report.pdf',
+      );
+      setExportStatus('✓ Файл сохранён');
+    } catch {
+      setExportStatus('Не удалось сформировать PDF. Сохраните JSON и повторите экспорт.');
+    }
+  }
 
   return (
     <div className="result-layout">
@@ -658,6 +687,19 @@ function Pz2ResultStep() {
       </section>
 
       <Pz2ReportSection />
+
+      <section className="result-actions">
+        <p className="eyebrow">Экспорт</p>
+        <h2>Скачать файлы</h2>
+        <p className="status-note">
+          PDF нужен для сдачи преподавателю. JSON — чтобы продолжить работу с теми же данными или передать её в следующее
+          задание.
+        </p>
+        <button className="button button--primary" onClick={() => void downloadPdf()} type="button">
+          Скачать PDF
+        </button>
+        {exportStatus ? <p className="status-note">{exportStatus}</p> : null}
+      </section>
     </div>
   );
 }

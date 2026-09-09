@@ -13,6 +13,7 @@ import {
   getPz2RoutePointMarks,
   getPz2SegmentMarks,
   getPz2StageWorks,
+  getPz2WorkMarks,
   isPz2StagesComplete,
   readPz2Position,
   removePz2Stage,
@@ -518,5 +519,34 @@ describe('линейка сходится с длиной маршрута из 
     for (let index = 1; index < ruler.cumulativeKm.length; index += 1) {
       expect(ruler.cumulativeKm[index]).toBeGreaterThanOrEqual(ruler.cumulativeKm[index - 1]);
     }
+  });
+});
+
+describe('значки мостов и тоннелей на карте', () => {
+  const measured = (kind: Parameters<typeof createPz2Work>[0], fromKm: number, toKm: number) =>
+    createPz2Work(kind, String(toKm - fromKm), { fromKm, toKm });
+
+  it('значок ставится посередине участка', () => {
+    const marks = getPz2WorkMarks(draftWith([measured('bridge', 100, 120)]));
+
+    expect(marks).toHaveLength(1);
+    expect(marks[0].distanceKm).toBeCloseTo(110, 6);
+    expect(marks[0].label).toBe('мост');
+  });
+
+  it('на карте только мосты и тоннели — остальные работы значков не имеют', () => {
+    const marks = getPz2WorkMarks(
+      draftWith([measured('bridge', 0, 10), measured('tunnel', 20, 30), measured('earthworks', 40, 90)]),
+    );
+
+    expect(marks.map((mark) => mark.kind)).toEqual(['bridge', 'tunnel']);
+  });
+
+  it('работа без участка на карте не показывается — где она, неизвестно', () => {
+    expect(getPz2WorkMarks(draftWith([lengthObject('bridge', '12')]))).toEqual([]);
+  });
+
+  it('участок, намеренный в обратную сторону, даёт ту же середину', () => {
+    expect(getPz2WorkMarks(draftWith([measured('tunnel', 120, 100)]))[0].distanceKm).toBeCloseTo(110, 6);
   });
 });

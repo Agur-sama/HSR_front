@@ -14,6 +14,7 @@ import {
   getPz2RoutePointMarks,
   getPz2SegmentMarks,
   getPz2StationMarks,
+  getPz2WorkMarks,
   setPz2WorkLength,
   togglePz2SoilCondition,
   getPz2WorkKind,
@@ -98,6 +99,7 @@ export function WorksStep() {
         ruler={ruler}
         segments={segments}
         stations={stations}
+        workMarks={getPz2WorkMarks(draft)}
       />
 
       <section className="form-section">
