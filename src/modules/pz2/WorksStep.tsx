@@ -95,6 +95,9 @@ export function WorksStep() {
         onMarksChange={(rulerMarksKm) => updateDraft((current) => ({ ...current, rulerMarksKm }))}
         highlightedSpan={highlighted}
         onMeasured={(lengthKm, span) => addObject(formatMeasured(lengthKm), span)}
+        onPreviewImageChange={(previewImage) =>
+          updateDraft((current) => (current.previewImage === previewImage ? current : { ...current, previewImage }))
+        }
         routePoints={routePoints}
         ruler={ruler}
         segments={segments}

@@ -1,6 +1,7 @@
-import { Document, Page, Text, View, pdf } from '@react-pdf/renderer';
+import { Document, Image, Page, Path, StyleSheet, Svg, Text, View, pdf } from '@react-pdf/renderer';
 import { downloadTextFile } from '../bridge/io';
 import type { Pz2Result } from '../bridge/schema';
+import { PZ2_ICON_GRID, PZ2_ICON_STROKE, getPz2IconKinds, getPz2WorkIcon } from '../modules/pz2/workIcons';
 import { KeyValueTable, PAGE_SIZE, formatDate, formatRequiredValue, styles } from './common';
 
 /**
@@ -18,11 +19,33 @@ export interface Pz2PdfSummary {
   runId?: string;
   /** Длина маршрута из ПЗ1 — эталон, с которым сверялась сумма работ. */
   routeLengthKm: number;
+  /** Снимок карты трассы. Пусто — студент не открывал карту в этом проходе. */
+  previewImage?: string;
   result: Pz2Result;
   /** Подписи типов работ и условий грунта: словарь живёт в модуле задания. */
   workKindLabels: Record<string, string>;
   conditionLabels: Record<string, string>;
 }
+
+const mapStyles = StyleSheet.create({
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 18,
+    marginBottom: 4,
+  },
+  legendIcon: {
+    marginRight: 5,
+  },
+  legendText: {
+    fontSize: 9,
+  },
+});
 
 export async function downloadPz2Pdf(summary: Pz2PdfSummary, fileName: string): Promise<void> {
   const blob = await createPz2PdfBlob(summary);
@@ -63,17 +86,33 @@ function Pz2ReportDocument({ summary }: { summary: Pz2PdfSummary }) {
 
         <View style={styles.contents}>
           <Text style={styles.sectionTitle}>Содержание</Text>
-          <Text style={styles.contentsLine}>1. Работы по трассе</Text>
-          <Text style={styles.contentsLine}>2. Разбиение на этапы</Text>
-          <Text style={styles.contentsLine}>3. Ресурсный график</Text>
-          <Text style={styles.contentsLine}>4. Расход материалов и машино-часы</Text>
+          <Text style={styles.contentsLine}>1. Трасса на карте</Text>
+          <Text style={styles.contentsLine}>2. Работы по трассе</Text>
+          <Text style={styles.contentsLine}>3. Разбиение на этапы</Text>
+          <Text style={styles.contentsLine}>4. Ресурсный график</Text>
+          <Text style={styles.contentsLine}>5. Расход материалов и машино-часы</Text>
         </View>
       </Page>
 
       <Page size={PAGE_SIZE} style={styles.page}>
+        <Header section="Трасса" summary={summary} />
+
+        <Text style={styles.sectionTitle}>1. Трасса на карте</Text>
+        <Text style={styles.paragraph}>
+          Трасса и станции — из ПЗ1; цветом показаны этапы, значками — сооружения, которые студент отмерил линейкой.
+          Снимок сделан с той же карты и в той же проекции, что на экране, поэтому километраж на карте и в таблицах
+          ниже — один и тот же.
+        </Text>
+        <MapPreview previewImage={summary.previewImage} />
+        <WorkIconLegend result={result} />
+      </Page>
+
+      {/* Работы и этапы — отдельной страницей: под снимком карты на ту же
+          страницу помещалась бы только шапка таблицы. */}
+      <Page size={PAGE_SIZE} style={styles.page}>
         <Header section="Работы и этапы" summary={summary} />
 
-        <Text style={styles.sectionTitle}>1. Работы по трассе</Text>
+        <Text style={styles.sectionTitle}>2. Работы по трассе</Text>
         <KeyValueTable
           rows={[
             ['Работ перечислено', String(result.works.length)],
@@ -113,7 +152,7 @@ function Pz2ReportDocument({ summary }: { summary: Pz2PdfSummary }) {
           <Text style={styles.paragraph}>Работы не перечислены.</Text>
         )}
 
-        <Text style={styles.sectionTitle}>2. Разбиение на этапы</Text>
+        <Text style={styles.sectionTitle}>3. Разбиение на этапы</Text>
         {result.stages.length > 0 ? (
           <View style={styles.table}>
             <View style={styles.tableRow}>
@@ -144,7 +183,7 @@ function Pz2ReportDocument({ summary }: { summary: Pz2PdfSummary }) {
       <Page size={PAGE_SIZE} style={styles.page}>
         <Header section="Ресурсы и расход" summary={summary} />
 
-        <Text style={styles.sectionTitle}>3. Ресурсный график</Text>
+        <Text style={styles.sectionTitle}>4. Ресурсный график</Text>
         <KeyValueTable
           rows={[
             ['Рабочих на проект', String(result.plan.totalWorkers)],
@@ -158,7 +197,7 @@ function Pz2ReportDocument({ summary }: { summary: Pz2PdfSummary }) {
           людей между этапами: этапы строятся параллельно, и пик потребности зависит от того, как они наложились во времени.
         </Text>
 
-        <Text style={styles.sectionTitle}>4. Расход материалов и машино-часы</Text>
+        <Text style={styles.sectionTitle}>5. Расход материалов и машино-часы</Text>
         <KeyValueTable
           rows={[
             ['Трудоёмкость', `${formatAmount(result.report.laborHours)} чел.-ч`],
@@ -181,12 +220,79 @@ function Pz2ReportDocument({ summary }: { summary: Pz2PdfSummary }) {
           и последняя страница выходила пустой, с одним колонтитулом. */}
       <Page size={PAGE_SIZE} style={styles.page}>
         <Header section="Расход по проекту" summary={summary} />
-        <Text style={styles.sectionTitle}>4.1. Материалы</Text>
+        <Text style={styles.sectionTitle}>5.1. Материалы</Text>
         <ResourceTable rows={result.report.materials} />
-        <Text style={styles.sectionTitle}>4.2. Машины</Text>
+        <Text style={styles.sectionTitle}>5.2. Машины</Text>
         <ResourceTable rows={result.report.machines} />
       </Page>
     </Document>
+  );
+}
+
+/**
+ * Снимок карты в отчёте.
+ *
+ * Рисовать карту в PDF заново нечем: подложка приходит тайлами, а своя схема
+ * «долгота/широта → прямоугольник» с веб-меркатором не совпадает и кладёт
+ * трассу мимо. Поэтому либо снимок с самой карты, либо честная строка о том,
+ * что снимка нет.
+ */
+function MapPreview({ previewImage }: { previewImage?: string }) {
+  if (!previewImage) {
+    return (
+      <View style={styles.mapFrame}>
+        <View style={styles.mapFallback}>
+          <Text style={styles.mapText}>
+            Снимок карты не сохранён: карта не открывалась в этом проходе задания.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.mapFrame}>
+      <Image src={previewImage} style={styles.mapImage} />
+    </View>
+  );
+}
+
+/** Расшифровка значков — те же контуры, что на карте и в маркерах. */
+function WorkIconLegend({ result }: { result: Pz2Result }) {
+  const items = getPz2IconKinds().flatMap((kind) => {
+    const icon = getPz2WorkIcon(kind);
+    // На карте отмечены только работы с участком: значок ставится по нему.
+    const count = result.works.filter((work) => work.kind === kind && work.span).length;
+
+    return icon && count > 0 ? [{ kind, icon, count }] : [];
+  });
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={mapStyles.legend}>
+      {items.map((item) => (
+        <View key={item.kind} style={mapStyles.legendItem}>
+          <Svg height={12} style={mapStyles.legendIcon} viewBox={`0 0 ${PZ2_ICON_GRID} ${PZ2_ICON_GRID}`} width={12}>
+            {item.icon.paths.map((definition) => (
+              <Path
+                d={definition}
+                key={definition}
+                stroke="#0F6E56"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={PZ2_ICON_STROKE}
+              />
+            ))}
+          </Svg>
+          <Text style={mapStyles.legendText}>
+            {item.icon.label} — {item.count}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 

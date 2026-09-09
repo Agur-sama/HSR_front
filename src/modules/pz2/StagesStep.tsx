@@ -101,6 +101,9 @@ export function StagesStep() {
         marksKm={[]}
         onMarksChange={() => undefined}
         onMeasured={() => undefined}
+        onPreviewImageChange={(previewImage) =>
+          updateDraft((current) => (current.previewImage === previewImage ? current : { ...current, previewImage }))
+        }
         routePoints={getPz2RoutePointMarks(source, ruler)}
         ruler={ruler}
         segments={getPz2SegmentMarks(source)}

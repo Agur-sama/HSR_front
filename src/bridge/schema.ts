@@ -264,6 +264,12 @@ export interface Pz2Result {
   routeLengthKm: number;
   /** Сумма длин линейных работ на момент сохранения. */
   measuredLengthKm: number;
+  /**
+   * Снимок карты трассы с работами и этапами — data URL PNG, как в ПЗ1.
+   * Поле необязательное: файлы, сохранённые раньше, его не имеют, а отчёт
+   * без снимка печатается с оговоркой вместо картинки.
+   */
+  previewImage?: string;
 }
 // TODO: уточнить по методичке при разработке ПЗ3.
 export type Pz3Result = unknown;

@@ -5,9 +5,17 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import '../../shared/lib/maplibreWorker';
 import { haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import { pointAtDistance, projectOntoRoute } from '../../shared/lib/routeRuler';
+import {
+  drawPreviewBadge,
+  drawPreviewIcon,
+  drawPreviewLine,
+  flushPreviewCapture,
+  schedulePreviewCapture,
+} from '../../shared/lib/mapPreview';
+import type { PreviewOptions } from '../../shared/lib/mapPreview';
 import type { RouteRuler } from '../../shared/lib/routeRuler';
 import { formatPz2Km } from './model';
-import { PZ2_ICON_GRID, getPz2WorkIcon } from './workIcons';
+import { PZ2_ICON_GRID, PZ2_ICON_STROKE, getPz2WorkIcon } from './workIcons';
 import type {
   Pz2RoutePointMark,
   Pz2RouteSpan,
@@ -26,6 +34,10 @@ import type {
  */
 const ROUTE_COLOR = '#e0182d';
 const SPAN_COLOR = '#08a696';
+/** Станция — синяя, как в ПЗ1; сооружение — тёмно-бирюзовое, как маркер на карте. */
+const STATION_COLOR = '#003d84';
+const WORK_COLOR = '#0f6e56';
+
 /** Значки маркеров рисуются как SVG-узлы, а те живут в своём пространстве имён. */
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
@@ -73,6 +85,11 @@ interface Pz2RouteMapProps {
   onMeasured: (lengthKm: number, span: Pz2RouteSpan) => void;
   /** Участок строки, на которую навели в таблице: показываем вместо текущих отметок. */
   highlightedSpan?: Pz2RouteSpan | null;
+  /**
+   * Снимок карты для отчёта. Карта в ПЗ2 — главное, что студент делает руками,
+   * и отчёт без неё не показывает, где на трассе стоят работы.
+   */
+  onPreviewImageChange?: (previewImage: string) => void;
 }
 
 /**
@@ -96,6 +113,7 @@ export function Pz2RouteMap({
   withRuler = true,
   onMarksChange,
   onMeasured,
+  onPreviewImageChange,
 }: Pz2RouteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -104,6 +122,9 @@ export function Pz2RouteMap({
   const marksRef = useRef(marksKm);
   const onMarksChangeRef = useRef(onMarksChange);
   const onMeasuredRef = useRef(onMeasured);
+  const onPreviewImageChangeRef = useRef(onPreviewImageChange);
+  const previewOptionsRef = useRef<PreviewOptions>({ paint: () => undefined });
+  const previewTimerRef = useRef<number | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [hoverKm, setHoverKm] = useState<number | null>(null);
   const [missedClick, setMissedClick] = useState(false);
@@ -130,6 +151,11 @@ export function Pz2RouteMap({
     marksRef.current = marksKm;
     onMarksChangeRef.current = onMarksChange;
     onMeasuredRef.current = onMeasured;
+    onPreviewImageChangeRef.current = onPreviewImageChange;
+    // Снимок делается отложенно, уже после этого рендера: что рисовать и что
+    // обязано попасть в кадр, берётся из ссылки — чтобы снялось то, что на
+    // карте сейчас.
+    previewOptionsRef.current = createPreviewOptions({ ruler, stations, routePoints, workMarks, stageSpans });
   });
 
   useEffect(() => {
@@ -195,6 +221,11 @@ export function Pz2RouteMap({
 
     map.on('mouseout', () => setHoverKm(null));
 
+    // Тайлы приезжают асинхронно, и снимок, сделанный сразу после отрисовки
+    // слоёв, вышел бы без подложки. «idle» — это кадр, в котором карта дорисовала
+    // всё, что могла: снимаем по нему, а не по таймеру от последнего изменения.
+    map.on('idle', () => capturePreview(map));
+
     const syncMarkPoint = () => {
       const [firstKm] = marksRef.current;
       const point = firstKm === undefined ? null : pointAtDistance(rulerRef.current, firstKm);
@@ -252,11 +283,37 @@ export function Pz2RouteMap({
     });
 
     return () => {
+      const onPreview = onPreviewImageChangeRef.current;
+
+      if (onPreview) {
+        // Отложенный снимок делаем сейчас: карта вот-вот исчезнет, и снимать
+        // будет нечего, а в отчёт уйдёт кадр до последней правки.
+        flushPreviewCapture(map, previewTimerRef, previewOptionsRef.current, onPreview);
+      }
+
       map.remove();
       mapRef.current = null;
       setIsMapReady(false);
     };
   }, [ruler.points.length]);
+
+  /**
+   * Снимок карты для отчёта.
+   *
+   * Функция замкнута только на ссылки, поэтому её можно звать и из обработчиков
+   * карты, заведённых один раз при создании. Повторный снимок того же вида даёт
+   * тот же PNG, а родитель сравнивает строку и не трогает черновик, если она не
+   * изменилась, — лишнего круга «снимок → перерисовка → снимок» не выходит.
+   */
+  function capturePreview(map: MapLibreMap) {
+    const onPreview = onPreviewImageChangeRef.current;
+
+    if (!onPreview) {
+      return;
+    }
+
+    schedulePreviewCapture(map, previewTimerRef, previewOptionsRef.current, onPreview);
+  }
 
   useEffect(() => {
     const map = mapRef.current;
@@ -277,6 +334,7 @@ export function Pz2RouteMap({
     setGeoJson(map, SPAN_SOURCE_ID, lineFeature(span.map((point) => [point.lon, point.lat])));
     setGeoJson(map, STAGE_SOURCE_ID, stageFeatures(ruler, stageSpans, highlightedStageId));
     syncMarkPointRef.current?.();
+    capturePreview(map);
   }, [highlightedSpan, highlightedStageId, isMapReady, marksKm, ruler, stageSpans]);
 
   useEffect(() => {
@@ -579,6 +637,80 @@ function createWorkMarker(map: MapLibreMap, lngLat: [number, number], mark: Pz2W
   }
 
   return new maplibregl.Marker({ element }).setLngLat(lngLat).addTo(map);
+}
+
+/**
+ * Что попадает в снимок карты для отчёта: трасса, раскраска по этапам, точки
+ * линии, значки сооружений и станции — ровно то, что видно на экране.
+ *
+ * Отметки линейки не рисуются: это незаконченное измерение, а не результат.
+ * Порядок отрисовки тот же, что у маркеров: станция крупнее и важнее, поэтому
+ * ложится поверх точки трассы, если они совпали.
+ */
+function createPreviewOptions({
+  ruler,
+  stations,
+  routePoints,
+  workMarks,
+  stageSpans,
+}: {
+  ruler: RouteRuler;
+  stations: Pz2StationMark[];
+  routePoints: Pz2RoutePointMark[];
+  workMarks: Pz2WorkMark[];
+  stageSpans: Pz2StageSpanGroup[];
+}): PreviewOptions {
+  const paint: PreviewOptions['paint'] = ({ context, project }) => {
+    const toPoint = (point: { lat: number; lon: number }) => project([point.lon, point.lat]);
+
+    drawPreviewLine(context, ruler.points.map(toPoint), { color: ROUTE_COLOR, width: 5, haloWidth: 9 });
+
+    for (const stage of stageSpans) {
+      for (const span of stage.spans) {
+        drawPreviewLine(context, sliceRoute(ruler, span.fromKm, span.toKm).map(toPoint), {
+          color: stage.color,
+          width: 6,
+        });
+      }
+    }
+
+    for (const point of routePoints) {
+      drawPreviewBadge(context, toPoint(point), {
+        label: String(point.number),
+        radius: 9,
+        color: ROUTE_COLOR,
+        fontSize: 11,
+      });
+    }
+
+    for (const mark of workMarks) {
+      const point = pointAtDistance(ruler, mark.distanceKm);
+      const icon = getPz2WorkIcon(mark.kind);
+
+      if (!point || !icon) {
+        continue;
+      }
+
+      drawPreviewIcon(context, toPoint(point), {
+        paths: icon.paths,
+        gridSize: PZ2_ICON_GRID,
+        strokeWidth: PZ2_ICON_STROKE,
+        radius: 11,
+        color: WORK_COLOR,
+      });
+    }
+
+    for (const station of stations) {
+      drawPreviewBadge(context, toPoint(station), { label: station.label, radius: 12, color: STATION_COLOR });
+    }
+  };
+
+  return {
+    paint,
+    // В кадр обязаны попасть трасса, станции и точки линии: снимок обрезается
+    // по ним, а значки сооружений стоят на самой трассе и попадают следом.
+    focus: [...ruler.points, ...stations, ...routePoints].map((point): [number, number] => [point.lon, point.lat]),
+  };
 }
 
 /** Какие сооружения отмечены на карте и сколько их — расшифровка значков. */

@@ -62,6 +62,8 @@ export interface Pz2Draft {
   workersByStage: Record<string, string>;
   /** Отметки линейки на трассе, км от начала. Незавершённое измерение — одна отметка. */
   rulerMarksKm: number[];
+  /** Последний снимок карты — уходит в отчёт. Пусто, пока карту не открывали. */
+  previewImage?: string;
 }
 
 /** Данные, которые ПЗ2 забирает из JSON-моста ПЗ1. */

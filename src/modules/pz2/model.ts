@@ -139,6 +139,9 @@ export function createInitialPz2Draft(importedBridge?: BridgeSchema | null): Pz2
     // Отметки линейки не сохраняются: это незаконченное измерение, а не
     // результат. Готовые участки лежат у работ.
     rulerMarksKm: [],
+    // Снимок возвращается из файла: иначе отчёт, собранный сразу после
+    // загрузки, выходил бы без карты, хотя карта у студента уже была.
+    ...(saved.previewImage ? { previewImage: saved.previewImage } : {}),
   };
 }
 
@@ -674,6 +677,7 @@ export function createPz2Result(draft: Pz2Draft, routeLengthKm: number): Pz2Resu
     report: createPz2ReportResult(draft),
     routeLengthKm,
     measuredLengthKm: getPz2LengthCheck(draft, routeLengthKm).measuredKm,
+    ...(draft.previewImage ? { previewImage: draft.previewImage } : {}),
   };
 }
 

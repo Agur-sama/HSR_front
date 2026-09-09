@@ -633,6 +633,7 @@ function Pz2ResultStep() {
           createdAt: bridge.passport.createdAt,
           runId: bridge.passport.runId,
           routeLengthKm: source.totalLengthKm,
+          previewImage: draft.previewImage,
           result: bridge.completed.pz2!,
           workKindLabels: Object.fromEntries(pz2WorkKinds.map((kind) => [kind.id, kind.label])),
           conditionLabels: Object.fromEntries(pz2SoilConditions.map((item) => [item.id, item.label])),
