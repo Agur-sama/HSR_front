@@ -19,6 +19,7 @@ import {
   isPz2StagesComplete,
   isPz2WorksComplete,
   pz2StepIds,
+  readPz2Position,
 } from './model';
 import { getPz2Plan, getPz2Report } from './plan';
 import type { Pz2Draft } from './types';
@@ -375,7 +376,8 @@ function describeStagesHint(draft: Pz2Draft) {
 }
 
 function Pz2IntroStep() {
-  const { importedBridge, setImportedBridge } = useModuleState<Pz2Draft>();
+  const { importedBridge, replaceDraft, setCurrentStepIndex, setImportedBridge, setTheorySeen } =
+    useModuleState<Pz2Draft>();
   const [importError, setImportError] = useState('');
   const [importStatus, setImportStatus] = useState('');
   const source = getPz2RouteSource(importedBridge);
@@ -392,7 +394,24 @@ function Pz2IntroStep() {
       }
 
       setImportedBridge(bridge);
+      // Возвращаем и данные, и место, на котором студент сохранился: файл ПЗ2
+      // открывает тот же экран с уже введёнными работами и этапами.
+      replaceDraft(createInitialPz2Draft(bridge));
       setImportError('');
+
+      const position = readPz2Position(bridge);
+
+      if (position) {
+        // Фазу не переключаем — студент остаётся на интро и возвращается в
+        // задание сам, как и в ПЗ1.
+        setTheorySeen(position.theorySeen);
+        setCurrentStepIndex(position.stepIndex);
+        setImportStatus(
+          `Загружен файл: ${file.name}. «Начать» вернёт на шаг ${position.stepIndex + 1} из ${pz2StepIds.length}.`,
+        );
+        return;
+      }
+
       setImportStatus(`Загружен файл: ${file.name}`);
     } catch (error) {
       setImportStatus('');

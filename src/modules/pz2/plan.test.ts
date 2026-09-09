@@ -5,6 +5,8 @@ import {
   createPz2Bridge,
   createPz2Stage,
   createPz2Work,
+  pz2StepIds,
+  readPz2Position,
   removePz2Stage,
 } from './model';
 import {
@@ -261,5 +263,61 @@ describe('план и отчёт в мосте', () => {
     expect(result.plan.totalWorkers).toBe(0);
     expect(result.plan.durationDays).toBe(0);
     expect(result.report.laborHours).toBeGreaterThan(0);
+  });
+});
+
+describe('восстановление из файла', () => {
+  it('работы, этапы и раскладка людей возвращаются из сохранённого файла', () => {
+    const { draft, stageIds } = twoStageDraft();
+    const saved: Pz2Draft = {
+      ...draft,
+      totalWorkers: '40',
+      workersByStage: { [stageIds[0]]: '25', [stageIds[1]]: '15' },
+    };
+    const bridge = createPz2Bridge(saved, null);
+
+    const restored = createInitialPz2Draft(bridge);
+
+    expect(restored.works).toHaveLength(saved.works.length);
+    expect(restored.works[0].kind).toBe(saved.works[0].kind);
+    expect(restored.works[0].stageId).toBe(stageIds[0]);
+    expect(restored.stages.map((stage) => stage.title)).toEqual(saved.stages.map((stage) => stage.title));
+    expect(restored.totalWorkers).toBe('40');
+    expect(restored.workersByStage[stageIds[0]]).toBe('25');
+  });
+
+  it('длина возвращается в поле в том же виде, в каком её вводили', () => {
+    const work = { ...createPz2Work('bridge', '12,5'), stageId: null };
+    const bridge = createPz2Bridge({ ...createInitialPz2Draft(), works: [work] }, null);
+
+    expect(createInitialPz2Draft(bridge).works[0].lengthKm).toBe('12,5');
+  });
+
+  it('у штучной работы возвращается количество, а не длина', () => {
+    const work = { ...createPz2Work('turnout'), count: '4' };
+    const bridge = createPz2Bridge({ ...createInitialPz2Draft(), works: [work] }, null);
+    const restored = createInitialPz2Draft(bridge).works[0];
+
+    expect(restored.count).toBe('4');
+    expect(restored.lengthKm).toBe('');
+  });
+
+  it('участок работы на трассе переживает сохранение', () => {
+    const work = createPz2Work('earthworks', '100', { fromKm: 10, toKm: 110 });
+    const bridge = createPz2Bridge({ ...createInitialPz2Draft(), works: [work] }, null);
+
+    expect(createInitialPz2Draft(bridge).works[0].span).toEqual({ fromKm: 10, toKm: 110 });
+  });
+
+  it('файл без секции ПЗ2 даёт пустой черновик, а не ошибку', () => {
+    expect(createInitialPz2Draft(null).works).toEqual([]);
+    expect(createInitialPz2Draft({ completed: {} } as never).stages).toEqual([]);
+  });
+
+  it('позиция и данные согласованы: шаг из файла существует', () => {
+    const { draft } = twoStageDraft();
+    const bridge = createPz2Bridge(draft, null, { phase: 'task', stepId: 'plan', theorySeen: true });
+
+    expect(readPz2Position(bridge)?.stepIndex).toBe(pz2StepIds.indexOf('plan'));
   });
 });

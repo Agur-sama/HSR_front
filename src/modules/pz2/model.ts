@@ -104,8 +104,45 @@ export function getPz2WorkKind(kind: Pz2WorkKind) {
   return pz2WorkKinds.find((item) => item.id === kind) ?? pz2WorkKinds[0];
 }
 
-export function createInitialPz2Draft(): Pz2Draft {
-  return { works: [], stages: [], criticalPathAnswers: {}, totalWorkers: '', workersByStage: {}, rulerMarksKm: [] };
+/**
+ * Черновик ПЗ2, при загрузке файла — с уже введёнными значениями.
+ *
+ * Заказчик просил дословно: файл должен открывать тот же экран «с уже
+ * введёнными значениями». В мост числа уходят числами, а поля ввода в проекте
+ * работают со строками, поэтому здесь обратный перевод.
+ */
+export function createInitialPz2Draft(importedBridge?: BridgeSchema | null): Pz2Draft {
+  const saved = importedBridge?.completed?.pz2;
+
+  if (!saved) {
+    return { works: [], stages: [], criticalPathAnswers: {}, totalWorkers: '', workersByStage: {}, rulerMarksKm: [] };
+  }
+
+  return {
+    works: saved.works.map((work) => ({
+      id: work.id,
+      kind: work.kind,
+      lengthKm: work.lengthKm === null ? '' : formatPz2InputNumber(work.lengthKm),
+      count: work.count === null ? '' : formatPz2InputNumber(work.count),
+      conditions: work.conditions,
+      stageId: work.stageId,
+      ...(work.span ? { span: work.span } : {}),
+    })),
+    stages: saved.stages.map((stage) => ({ id: stage.id, title: stage.title, order: stage.order })),
+    criticalPathAnswers: Object.fromEntries(saved.criticalPath.map((answer) => [answer.exerciseId, answer.answer])),
+    totalWorkers: saved.plan.totalWorkers > 0 ? formatPz2InputNumber(saved.plan.totalWorkers) : '',
+    workersByStage: Object.fromEntries(
+      Object.entries(saved.plan.workersByStage).map(([stageId, workers]) => [stageId, formatPz2InputNumber(workers)]),
+    ),
+    // Отметки линейки не сохраняются: это незаконченное измерение, а не
+    // результат. Готовые участки лежат у работ.
+    rulerMarksKm: [],
+  };
+}
+
+/** Число из моста обратно в поле ввода: запятая как разделитель, без хвоста нулей. */
+function formatPz2InputNumber(value: number): string {
+  return String(Number(value.toFixed(2))).replace('.', ',');
 }
 
 export function createPz2Work(
