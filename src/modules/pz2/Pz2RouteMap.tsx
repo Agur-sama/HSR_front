@@ -7,21 +7,16 @@ import { haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import { pointAtDistance, projectOntoRoute } from '../../shared/lib/routeRuler';
 import type { RouteRuler } from '../../shared/lib/routeRuler';
 import { formatPz2Km } from './model';
-import type { Pz2RoutePointMark, Pz2RouteSpan, Pz2SegmentMark, Pz2StationMark } from './types';
-
-export interface Pz2WorkMark {
-  id: string;
-  label: string;
-  title: string;
-  distanceKm: number;
-}
-
-export interface Pz2StageSpanGroup {
-  id: string;
-  title: string;
-  color: string;
-  spans: Pz2RouteSpan[];
-}
+import { PZ2_ICON_GRID, getPz2WorkIcon } from './workIcons';
+import type {
+  Pz2RoutePointMark,
+  Pz2RouteSpan,
+  Pz2SegmentMark,
+  Pz2StageSpanGroup,
+  Pz2StationMark,
+  Pz2WorkKind,
+  Pz2WorkMark,
+} from './types';
 
 /**
  * Цвета те же, что в ПЗ1: трасса ВСМ красная (--color-route-hsr), а бирюзовый
@@ -31,6 +26,8 @@ export interface Pz2StageSpanGroup {
  */
 const ROUTE_COLOR = '#e0182d';
 const SPAN_COLOR = '#08a696';
+/** Значки маркеров рисуются как SVG-узлы, а те живут в своём пространстве имён. */
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 const ROUTE_SOURCE_ID = 'pz2-route';
 const ROUTE_LAYER_ID = 'pz2-route-line';
@@ -58,7 +55,7 @@ interface Pz2RouteMapProps {
   routePoints: Pz2RoutePointMark[];
   /** Прямые вставки и кривые из ПЗ1 — справочно, менять их здесь нельзя. */
   segments: Pz2SegmentMark[];
-  /** Мосты и тоннели, отмеченные на трассе значком. */
+  /** Сооружения на трассе — мосты, тоннели, эстакады — с их значками. */
   workMarks?: Pz2WorkMark[];
   /**
    * Куски трассы по этапам — раскраска для экрана 02. Линейка там не нужна:
@@ -319,9 +316,7 @@ export function Pz2RouteMap({
       ...workMarks.flatMap((mark) => {
         const point = pointAtDistance(ruler, mark.distanceKm);
 
-        return point
-          ? [createMarker(map, [point.lon, point.lat], 'maplibre-marker--work', mark.label === 'мост' ? '≋' : '◠', mark.title)]
-          : [];
+        return point ? [createWorkMarker(map, [point.lon, point.lat], mark)] : [];
       }),
       ...stations.map((station) =>
         createMarker(
@@ -356,6 +351,7 @@ export function Pz2RouteMap({
     );
   }
 
+  const workLegend = getWorkLegend(workMarks);
   const measuringKm = marksKm.length === 1 && hoverKm !== null ? Math.abs(hoverKm - marksKm[0]) : null;
   const highlightedKm = highlightedSpan ? Math.abs(highlightedSpan.toKm - highlightedSpan.fromKm) : null;
 
@@ -426,6 +422,23 @@ export function Pz2RouteMap({
               <span className="route-stations-legend__label">{station.label}</span>
               <span>{station.name || 'без названия'}</span>
               <strong>{formatPz2Km(station.distanceKm)}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {workLegend.length > 0 ? (
+        <ul className="route-works-legend">
+          {/* Значок на трассе ничего не значит без расшифровки: три сооружения
+              похожи силуэтом, и на общем виде маршрута их легко перепутать. */}
+          <li className="route-works-legend__caption">Сооружения на трассе:</li>
+          {workLegend.map((item) => (
+            <li key={item.kind}>
+              <span className="route-works-legend__icon">
+                <WorkIconGlyph kind={item.kind} />
+              </span>
+              <span>{item.label}</span>
+              <strong>{item.count}</strong>
             </li>
           ))}
         </ul>
@@ -535,6 +548,71 @@ function createMarker(map: MapLibreMap, lngLat: [number, number], modifier: stri
   element.title = title;
 
   return new maplibregl.Marker({ element }).setLngLat(lngLat).addTo(map);
+}
+
+/**
+ * Маркер сооружения: вместо подписи — значок из общего словаря.
+ *
+ * Название («мост», «тоннель») в кружок размером с точку трассы не поместится,
+ * а сокращать его до буквы значит заводить второй язык подписей. Значок
+ * читается сразу, а полное название с километражом остаётся в подсказке.
+ */
+function createWorkMarker(map: MapLibreMap, lngLat: [number, number], mark: Pz2WorkMark) {
+  const icon = getPz2WorkIcon(mark.kind);
+  const element = document.createElement('span');
+  element.className = 'maplibre-marker maplibre-marker--work';
+  element.title = mark.title;
+
+  if (icon) {
+    const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${PZ2_ICON_GRID} ${PZ2_ICON_GRID}`);
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+
+    for (const definition of icon.paths) {
+      const path = document.createElementNS(SVG_NAMESPACE, 'path');
+      path.setAttribute('d', definition);
+      svg.append(path);
+    }
+
+    element.append(svg);
+  }
+
+  return new maplibregl.Marker({ element }).setLngLat(lngLat).addTo(map);
+}
+
+/** Какие сооружения отмечены на карте и сколько их — расшифровка значков. */
+function getWorkLegend(workMarks: Pz2WorkMark[]) {
+  const counts = new Map<Pz2WorkKind, { kind: Pz2WorkKind; label: string; count: number }>();
+
+  for (const mark of workMarks) {
+    const item = counts.get(mark.kind);
+
+    if (item) {
+      item.count += 1;
+    } else {
+      counts.set(mark.kind, { kind: mark.kind, label: mark.label, count: 1 });
+    }
+  }
+
+  return [...counts.values()];
+}
+
+/** Значок в вёрстке легенды — те же контуры, что и у маркера. */
+function WorkIconGlyph({ kind }: { kind: Pz2WorkKind }) {
+  const icon = getPz2WorkIcon(kind);
+
+  if (!icon) {
+    return null;
+  }
+
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox={`0 0 ${PZ2_ICON_GRID} ${PZ2_ICON_GRID}`}>
+      {icon.paths.map((definition) => (
+        <path d={definition} key={definition} />
+      ))}
+    </svg>
+  );
 }
 
 function panelLabel(highlightedKm: number | null, markCount: number) {

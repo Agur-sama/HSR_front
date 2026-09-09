@@ -102,3 +102,22 @@ export interface Pz2StationMark {
   /** Расстояние от начала трассы, км. */
   distanceKm: number;
 }
+
+/** Значок сооружения на трассе: где стоит и что подписано. */
+export interface Pz2WorkMark {
+  id: string;
+  kind: Pz2WorkKind;
+  /** Название сооружения из словаря значков — «мост», «тоннель», «эстакада». */
+  label: string;
+  title: string;
+  /** Километр от начала трассы: середина намеренного участка. */
+  distanceKm: number;
+}
+
+/** Куски трассы одного этапа с его цветом — раскраска карты на экране 02. */
+export interface Pz2StageSpanGroup {
+  id: string;
+  title: string;
+  color: string;
+  spans: Pz2RouteSpan[];
+}

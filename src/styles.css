@@ -1033,6 +1033,45 @@ button:focus-visible {
   font-weight: 800;
 }
 
+/* Расшифровка значков сооружений — рядом с легендой станций и в том же виде. */
+.route-works-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.route-works-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.route-works-legend__caption {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.route-works-legend strong {
+  color: var(--teal-text);
+}
+
+.route-works-legend__icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--teal-text);
+  color: #fff;
+}
+
 /* Пояснение под названием типа объекта — подсказка, а не заголовок строки. */
 .works-table tbody th small {
   display: block;
@@ -1469,14 +1508,24 @@ button:focus-visible {
   box-shadow: 0 0 0 6px var(--teal-bg), 0 5px 14px rgba(8, 166, 150, 0.26);
 }
 
-/* Мост и тоннель на трассе: значок, а не подпись — на общем виде маршрута
-   текст не поместился бы, а форма читается сразу. */
+/* Сооружения на трассе: значок, а не подпись — на общем виде маршрута
+   название не поместилось бы, а силуэт читается сразу. */
 .maplibre-marker--work {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   background: var(--teal-text);
   box-shadow: 0 3px 8px rgba(4, 52, 44, 0.28);
-  font-size: 13px;
+}
+
+.maplibre-marker--work svg,
+.route-works-legend__icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .maplibre-marker--route {

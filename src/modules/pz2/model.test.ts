@@ -27,6 +27,7 @@ import {
   pz2WorkKinds,
   validatePz2Work,
 } from './model';
+import { getPz2IconKinds, getPz2WorkIcon } from './workIcons';
 
 function draftWith(objects: Parameters<typeof getPz2LengthCheck>[0]['works']) {
   return { ...createInitialPz2Draft(), works: objects };
@@ -522,7 +523,7 @@ describe('линейка сходится с длиной маршрута из 
   });
 });
 
-describe('значки мостов и тоннелей на карте', () => {
+describe('значки сооружений на карте', () => {
   const measured = (kind: Parameters<typeof createPz2Work>[0], fromKm: number, toKm: number) =>
     createPz2Work(kind, String(toKm - fromKm), { fromKm, toKm });
 
@@ -534,12 +535,28 @@ describe('значки мостов и тоннелей на карте', () => 
     expect(marks[0].label).toBe('мост');
   });
 
-  it('на карте только мосты и тоннели — остальные работы значков не имеют', () => {
+  it('значок есть у сооружений, а у земляного полотна и пути — нет', () => {
     const marks = getPz2WorkMarks(
-      draftWith([measured('bridge', 0, 10), measured('tunnel', 20, 30), measured('earthworks', 40, 90)]),
+      draftWith([
+        measured('bridge', 0, 10),
+        measured('tunnel', 20, 30),
+        measured('viaduct', 32, 36),
+        measured('earthworks', 40, 90),
+        measured('ballastTrack', 90, 120),
+      ]),
     );
 
-    expect(marks.map((mark) => mark.kind)).toEqual(['bridge', 'tunnel']);
+    expect(marks.map((mark) => mark.kind)).toEqual(['bridge', 'tunnel', 'viaduct']);
+    expect(marks.map((mark) => mark.label)).toEqual(['мост', 'тоннель', 'эстакада']);
+  });
+
+  it('у каждого значка есть контуры — иначе маркер будет пустым кружком', () => {
+    for (const kind of getPz2IconKinds()) {
+      const icon = getPz2WorkIcon(kind);
+
+      expect(icon?.label).toBeTruthy();
+      expect(icon?.paths.length).toBeGreaterThan(0);
+    }
   });
 
   it('работа без участка на карте не показывается — где она, неизвестно', () => {

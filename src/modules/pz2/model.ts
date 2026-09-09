@@ -12,6 +12,7 @@ import { buildRoutePointsBySegment, computeRouteLineMetrics } from '../../shared
 import { createRouteRulerFromSegments, projectOntoRoute } from '../../shared/lib/routeRuler';
 import type { RouteRuler } from '../../shared/lib/routeRuler';
 import { pz2NetworkExercises } from './networkExercises';
+import { getPz2WorkIcon } from './workIcons';
 import { getPz2Plan, getPz2Report } from './plan';
 import type {
   Pz2Draft,
@@ -24,6 +25,7 @@ import type {
   Pz2StageDraft,
   Pz2WorkDraft,
   Pz2WorkKind,
+  Pz2WorkMark,
   Pz2WorkMeasure,
 } from './types';
 
@@ -476,23 +478,22 @@ export function getPz2SegmentMarks(source: Pz2RouteSource): Pz2SegmentMark[] {
 }
 
 /**
- * Работы, которые заказчик просил показывать на карте значками: мост и тоннель.
+ * Значки сооружений на трассе: мост, тоннель, эстакада.
  *
- * «Может не делать, если будет время» — ТЗ §3 относит это к этапу B. Данные для
- * значка уже есть: у намеренной линейкой работы известен её участок трассы,
- * значок ставится в его середине. Работы, введённые руками, на карте не
- * показываются — где они лежат, неизвестно.
+ * Заказчик просил значки для моста и тоннеля («может не делать, если будет
+ * время» — ТЗ §3, этап B). Эстакада добавлена нами: это такое же искусственное
+ * сооружение с участком трассы, и без значка она одна из трёх выпадала из
+ * карты. Если заказчик решит иначе — убирается строкой из словаря значков.
+ *
+ * Отмечаются только работы, у которых есть намеренный линейкой участок: без
+ * него неизвестно, где на трассе стоит сооружение, а ставить значок «примерно»
+ * значит врать про километраж.
  */
-export const pz2MappedWorkKinds: Record<string, string> = {
-  bridge: 'мост',
-  tunnel: 'тоннель',
-};
-
-export function getPz2WorkMarks(draft: Pz2Draft) {
+export function getPz2WorkMarks(draft: Pz2Draft): Pz2WorkMark[] {
   return draft.works.flatMap((work) => {
-    const label = pz2MappedWorkKinds[work.kind];
+    const icon = getPz2WorkIcon(work.kind);
 
-    if (!label || !work.span) {
+    if (!icon || !work.span) {
       return [];
     }
 
@@ -503,7 +504,7 @@ export function getPz2WorkMarks(draft: Pz2Draft) {
       {
         id: work.id,
         kind: work.kind,
-        label,
+        label: icon.label,
         title: `${getPz2WorkKind(work.kind).label}: ${formatPz2Km(to - from)}`,
         // Значок ставится посередине участка: у концов он налезал бы на отметки
         // соседних работ и на станции.
