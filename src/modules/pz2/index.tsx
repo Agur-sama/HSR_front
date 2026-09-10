@@ -589,17 +589,20 @@ function ReportTable({ caption, rows }: { caption: string; rows: ReturnType<type
         <caption className="eyebrow">{caption}</caption>
         <thead>
           <tr>
+            {/* Единица стоит рядом с числом, а не отдельной колонкой: в узкой
+                колонке отчёта третий столбец не помещался и заголовок
+                обрезался на «ЕДИНИЦ». В PDF расход печатается так же. */}
             <th>Позиция</th>
-            <th className="numeric">Количество</th>
-            <th>Единица</th>
+            <th className="numeric">Расход</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.title}>
               <th scope="row">{row.title}</th>
-              <td className="numeric">{formatAmount(row.amount)}</td>
-              <td>{row.unit}</td>
+              <td className="numeric">
+                {formatAmount(row.amount)} {row.unit}
+              </td>
             </tr>
           ))}
         </tbody>
