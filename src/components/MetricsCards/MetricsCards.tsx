@@ -1,5 +1,8 @@
 import type { ProjectMetrics } from '../../domain/network/types';
 
+/** Дробные числа пишутся по-русски: «4,8 чел.», а не «4.8 чел.». */
+const decimalFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+
 type MetricsCardsProps = {
   metrics: ProjectMetrics;
 };
@@ -8,7 +11,7 @@ export function MetricsCards({ metrics }: MetricsCardsProps) {
   const cards = [
     ['Общая длительность', `${metrics.projectDuration} дн.`],
     ['Макс. занятость', `${metrics.maxWorkers} чел.`],
-    ['Средняя занятость', `${metrics.averageWorkers.toFixed(1)} чел.`],
+    ['Средняя занятость', `${decimalFormat.format(metrics.averageWorkers)} чел.`],
     ['Критические работы', `${metrics.criticalCount}`],
     ['Работы с резервом', `${metrics.floatCount}`],
     ['Дни перегрузки', `${metrics.overloadDays}`],

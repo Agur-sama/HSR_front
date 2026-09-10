@@ -58,10 +58,10 @@ export function WorkDefinitionTable({
           {!readOnly ? (
             <>
               <button className="button button--primary" type="button" onClick={onAdd}>Добавить работу</button>
-              <button className="button button--ghost" type="button" onClick={onSave}>Сохранить</button>
-              <button className="button button--ghost" type="button" onClick={onReset}>Сбросить изменения</button>
-              <button className="button button--ghost" type="button" onClick={onRestore}>Восстановить пример</button>
-              <button className="button button--ghost danger" type="button" onClick={onClear}>Очистить таблицу</button>
+              <button className="button button--outline" type="button" onClick={onSave}>Сохранить</button>
+              <button className="button button--outline" type="button" onClick={onReset}>Сбросить изменения</button>
+              <button className="button button--outline" type="button" onClick={onRestore}>Восстановить пример</button>
+              <button className="button button--danger" type="button" onClick={onClear}>Очистить таблицу</button>
             </>
           ) : null}
           <label className="compact-toggle">
@@ -71,7 +71,7 @@ export function WorkDefinitionTable({
         </div>
       </div>
       <div className="table-wrap">
-        <table className="definition-table__table">
+        <table className="input-table definition-table__table">
           <thead>
             <tr>
               <th title="Код или номер работы">№</th>
@@ -113,13 +113,13 @@ export function WorkDefinitionTable({
                     {eventWarning ? <small className="warning-text">Окончание меньше начала. Проверьте события.</small> : null}
                   </td>
                   <td className="row-actions">
-                    <button className="button button--ghost" type="button" onClick={(event) => {
+                    <button className="button button--outline" type="button" onClick={(event) => {
                       event.stopPropagation();
                       setExplainedId(explainedId === definition.id ? '' : definition.id);
                     }}>
                       Пояснить
                     </button>
-                    {!readOnly ? <button className="button button--ghost danger" type="button" onClick={(event) => {
+                    {!readOnly ? <button className="button button--danger" type="button" onClick={(event) => {
                       event.stopPropagation();
                       onDelete(definition.id);
                     }}>

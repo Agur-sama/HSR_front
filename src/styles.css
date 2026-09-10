@@ -360,6 +360,19 @@ button:focus-visible {
   color: var(--primary);
 }
 
+/* Действие, которое стирает данные: «Очистить таблицу», «Удалить работу».
+   В унаследованном тренажёре КСГ такие кнопки имели класс `danger`, которого
+   в системе не существовало, и стирающее действие выглядело как остальные. */
+.button--danger {
+  border-color: var(--danger);
+  background: #fff;
+  color: var(--danger);
+}
+
+.button--danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
 .button--outline:hover:not(:disabled) {
   background: var(--panel-alt);
 }
@@ -556,21 +569,25 @@ button:focus-visible {
   text-align: right;
 }
 
-/* Гант: строка на этап, внутри работы в порядке выполнения. */
-.gantt {
+/* Гант ПЗ2, экран 04: строка на этап, внутри работы в порядке выполнения.
+   Селекторы привязаны к экрану: те же имена классов носит унаследованный
+   тренажёр КСГ на экране 03, и без привязки правила смешивались — его столбики
+   получали отсюда `position: absolute` и все сваливались в левый верхний угол
+   диаграммы, а сюда прилетала высота 26px и закрывала дорожку под столбиком. */
+.plan-step .gantt {
   display: grid;
   gap: 6px;
   margin: 12px 0 16px;
 }
 
-.gantt__row {
+.plan-step .gantt__row {
   display: grid;
   grid-template-columns: 132px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
 }
 
-.gantt__label {
+.plan-step .gantt__label {
   overflow: hidden;
   color: var(--primary);
   font-size: 12px;
@@ -579,7 +596,7 @@ button:focus-visible {
   white-space: nowrap;
 }
 
-.gantt__track {
+.plan-step .gantt__track {
   position: relative;
   display: block;
   height: 26px;
@@ -587,7 +604,7 @@ button:focus-visible {
   background: var(--bg-soft);
 }
 
-.gantt__bar {
+.plan-step .gantt__bar {
   position: absolute;
   top: 3px;
   height: 20px;
@@ -603,7 +620,7 @@ button:focus-visible {
   white-space: nowrap;
 }
 
-.gantt__axis {
+.plan-step .gantt__axis {
   display: flex;
   justify-content: space-between;
   padding-left: 142px;
@@ -1937,6 +1954,14 @@ input.is-invalid {
   width: auto;
 }
 
+/* Подпись флажка в панели тренажёра шла размером с основной текст и была
+   заметнее самих кнопок рядом. */
+.ksg-module .compact-toggle {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .coordinate-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2658,81 +2683,33 @@ input.is-invalid {
   }
 }
 
+/* Тренажёр КСГ на экране 03 ПЗ2.
+   Его расчёт трогать нельзя — ТЗ ПЗ2 §7.1 требует подключить код как есть и не
+   переписывать, — но заказчик там же просил не показывать тренажёр, «пока он
+   выглядит не так, как задумано в финале». Поэтому меняется только оформление:
+   карточки, заголовки, плитки и таблицы берут те же токены и размеры, что и
+   остальные экраны. Раньше тренажёр приносил с собой вид отдельной страницы —
+   свой фон, свою высоту в целый экран и свою полосу прокрутки внутри шага. */
 .ksg-module {
-  height: 100vh;
-  overflow-x: hidden;
-  overflow-y: auto;
-  background:
-    linear-gradient(180deg, rgba(243, 247, 255, 0.96), rgba(255, 255, 255, 0.88) 280px),
-    #ffffff;
-  padding: 22px 24px 28px;
-}
-
-.ksg-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 20px;
-  align-items: start;
-  margin-bottom: 16px;
-  border-bottom: 1px solid var(--border-strong);
-  padding-bottom: 16px;
-}
-
-.ksg-header h1 {
-  margin: 6px 0 8px;
-  color: var(--primary);
-  font-size: clamp(30px, 4vw, 48px);
-  line-height: 1;
-}
-
-.ksg-header p {
-  max-width: 780px;
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.ksg-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: end;
-}
-
-.ksg-nav a {
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--primary);
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.ksg-nav a[aria-current="page"] {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: #fff;
+  gap: 16px;
 }
 
 .ksg-notice {
-  margin-bottom: 14px;
+  margin: 0;
   border: 1px solid #cdeee1;
   border-radius: 8px;
   background: var(--teal-bg);
-  color: var(--teal-text-dark);
+  color: var(--teal-text);
   padding: 10px 12px;
-  font-size: 13px;
-  font-weight: 800;
+  line-height: 1.55;
 }
 
 .ksg-module .panel {
-  overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   background: #fff;
-  box-shadow: 0 12px 28px rgba(20, 29, 60, 0.06);
+  padding: 16px;
 }
 
 .ksg-module .panel__header {
@@ -2740,7 +2717,7 @@ input.is-invalid {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px 10px;
+  padding: 0 0 12px;
 }
 
 .ksg-module .panel__header--stacked {
@@ -2748,9 +2725,9 @@ input.is-invalid {
 }
 
 .ksg-module .panel__header h2 {
-  margin: 0;
-  color: var(--primary);
-  font-size: 18px;
+  margin: 4px 0 0;
+  color: var(--indigo);
+  font-size: 20px;
 }
 
 .ksg-module .panel__header p,
@@ -2768,24 +2745,26 @@ input.is-invalid {
   font-weight: 800;
 }
 
+/* Плитки показателей — те же, что в сводке ПЗ1 и на экране 04 ПЗ2
+   (`.forecast-summary-grid`): мягкая подложка, подпись капителью, крупное
+   число. Отдельного вида у тренажёра быть не должно. */
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  margin: 0 0 16px;
+  margin: 0;
 }
 
 .metric-card {
-  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-soft);
   padding: 12px;
 }
 
 .metric-card span {
   display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -2793,8 +2772,8 @@ input.is-invalid {
 .metric-card strong {
   display: block;
   margin-top: 6px;
-  color: var(--primary);
-  font-size: 21px;
+  color: var(--indigo);
+  font-size: 22px;
   font-weight: 800;
 }
 
@@ -2803,7 +2782,6 @@ input.is-invalid {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
   gap: 16px;
   align-items: stretch;
-  margin-bottom: 16px;
 }
 
 .ksg-right-rail,
@@ -2814,11 +2792,12 @@ input.is-invalid {
 
 .ksg-chart-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: 16px;
 }
 
 .ksg-module .table-wrap {
   overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 .ksg-module .table-actions {
@@ -2829,14 +2808,8 @@ input.is-invalid {
   justify-content: flex-end;
 }
 
-.definition-table {
-  margin-bottom: 16px;
-}
-
 .definition-table__table input {
   min-width: 74px;
-  border-color: transparent;
-  background: #f8fbff;
 }
 
 .definition-table__table td:nth-child(4) input {
@@ -2901,7 +2874,7 @@ input.is-invalid {
 
 .row-explanation,
 .formula-note {
-  margin: 12px 16px;
+  margin: 12px 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-soft);
@@ -2915,37 +2888,39 @@ input.is-invalid {
   margin-top: 0;
 }
 
-.gantt {
+/* Гант тренажёра КСГ. Имена классов совпадают с Гантом экрана 04, поэтому
+   правила привязаны к оболочке тренажёра — см. пояснение у `.plan-step .gantt`. */
+.ksg-module .gantt {
   min-width: 0;
 }
 
-.gantt__days,
-.gantt__row {
+.ksg-module .gantt__days,
+.ksg-module .gantt__row {
   display: grid;
   gap: 3px;
   align-items: center;
 }
 
-.gantt__days {
+.ksg-module .gantt__days {
   min-width: 760px;
-  padding: 0 14px 8px;
+  padding: 0 0 8px;
   color: var(--muted);
   font-size: 11px;
 }
 
-.gantt__days b {
+.ksg-module .gantt__days b {
   text-align: center;
 }
 
-.gantt__body {
+.ksg-module .gantt__body {
   display: grid;
   gap: 7px;
   overflow-x: auto;
-  padding: 0 14px 16px;
+  padding: 0;
   position: relative;
 }
 
-.gantt__deadline {
+.ksg-module .gantt__deadline {
   display: grid;
   min-width: 760px;
   height: 0;
@@ -2955,14 +2930,14 @@ input.is-invalid {
   pointer-events: none;
 }
 
-.gantt__deadline span {
+.ksg-module .gantt__deadline span {
   min-height: 100%;
   border-right: 2px dashed var(--danger);
   transform: translateY(8px);
   writing-mode: vertical-rl;
 }
 
-.gantt__row {
+.ksg-module .gantt__row {
   min-width: 760px;
   min-height: 42px;
   border: 0;
@@ -2971,11 +2946,11 @@ input.is-invalid {
   text-align: left;
 }
 
-.gantt__row.is-selected {
+.ksg-module .gantt__row.is-selected {
   background: #f2f7ff;
 }
 
-.gantt__label {
+.ksg-module .gantt__label {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -2983,19 +2958,19 @@ input.is-invalid {
   color: var(--ink);
 }
 
-.gantt__label small {
+.ksg-module .gantt__label small {
   color: var(--muted);
   font-size: 11px;
 }
 
-.gantt__bar,
-.gantt__float {
+.ksg-module .gantt__bar,
+.ksg-module .gantt__float {
   grid-row: 1;
   height: 26px;
   border-radius: 7px;
 }
 
-.gantt__bar {
+.ksg-module .gantt__bar {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3006,11 +2981,11 @@ input.is-invalid {
   font-weight: 800;
 }
 
-.gantt__bar--critical {
+.ksg-module .gantt__bar--critical {
   background: var(--danger);
 }
 
-.gantt__float {
+.ksg-module .gantt__float {
   background: repeating-linear-gradient(
     45deg,
     rgba(0, 61, 132, 0.12),
@@ -3020,7 +2995,7 @@ input.is-invalid {
   );
 }
 
-.gantt__shift {
+.ksg-module .gantt__shift {
   display: grid;
   grid-column: 2 / -1;
   grid-row: 2;
@@ -3033,21 +3008,18 @@ input.is-invalid {
   font-weight: 700;
 }
 
-.work-editor {
-  padding-bottom: 14px;
-}
-
 .work-editor h3 {
-  margin: 0 16px 10px;
-  color: var(--primary);
-  font-size: 18px;
+  margin: 0 0 10px;
+  color: var(--indigo);
+  font-size: 20px;
 }
 
 .work-editor label {
   display: grid;
   gap: 7px;
-  padding: 10px 16px;
+  padding: 10px 0;
   color: var(--muted);
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -3056,7 +3028,7 @@ input.is-invalid {
 .ksg-module .status-note,
 .ksg-module .hint,
 .form-error {
-  margin: 10px 16px;
+  margin: 10px 0;
   border-radius: 8px;
   background: var(--bg-soft);
   color: var(--muted);

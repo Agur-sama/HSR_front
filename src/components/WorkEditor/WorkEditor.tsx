@@ -98,7 +98,7 @@ export function WorkEditor({ work, onWorkersChange, onDurationChange, onShiftCha
       </div>
       <div className="editor-actions">
         <button className="button button--primary" type="button" onClick={applyChanges}>Применить</button>
-        <button className="button button--ghost" type="button" onClick={resetDraft}>Отменить</button>
+        <button className="button button--outline" type="button" onClick={resetDraft}>Отменить</button>
       </div>
       {error ? <p className="form-error">{error}</p> : null}
     </section>
