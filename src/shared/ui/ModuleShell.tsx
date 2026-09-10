@@ -12,6 +12,15 @@ export interface ModuleTaskStep {
   content: ReactNode;
   isComplete?: boolean;
   completionHint?: string;
+  /**
+   * Что писать под шагом, который пропускает дальше. Пусто — «шаг завершён».
+   *
+   * Шаг может пускать вперёд и при этом быть заполнен не до конца: так задумано
+   * там, где значений по умолчанию нет, а придумывать их за студента нельзя.
+   * Писать в таком случае «шаг завершён» — неправда, поэтому шаг может сказать
+   * о себе точнее.
+   */
+  readyHint?: string;
 }
 
 interface ModuleShellProps {
@@ -238,5 +247,5 @@ function getProgressHint({
     return activeTaskStep?.completionHint ?? 'Завершите текущий шаг, чтобы продолжить.';
   }
 
-  return 'Шаг завершён, можно двигаться дальше.';
+  return activeTaskStep?.readyHint ?? 'Шаг завершён, можно двигаться дальше.';
 }

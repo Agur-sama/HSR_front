@@ -101,6 +101,7 @@ function Pz1Workspace() {
   const fileSlug = sanitizeFileName(draft.passport.lineTitle, 'pz1');
   const correspondenceDetails = getSyncedCorrespondenceDetails(draft);
   const hasCorrespondences = correspondenceDetails.length > 0;
+  const missing = getMissingFieldCounts(draft, correspondenceDetails);
   const stepsById: Record<Pz1StepId, ModuleTaskStep> = keyStepsById([
     {
       id: 'stations',
@@ -136,6 +137,7 @@ function Pz1Workspace() {
       content: <AllCorrespondenceTravelTimesStep />,
       isComplete: hasCorrespondences,
       completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+      readyHint: describeStepReadiness(missing.byStep.get('Время в пути')),
     },
     {
       id: 'correspondence-discomfort',
@@ -144,6 +146,7 @@ function Pz1Workspace() {
       content: <AllCorrespondenceDiscomfortStep />,
       isComplete: hasCorrespondences,
       completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+      readyHint: describeStepReadiness(missing.byStep.get('Коэффициент дискомфорта')),
     },
     {
       id: 'correspondence-frequency-fare',
@@ -152,6 +155,7 @@ function Pz1Workspace() {
       content: <AllCorrespondenceFrequencyFareStep />,
       isComplete: hasCorrespondences,
       completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+      readyHint: describeStepReadiness(missing.byStep.get('Частота сообщений и стоимость проезда')),
     },
     {
       id: 'station-other-parameters',
@@ -160,6 +164,7 @@ function Pz1Workspace() {
       content: <StationOtherParametersStep />,
       isComplete: hasCorrespondences,
       completionHint: 'Назначьте минимум две станции, чтобы появились станционные таблицы',
+      readyHint: describeStepReadiness(missing.byStep.get('Прочие параметры')),
     },
     {
       id: 'annual-flow',
@@ -168,6 +173,7 @@ function Pz1Workspace() {
       content: <AllCorrespondenceAnnualFlowStep />,
       isComplete: hasCorrespondences,
       completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+      readyHint: describeStepReadiness(missing.byStep.get('Годовой пассажиропоток')),
     },
     {
       id: 'model',
@@ -176,6 +182,7 @@ function Pz1Workspace() {
       content: <AllCorrespondenceModelStep />,
       isComplete: hasCorrespondences,
       completionHint: 'Назначьте минимум две станции, чтобы появились корреспонденции',
+      readyHint: describeModelReadiness(missing.total),
     },
     {
       id: 'final-indicators',
@@ -2191,6 +2198,58 @@ function getPassengerFlowModeValue(
   field: 'existingAnnualFlow' | 'forecastAnnualFlow',
 ) {
   return forecast.modes.find((mode) => mode.modeId === modeId)?.[field] ?? 0;
+}
+
+/**
+ * Сколько полей шага ещё не заполнено — по тому же списку, который печатает шаг
+ * «Модель прогноза». Считается один раз на рендер и раскладывается по шагам:
+ * у каждой строки списка спереди стоит название своего шага.
+ */
+function getMissingFieldCounts(draft: Pz1Draft, details: ReturnType<typeof getSyncedCorrespondenceDetails>) {
+  const byStep = new Map<string, number>();
+  let total = 0;
+
+  for (const detail of details) {
+    for (const field of getForecastMissingFields(draft, detail.pairKey)) {
+      const separator = field.indexOf(':');
+
+      if (separator < 0) {
+        continue;
+      }
+
+      const step = field.slice(0, separator);
+      byStep.set(step, (byStep.get(step) ?? 0) + 1);
+      total += 1;
+    }
+  }
+
+  return { byStep, total };
+}
+
+/**
+ * Подпись под шагом, который пускает дальше, но заполнен не до конца.
+ *
+ * Значения по умолчанию заказчик задал только там, где они есть в методичке:
+ * дискомфорт, прочие параметры, заполняемость. Для времени в пути, частоты и
+ * стоимости их нет, и придумывать числа за студента нельзя — поэтому шаг
+ * пропускает вперёд с незаполненными полями (SRS ФТ-15). Но и говорить «шаг
+ * завершён» на пустой странице нельзя: расплата приходила через пять шагов,
+ * списком из десятков полей, взявшимся как будто ниоткуда.
+ */
+function describeStepReadiness(missingCount: number | undefined) {
+  if (!missingCount) {
+    return undefined;
+  }
+
+  return `Не заполнено полей: ${missingCount}. Дальше пройти можно, но без них не построится модель прогноза.`;
+}
+
+function describeModelReadiness(missingCount: number) {
+  if (!missingCount) {
+    return undefined;
+  }
+
+  return `Не заполнено полей: ${missingCount} — они перечислены на странице. График появится, когда данные будут заполнены.`;
 }
 
 function getForecastMissingFields(draft: Pz1Draft, pairKey: string) {
