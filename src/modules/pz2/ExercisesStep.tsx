@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useModuleState } from '../../bridge/context';
+import { LevelingExercise } from './LevelingExercise';
 import { checkPz2CriticalPath } from './model';
 import { pz2NetworkExercises } from './networkExercises';
 import type { Pz2NetworkExercise } from './networkExercises';
@@ -9,14 +10,14 @@ import type { Pz2Draft } from './types';
  * Шаг 03 ПЗ2: упражнения (ТЗ ПЗ2 §7).
  *
  * Сверху — упражнение Артёма Глебовича: готовая сетевая диаграмма картинкой,
- * студент определяет критический путь и вводит ответ. Ниже — тренажёр
- * выравнивания загрузки Ольги Владимировны, он подключается как есть.
+ * студент определяет критический путь и вводит ответ. Ниже — упражнение Ольги
+ * Владимировны на выравнивание загрузки.
  */
-export function ExercisesStep({ trainer }: { trainer: React.ReactNode }) {
+export function ExercisesStep() {
   return (
     <div className="exercises-step">
       <CriticalPathExercises />
-      {trainer}
+      <LevelingExercise />
     </div>
   );
 }

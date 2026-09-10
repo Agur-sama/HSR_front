@@ -1954,14 +1954,6 @@ input.is-invalid {
   width: auto;
 }
 
-/* Подпись флажка в панели тренажёра шла размером с основной текст и была
-   заметнее самих кнопок рядом. */
-.ksg-module .compact-toggle {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .coordinate-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2683,368 +2675,176 @@ input.is-invalid {
   }
 }
 
-/* Тренажёр КСГ на экране 03 ПЗ2.
-   Его расчёт трогать нельзя — ТЗ ПЗ2 §7.1 требует подключить код как есть и не
-   переписывать, — но заказчик там же просил не показывать тренажёр, «пока он
-   выглядит не так, как задумано в финале». Поэтому меняется только оформление:
-   карточки, заголовки, плитки и таблицы берут те же токены и размеры, что и
-   остальные экраны. Раньше тренажёр приносил с собой вид отдельной страницы —
-   свой фон, свою высоту в целый экран и свою полосу прокрутки внутри шага. */
-.ksg-module {
+/* Упражнение на выравнивание загрузки, экран 03 ПЗ2.
+   Строки работ и гистограмма живут в одной сетке дней: столбик под работой
+   должен приходиться на тот же день, что и сама работа, иначе связь «подвинул
+   работу — просела гора» не читается. Общий отступ слева держит колонку
+   названий. */
+.leveling {
   display: grid;
-  gap: 16px;
-}
-
-.ksg-notice {
-  margin: 0;
-  border: 1px solid #cdeee1;
-  border-radius: 8px;
-  background: var(--teal-bg);
-  color: var(--teal-text);
-  padding: 10px 12px;
-  line-height: 1.55;
-}
-
-.ksg-module .panel {
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: #fff;
-  padding: 16px;
-}
-
-.ksg-module .panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 0 12px;
-}
-
-.ksg-module .panel__header--stacked {
-  align-items: flex-start;
-}
-
-.ksg-module .panel__header h2 {
-  margin: 4px 0 0;
-  color: var(--indigo);
-  font-size: 20px;
-}
-
-.ksg-module .panel__header p,
-.ksg-module .panel-hint,
-.ksg-module .hint {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.ksg-module .panel__header span {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-/* Плитки показателей — те же, что в сводке ПЗ1 и на экране 04 ПЗ2
-   (`.forecast-summary-grid`): мягкая подложка, подпись капителью, крупное
-   число. Отдельного вида у тренажёра быть не должно. */
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0;
-}
-
-.metric-card {
-  border-radius: 8px;
-  background: var(--bg-soft);
-  padding: 12px;
-}
-
-.metric-card span {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.metric-card strong {
-  display: block;
-  margin-top: 6px;
-  color: var(--indigo);
-  font-size: 22px;
-  font-weight: 800;
-}
-
-.ksg-simulator-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
-  gap: 16px;
-  align-items: stretch;
-}
-
-.ksg-right-rail,
-.ksg-chart-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.ksg-chart-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.ksg-module .table-wrap {
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.ksg-module .table-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.definition-table__table input {
-  min-width: 74px;
-}
-
-.definition-table__table td:nth-child(4) input {
-  min-width: 180px;
-}
-
-.definition-table__table .mode-select {
-  margin-top: 6px;
-  min-width: 190px;
-  font-size: 12px;
-}
-
-.definition-table--compact th,
-.definition-table--compact td {
-  padding: 7px 8px;
-  font-size: 12px;
-}
-
-.ksg-module tr.is-selected {
-  background: #f2f7ff;
-}
-
-.ksg-module tr.is-critical td {
-  border-bottom-color: #f4cdd2;
-}
-
-.cell-error input {
-  border-color: var(--danger);
-  background: var(--danger-bg);
-}
-
-.cell-error small,
-.warning-text {
-  display: block;
-  margin-top: 5px;
-  color: var(--danger);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.row-actions {
-  display: flex;
-  flex-wrap: wrap;
   gap: 6px;
+  margin: 14px 0 12px;
 }
 
-.badge {
-  display: inline-flex;
-  border-radius: 999px;
-  background: #e8f3ef;
-  color: #25715f;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.badge--critical {
-  background: #fff0f1;
-  color: #a72934;
-}
-
-.row-explanation,
-.formula-note {
-  margin: 12px 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-soft);
-  padding: 12px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.formula-note {
-  margin-top: 0;
-}
-
-/* Гант тренажёра КСГ. Имена классов совпадают с Гантом экрана 04, поэтому
-   правила привязаны к оболочке тренажёра — см. пояснение у `.plan-step .gantt`. */
-.ksg-module .gantt {
-  min-width: 0;
-}
-
-.ksg-module .gantt__days,
-.ksg-module .gantt__row {
+.leveling__row {
   display: grid;
-  gap: 3px;
+  grid-template-columns: 190px minmax(0, 1fr) 150px;
+  gap: 10px;
   align-items: center;
 }
 
-.ksg-module .gantt__days {
-  min-width: 760px;
-  padding: 0 0 8px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.ksg-module .gantt__days b {
-  text-align: center;
-}
-
-.ksg-module .gantt__body {
+.leveling__name {
   display: grid;
-  gap: 7px;
-  overflow-x: auto;
-  padding: 0;
-  position: relative;
-}
-
-.ksg-module .gantt__deadline {
-  display: grid;
-  min-width: 760px;
-  height: 0;
-  color: #8a4350;
-  font-size: 11px;
-  font-weight: 800;
-  pointer-events: none;
-}
-
-.ksg-module .gantt__deadline span {
-  min-height: 100%;
-  border-right: 2px dashed var(--danger);
-  transform: translateY(8px);
-  writing-mode: vertical-rl;
-}
-
-.ksg-module .gantt__row {
-  min-width: 760px;
-  min-height: 42px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  text-align: left;
-}
-
-.ksg-module .gantt__row.is-selected {
-  background: #f2f7ff;
-}
-
-.ksg-module .gantt__label {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
   color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
-.ksg-module .gantt__label small {
+.leveling__name strong {
+  color: var(--primary);
+}
+
+.leveling__name small {
   color: var(--muted);
   font-size: 11px;
+  font-weight: 600;
 }
 
-.ksg-module .gantt__bar,
-.ksg-module .gantt__float {
-  grid-row: 1;
+.leveling__track {
+  position: relative;
+  display: block;
   height: 26px;
-  border-radius: 7px;
+  /* Полоса дней — граница графика: работа, вставшая в самый конец, не должна
+     вылезать за неё на узком экране. */
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--bg-soft);
 }
 
-.ksg-module .gantt__bar {
+/* Куда работу можно двигать: полоса резерва под самой работой. */
+.leveling__float {
+  position: absolute;
+  top: 5px;
+  height: 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 5px;
+  background: rgba(0, 61, 132, 0.06);
+}
+
+.leveling__work {
+  position: absolute;
+  top: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
+  min-width: 30px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 5px;
   background: var(--primary);
   color: #fff;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.ksg-module .gantt__bar--critical {
+/* Критическая работа держит срок — цвет тот же, которым в проекте помечена
+   трасса и опасные значения, и она единственная без ползунка. */
+.leveling__work.is-critical {
   background: var(--danger);
 }
 
-.ksg-module .gantt__float {
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(0, 61, 132, 0.12),
-    rgba(0, 61, 132, 0.12) 6px,
-    rgba(0, 61, 132, 0.22) 6px,
-    rgba(0, 61, 132, 0.22) 12px
-  );
-}
-
-.ksg-module .gantt__shift {
+.leveling__shift {
   display: grid;
-  grid-column: 2 / -1;
-  grid-row: 2;
-  grid-template-columns: 150px minmax(180px, 1fr);
-  gap: 10px;
-  align-items: center;
-  margin: 2px 0 6px;
+  gap: 2px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
-.work-editor h3 {
-  margin: 0 0 10px;
-  color: var(--indigo);
-  font-size: 20px;
+.leveling__shift em {
+  color: var(--danger);
+  font-style: normal;
 }
 
-.work-editor label {
-  display: grid;
-  gap: 7px;
-  padding: 10px 0;
+.leveling__shift b {
+  color: var(--primary);
+}
+
+.leveling__shift input {
+  width: 100%;
+  padding: 0;
+}
+
+.leveling__axis {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 160px 0 200px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.leveling__load {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 96px;
+  margin: 12px 160px 0 200px;
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.leveling__bar {
+  flex: 1;
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--primary);
+}
+
+.leveling__bar.is-over {
+  background: var(--danger);
+}
+
+/* Сколько людей в бригаде: всё, что выше линии, — дни, на которые их не хватает. */
+.leveling__limit {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 2px dashed var(--teal-text);
+  line-height: 1;
+  pointer-events: none;
+  text-align: right;
+}
+
+/* Подпись висит под линией и на подложке: при решённой задаче линия совпадает
+   с верхом графика, и подпись над ней налезала бы на шкалу дней. */
+.leveling__limit b {
+  display: inline-block;
+  transform: translateY(2px);
+  border-radius: 4px;
+  background: #fff;
+  padding: 0 4px;
+  color: var(--teal-text);
+  font-size: 11px;
   font-weight: 800;
 }
 
-.editor-preview,
-.editor-impact,
-.ksg-module .status-note,
-.ksg-module .hint,
-.form-error {
-  margin: 10px 0;
-  border-radius: 8px;
-  background: var(--bg-soft);
-  color: var(--muted);
-  padding: 10px 12px;
-  font-size: 13px;
-  line-height: 1.45;
-}
+@media (max-width: 900px) {
+  .leveling__row {
+    grid-template-columns: 130px minmax(0, 1fr) 110px;
+  }
 
-.status-note--critical {
-  background: #fff0f1;
-  color: #a72934;
-}
+  .leveling__axis {
+    margin-left: 140px;
+    margin-right: 120px;
+  }
 
-.editor-impact h4 {
-  margin: 0 0 6px;
-  color: var(--primary);
+  .leveling__load {
+    margin-left: 140px;
+    margin-right: 120px;
+  }
 }
 
 .topic-correspondence-page,

@@ -258,6 +258,11 @@ export interface Pz2Result {
   works: Pz2Work[];
   stages: Pz2Stage[];
   criticalPath: Pz2CriticalPathAnswer[];
+  /**
+   * Упражнение на выравнивание загрузки: id работы учебного примера → сдвиг в
+   * днях. Поле необязательное — файлы, сохранённые раньше, его не имеют.
+   */
+  levelingShifts?: Record<string, number>;
   plan: Pz2PlanResult;
   report: Pz2ReportResult;
   /** Эталон из ПЗ1, с которым сверялась сумма длин. */

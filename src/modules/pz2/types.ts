@@ -56,6 +56,8 @@ export interface Pz2Draft {
   stages: Pz2StageDraft[];
   /** Ответы на упражнения про критический путь: id упражнения → ответ студента. */
   criticalPathAnswers: Record<string, string>;
+  /** Упражнение на выравнивание: id работы → сдвиг в днях. Пусто — не начато. */
+  levelingShifts?: Record<string, number>;
   /** Сколько рабочих есть на проект. Откуда берётся число — вопрос в-7. */
   totalWorkers: string;
   /** Сколько рабочих назначено этапу: id этапа → число. */

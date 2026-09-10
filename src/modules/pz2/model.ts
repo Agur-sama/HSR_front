@@ -132,6 +132,7 @@ export function createInitialPz2Draft(importedBridge?: BridgeSchema | null): Pz2
     })),
     stages: saved.stages.map((stage) => ({ id: stage.id, title: stage.title, order: stage.order })),
     criticalPathAnswers: Object.fromEntries(saved.criticalPath.map((answer) => [answer.exerciseId, answer.answer])),
+    ...(saved.levelingShifts ? { levelingShifts: saved.levelingShifts } : {}),
     totalWorkers: saved.plan.totalWorkers > 0 ? formatPz2InputNumber(saved.plan.totalWorkers) : '',
     workersByStage: Object.fromEntries(
       Object.entries(saved.plan.workersByStage).map(([stageId, workers]) => [stageId, formatPz2InputNumber(workers)]),
@@ -675,6 +676,7 @@ export function createPz2Result(draft: Pz2Draft, routeLengthKm: number): Pz2Resu
     })),
     plan: createPz2PlanResult(draft),
     report: createPz2ReportResult(draft),
+    ...(draft.levelingShifts ? { levelingShifts: draft.levelingShifts } : {}),
     routeLengthKm,
     measuredLengthKm: getPz2LengthCheck(draft, routeLengthKm).measuredKm,
     ...(draft.previewImage ? { previewImage: draft.previewImage } : {}),
