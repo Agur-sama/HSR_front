@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useModuleState } from '../../bridge/context';
 import { Pz2RouteMap } from './lazyRouteMap';
 import {
@@ -37,9 +37,15 @@ import type { Pz2Draft, Pz2WorkDraft } from './types';
  */
 export function StagesStep() {
   const { draft, importedBridge, updateDraft } = useModuleState<Pz2Draft>();
-  const source = getPz2RouteSource(importedBridge);
-  const ruler = createPz2Ruler(source);
-  const stageSpans = getPz2StageSpans(draft);
+  // См. пояснение в WorksStep: пересбор линейки на каждый рендер стоил дорого,
+  // а трасса из ПЗ1 меняется только при загрузке другого файла.
+  const source = useMemo(() => getPz2RouteSource(importedBridge), [importedBridge]);
+  const ruler = useMemo(() => createPz2Ruler(source), [source]);
+  const stations = useMemo(() => getPz2StationMarks(source, ruler), [source, ruler]);
+  const routePoints = useMemo(() => getPz2RoutePointMarks(source, ruler), [source, ruler]);
+  const segments = useMemo(() => getPz2SegmentMarks(source), [source]);
+  const workMarks = useMemo(() => getPz2WorkMarks(draft), [draft]);
+  const stageSpans = useMemo(() => getPz2StageSpans(draft), [draft]);
   const [hoveredStageId, setHoveredStageId] = useState('');
   const [title, setTitle] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -104,12 +110,12 @@ export function StagesStep() {
         onPreviewImageChange={(previewImage) =>
           updateDraft((current) => (current.previewImage === previewImage ? current : { ...current, previewImage }))
         }
-        routePoints={getPz2RoutePointMarks(source, ruler)}
+        routePoints={routePoints}
         ruler={ruler}
-        segments={getPz2SegmentMarks(source)}
+        segments={segments}
         stageSpans={stageSpans}
-        stations={getPz2StationMarks(source, ruler)}
-        workMarks={getPz2WorkMarks(draft)}
+        stations={stations}
+        workMarks={workMarks}
         withRuler={false}
       />
 

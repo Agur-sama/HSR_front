@@ -40,6 +40,17 @@ const WORK_COLOR = '#0f6e56';
 /** Значки маркеров рисуются как SVG-узлы, а те живут в своём пространстве имён. */
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
+/**
+ * Пустые значения по умолчанию заведены один раз.
+ *
+ * Литерал `[]` в параметрах создавал бы новый массив на каждый рендер, а он
+ * стоит в зависимостях эффекта, который перекладывает слои карты: эффект
+ * срабатывал на каждое нажатие клавиши в таблице работ и пересобирал geojson
+ * всей трассы.
+ */
+const NO_WORK_MARKS: Pz2WorkMark[] = [];
+const NO_STAGE_SPANS: Pz2StageSpanGroup[] = [];
+
 const ROUTE_SOURCE_ID = 'pz2-route';
 const ROUTE_LAYER_ID = 'pz2-route-line';
 const SPAN_SOURCE_ID = 'pz2-span';
@@ -104,10 +115,10 @@ export function Pz2RouteMap({
   stations,
   routePoints,
   segments,
-  workMarks = [],
+  workMarks = NO_WORK_MARKS,
   marksKm,
   highlightedSpan = null,
-  stageSpans = [],
+  stageSpans = NO_STAGE_SPANS,
   highlightedStageId = '',
   withRuler = true,
   onMarksChange,

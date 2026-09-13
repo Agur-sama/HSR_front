@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useModuleState } from '../../bridge/context';
 import { useTouchedFields } from '../../shared/hooks/useTouchedFields';
 import { GroupedNumberInput } from '../../shared/ui/GroupedNumberInput';
@@ -34,11 +34,16 @@ import type { Pz2Draft, Pz2RouteSpan, Pz2SoilCondition, Pz2WorkDraft, Pz2WorkKin
 export function WorksStep() {
   const { draft, importedBridge, updateDraft } = useModuleState<Pz2Draft>();
   const { markTouched, shouldShowError } = useTouchedFields();
-  const source = getPz2RouteSource(importedBridge);
-  const ruler = createPz2Ruler(source);
-  const stations = getPz2StationMarks(source, ruler);
-  const routePoints = getPz2RoutePointMarks(source, ruler);
-  const segments = getPz2SegmentMarks(source);
+  // Трасса из ПЗ1 не меняется, пока не загрузят другой файл, а километраж
+  // станций и точек считается по всей её геометрии. Без этого замера каждый
+  // введённый символ пересобирал линейку заново и заодно перезапускал эффекты
+  // карты: на шести строках ввод отставал примерно на 40 мс на нажатие.
+  const source = useMemo(() => getPz2RouteSource(importedBridge), [importedBridge]);
+  const ruler = useMemo(() => createPz2Ruler(source), [source]);
+  const stations = useMemo(() => getPz2StationMarks(source, ruler), [source, ruler]);
+  const routePoints = useMemo(() => getPz2RoutePointMarks(source, ruler), [source, ruler]);
+  const segments = useMemo(() => getPz2SegmentMarks(source), [source]);
+  const workMarks = useMemo(() => getPz2WorkMarks(draft), [draft]);
   const [highlightedId, setHighlightedId] = useState('');
   const overlapping = new Set(findPz2OverlappingWorks(draft));
   const highlighted = draft.works.find((object) => object.id === highlightedId)?.span ?? null;
@@ -102,7 +107,7 @@ export function WorksStep() {
         ruler={ruler}
         segments={segments}
         stations={stations}
-        workMarks={getPz2WorkMarks(draft)}
+        workMarks={workMarks}
       />
 
       <section className="form-section">
