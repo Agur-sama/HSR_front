@@ -13,6 +13,14 @@ import '@fontsource/raleway/latin-500.css';
 import '@fontsource/raleway/latin-600.css';
 import '@fontsource/raleway/latin-700.css';
 import '@fontsource/raleway/latin-800.css';
+// Стили MapLibre подключаются здесь, а не в компонентах карты, и обязательно
+// перед `styles.css`. Карта грузится отдельным куском по требованию, и её
+// стили приезжали после наших — а они задают те же классы на том же уровне
+// вложенности. Порядок переворачивался, `.maplibregl-map` перебивал
+// `.maplibre-container`, контейнер переставал быть растянутым, и карта
+// схлопывалась в пустую полосу. Один файл на входе — и порядок каскада
+// перестаёт зависеть от того, когда приедет кусок.
+import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(

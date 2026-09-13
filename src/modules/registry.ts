@@ -1,18 +1,25 @@
-import { Pz1Module } from './pz1';
-import { Pz2Module } from './pz2';
+import { lazy } from 'react';
 import type { ModuleDefinition, PzNumber } from './types';
 
+/**
+ * Модули подгружаются по требованию.
+ *
+ * Каждое задание встраивается в iSpring отдельным Web Object по своему адресу
+ * `?pz=N`, и студент за раз открывает ровно одно. Раньше сборка была общей:
+ * на ПЗ2 грузился код ПЗ1 вместе с библиотекой диаграмм, которая нужна только
+ * ему, и наоборот. Теперь на страницу приезжает только её модуль.
+ */
 export const moduleRegistry: Partial<Record<PzNumber, ModuleDefinition>> = {
   1: {
     id: 1,
     title: 'ПЗ1. Технико-экономическое обоснование',
     shortTitle: 'ПЗ1',
-    Component: Pz1Module,
+    Component: lazy(() => import('./pz1').then((module) => ({ default: module.Pz1Module }))),
   },
   2: {
     id: 2,
     title: 'ПЗ2. Календарно-сетевой график',
     shortTitle: 'ПЗ2',
-    Component: Pz2Module,
+    Component: lazy(() => import('./pz2').then((module) => ({ default: module.Pz2Module }))),
   },
 };

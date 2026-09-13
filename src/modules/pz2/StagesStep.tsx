@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useModuleState } from '../../bridge/context';
-import { Pz2RouteMap } from './Pz2RouteMap';
+import { Pz2RouteMap } from './lazyRouteMap';
 import {
   assignPz2WorkToStage,
   createPz2Ruler,

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { moduleRegistry } from '../modules/registry';
 import type { PzNumber } from '../modules/types';
 
@@ -11,7 +12,12 @@ export function App() {
   }
 
   const SelectedModule = module.Component;
-  return <SelectedModule />;
+
+  return (
+    <Suspense fallback={<ModuleLoading title={module.title} />}>
+      <SelectedModule />
+    </Suspense>
+  );
 }
 
 function readPzNumber(search: string): PzNumber | null {
@@ -23,6 +29,18 @@ function readPzNumber(search: string): PzNumber | null {
   }
 
   return parsed as PzNumber;
+}
+
+/** Пока модуль едет: та же рамка, что у экрана задания, — без пустого мига. */
+function ModuleLoading({ title }: { title: string }) {
+  return (
+    <main className="module-shell module-shell--empty">
+      <section className="empty-module">
+        <h1>{title}</h1>
+        <p>Загружается…</p>
+      </section>
+    </main>
+  );
 }
 
 /**

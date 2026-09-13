@@ -27,7 +27,7 @@ import { GroupedNumberInput } from '../../shared/ui/GroupedNumberInput';
 import { reverseGeocodeRegion } from '../../shared/lib/reverseGeocode';
 import { useTouchedFields } from '../../shared/hooks/useTouchedFields';
 import { useUndoHistory } from '../../shared/hooks/useUndoHistory';
-import { OsmStationMap } from './OsmStationMap';
+import { OsmStationMap } from './lazyStationMap';
 import {
   countFilledConsumerCells,
   correspondenceTravelTimeRows,

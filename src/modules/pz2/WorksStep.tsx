@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useModuleState } from '../../bridge/context';
 import { useTouchedFields } from '../../shared/hooks/useTouchedFields';
 import { GroupedNumberInput } from '../../shared/ui/GroupedNumberInput';
-import { Pz2RouteMap } from './Pz2RouteMap';
+import { Pz2RouteMap } from './lazyRouteMap';
 import {
   changePz2WorkKind,
   createPz2Ruler,

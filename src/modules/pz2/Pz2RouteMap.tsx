@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import '../../shared/lib/maplibreWorker';
 import { haversineDistanceKm } from '../../shared/lib/routeGeometry';
 import { pointAtDistance, projectOntoRoute } from '../../shared/lib/routeRuler';
