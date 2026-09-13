@@ -2871,6 +2871,63 @@ input.is-invalid {
   gap: 10px;
 }
 
+/* Недостающие поля сгруппированы по шагам: строка на шаг со счётчиком,
+   имена полей открываются по требованию. */
+.missing-field-groups {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.missing-field-groups > li {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.missing-field-groups summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Строка выглядит раскрываемой: у summary с display:flex браузер свою
+   стрелку не рисует. */
+.missing-field-groups summary > span::before {
+  content: '▸';
+  margin-right: 8px;
+  color: var(--muted);
+}
+
+.missing-field-groups details[open] summary > span::before {
+  content: '▾';
+}
+
+.missing-field-groups summary b {
+  border-radius: 999px;
+  background: var(--bg-soft);
+  padding: 2px 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.missing-field-groups summary:hover b {
+  background: var(--teal-bg);
+  color: var(--teal-text);
+}
+
+.missing-field-groups .missing-field-list {
+  padding: 0 12px 12px 32px;
+}
+
 .missing-field-list {
   display: grid;
   gap: 6px;

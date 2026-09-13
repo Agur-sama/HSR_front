@@ -2037,16 +2037,54 @@ function ForecastMissingState({ missingFields }: { missingFields: string[] }) {
     );
   }
 
+  const groups = groupMissingFields(missingFields);
+
   return (
     <div className="forecast-missing-state">
-      <p className="status-note">Чтобы построить график имитационной модели, заполните недостающие поля:</p>
-      <ul className="missing-field-list">
-        {missingFields.map((field) => (
-          <li key={field}>{field}</li>
+      <p className="status-note">
+        Чтобы построить график имитационной модели, заполните недостающие поля. Всего их {missingFields.length}, по
+        шагам:
+      </p>
+      {/* Плоский список на сорок строк занимал весь экран и не отвечал на
+          главный вопрос — куда возвращаться. Теперь сверху видно, на каком шаге
+          сколько осталось, а имена полей открываются по требованию. */}
+      <ul className="missing-field-groups">
+        {groups.map((group) => (
+          <li key={group.step}>
+            <details>
+              <summary>
+                <span>{group.step}</span>
+                <b>{group.fields.length}</b>
+              </summary>
+              <ul className="missing-field-list">
+                {group.fields.map((field) => (
+                  <li key={field}>{field}</li>
+                ))}
+              </ul>
+            </details>
+          </li>
         ))}
       </ul>
     </div>
   );
+}
+
+/**
+ * Недостающие поля по шагам. У каждой строки списка спереди стоит название
+ * своего шага — по нему и группируем; строку без названия оставляем как есть,
+ * чтобы ничего не потерялось.
+ */
+function groupMissingFields(missingFields: string[]) {
+  const groups = new Map<string, string[]>();
+
+  for (const field of missingFields) {
+    const separator = field.indexOf(':');
+    const step = separator < 0 ? field : field.slice(0, separator);
+    const name = separator < 0 ? field : field.slice(separator + 1).trim();
+    groups.set(step, [...(groups.get(step) ?? []), name]);
+  }
+
+  return [...groups].map(([step, fields]) => ({ step, fields }));
 }
 
 /** ВСМ — в конец списка, чтобы в столбце с накоплением она легла сверху. */
