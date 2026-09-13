@@ -28,21 +28,42 @@ export function serializeBridge(bridge: BridgeSchema): string {
   return `${JSON.stringify(bridge, null, 2)}\n`;
 }
 
+/**
+ * Разбор файла задания.
+ *
+ * Сообщения об отказе читает студент, а не разработчик: «мост» и
+ * «schemaVersion» — наши внутренние слова, по ним нельзя понять, что делать
+ * дальше. Поэтому каждый отказ называет причину обычными словами и говорит,
+ * какой файл нужен.
+ */
 export function parseBridgeJson(input: string): BridgeSchema {
   let parsed: unknown;
 
   try {
     parsed = JSON.parse(input);
   } catch {
-    throw new Error('JSON-файл поврежден или имеет неверный формат.');
+    throw new Error(`Файл повреждён и не читается. ${EXPECTED_FILE_HINT}`);
   }
 
   if (!isBridgeSchema(parsed)) {
-    throw new Error(`Файл моста не соответствует schemaVersion ${SUPPORTED_SCHEMA_VERSIONS.join('/')}.`);
+    const version = isRecord(parsed) && typeof parsed.schemaVersion === 'string' ? parsed.schemaVersion : null;
+
+    // Файл нашего формата, но другой версии — это не «чужой файл», и советовать
+    // сохранить заново тут неправильно: сохранять, возможно, нечего.
+    if (version && !SUPPORTED_SCHEMA_VERSIONS.includes(version as BridgeSchemaVersion)) {
+      throw new Error(
+        `Файл сохранён версией задания ${version}, а эта версия открывает ${SUPPORTED_SCHEMA_VERSIONS.join(', ')}. Откройте файл в той версии, где он был сохранён.`,
+      );
+    }
+
+    throw new Error(`Это не файл задания. ${EXPECTED_FILE_HINT}`);
   }
 
   return parsed;
 }
+
+/** Что именно нужно загрузить — повторяется во всех отказах, чтобы не гадать. */
+const EXPECTED_FILE_HINT = 'Загрузите JSON, сохранённый кнопкой «Скачать JSON» в конце задания.';
 
 export function downloadBridgeJson(bridge: BridgeSchema, fileName = 'vsm-bridge.json'): void {
   downloadTextFile(fileName, 'application/json;charset=utf-8', serializeBridge(bridge));

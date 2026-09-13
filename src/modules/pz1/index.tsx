@@ -267,7 +267,7 @@ function IntroStep() {
       setImportStatus(`Загружен файл: ${file.name}`);
     } catch (error) {
       setImportStatus('');
-      setImportError(error instanceof Error ? error.message : 'Не удалось загрузить JSON-мост.');
+      setImportError(error instanceof Error ? error.message : 'Не удалось прочитать файл.');
     }
   }
 

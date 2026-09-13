@@ -37,7 +37,14 @@ describe('bridge io', () => {
   });
 
   it('rejects broken JSON', () => {
-    expect(() => parseBridgeJson('{')).toThrow('JSON-файл поврежден');
+    expect(() => parseBridgeJson('{')).toThrow('Файл повреждён');
+  });
+
+  it('говорит, что файл чужой, а не сыплет внутренними словами', () => {
+    // Сообщение читает студент: ни «мост», ни «schemaVersion» ему ничего не
+    // говорят, зато «Скачать JSON» он видел на экране итога.
+    expect(() => parseBridgeJson(JSON.stringify({ hello: 'world' }))).toThrow('Это не файл задания');
+    expect(() => parseBridgeJson(JSON.stringify({ hello: 'world' }))).toThrow('Скачать JSON');
   });
 
   it('rejects another schema version', () => {
@@ -49,6 +56,6 @@ describe('bridge io', () => {
           completed: {},
         }),
       ),
-    ).toThrow('schemaVersion 1.0/1.1/1.2');
+    ).toThrow('Файл сохранён версией задания 2.0');
   });
 });
