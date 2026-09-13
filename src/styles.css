@@ -360,19 +360,6 @@ button:focus-visible {
   color: var(--primary);
 }
 
-/* Действие, которое стирает данные: «Очистить таблицу», «Удалить работу».
-   В унаследованном тренажёре КСГ такие кнопки имели класс `danger`, которого
-   в системе не существовало, и стирающее действие выглядело как остальные. */
-.button--danger {
-  border-color: var(--danger);
-  background: #fff;
-  color: var(--danger);
-}
-
-.button--danger:hover:not(:disabled) {
-  background: var(--danger-bg);
-}
-
 .button--outline:hover:not(:disabled) {
   background: var(--panel-alt);
 }
@@ -563,7 +550,6 @@ button:focus-visible {
   font-size: 13px;
 }
 
-.plan-stages li .grouped-number-input,
 .plan-stages li input {
   max-width: 92px;
   text-align: right;
@@ -1632,80 +1618,6 @@ button:focus-visible {
   cursor: grabbing;
 }
 
-.osm-map-zoom {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 20;
-  display: grid;
-  overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 6px 18px rgba(20, 29, 60, 0.12);
-  cursor: default;
-  pointer-events: auto;
-}
-
-.osm-map-zoom button {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 34px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: #fff;
-  color: var(--indigo);
-  cursor: pointer;
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1;
-  touch-action: manipulation;
-}
-
-.osm-map-zoom button:last-child {
-  border-bottom: 0;
-}
-
-.osm-map-zoom button:disabled {
-  color: var(--future);
-  cursor: not-allowed;
-}
-
-.osm-map-zoom button:not(:disabled):hover {
-  background: var(--panel-alt);
-}
-
-.osm-map-tiles {
-  position: absolute;
-  inset: 0;
-}
-
-.osm-map-tiles img {
-  position: absolute;
-  width: 256px;
-  height: 256px;
-  max-width: none;
-  user-select: none;
-}
-
-.osm-map-route {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.osm-map-route polyline {
-  fill: none;
-  stroke: var(--color-route-hsr);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 4;
-  filter: drop-shadow(0 1px 0 #fff);
-}
-
 .osm-map-empty {
   position: absolute;
   left: 50%;
@@ -1734,61 +1646,6 @@ button:focus-visible {
   line-height: 1.4;
 }
 
-.osm-map-marker {
-  position: absolute;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: var(--indigo);
-  box-shadow: 0 4px 12px rgba(58, 40, 139, 0.26);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  transform: translate(-50%, -50%);
-}
-
-.osm-map-route-point {
-  position: absolute;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  background: var(--teal);
-  box-shadow: 0 4px 10px rgba(8, 166, 150, 0.24);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  transform: translate(-50%, -50%);
-}
-
-.osm-map-route-point:hover {
-  background: var(--indigo);
-}
-
-.osm-map-marker.is-active {
-  background: var(--teal);
-  box-shadow: 0 0 0 6px var(--teal-bg), 0 5px 14px rgba(8, 166, 150, 0.26);
-}
-
-.osm-map-attribution {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.86);
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 600;
-  padding: 3px 6px;
-}
-
 .osm-map-hint {
   margin: 0;
   color: var(--muted);
@@ -1799,27 +1656,6 @@ button:focus-visible {
 .station-grid {
   grid-column: 1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.correspondence-estimate {
-  border: 1px solid #cdeee1;
-  border-radius: 10px;
-  background: var(--teal-bg);
-  padding: 14px;
-}
-
-.correspondence-estimate strong {
-  display: block;
-  margin: 5px 0;
-  color: var(--teal-text-dark);
-  font-size: 20px;
-}
-
-.correspondence-estimate span {
-  color: var(--teal-text);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.4;
 }
 
 .station-route-distances {
@@ -1963,16 +1799,6 @@ input.is-invalid {
   font-size: 20px;
 }
 
-.consumer-tables {
-  display: grid;
-  gap: 14px;
-}
-
-.passenger-flow-step {
-  display: grid;
-  gap: 16px;
-}
-
 .hsr-time-step,
 .regional-step {
   display: grid;
@@ -2048,21 +1874,6 @@ input.is-invalid {
   gap: 16px;
 }
 
-.aggregate-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.aggregate-strip span {
-  border-radius: 7px;
-  background: var(--bg-soft);
-  padding: 7px 9px;
-  color: var(--indigo);
-  font-size: 12px;
-  font-weight: 800;
-}
-
 .input-table__total-row th,
 .input-table__total-row td {
   background: var(--teal-bg);
@@ -2077,55 +1888,9 @@ input.is-invalid {
   font-size: 12px;
 }
 
-.region-pair-summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0 0 14px;
-}
-
-.region-pair-summary div {
-  border-radius: 8px;
-  background: var(--bg-soft);
-  padding: 12px;
-}
-
-.region-pair-summary dt {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.region-pair-summary dd {
-  margin: 5px 0 0;
-  color: var(--indigo);
-  font-weight: 800;
-}
-
 .regional-fields {
   display: grid;
   gap: 2px;
-}
-
-.region-parameter-grid {
-  display: grid;
-  gap: 14px;
-}
-
-.region-parameter-card {
-  display: grid;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  padding: 12px;
-}
-
-.region-parameter-card h4 {
-  margin: 0;
-  color: var(--indigo);
-  font-size: 16px;
 }
 
 .regional-parameter-table th small {
@@ -2169,11 +1934,6 @@ input.is-invalid {
 
 .regional-parameter-table input {
   min-width: 120px;
-}
-
-.passenger-flow-regions {
-  display: grid;
-  gap: 10px;
 }
 
 .forecast-summary-panel {
@@ -2251,11 +2011,6 @@ input.is-invalid {
 
 .forecast-result-table thead th:first-child {
   white-space: normal;
-}
-
-.correspondence-table {
-  display: grid;
-  gap: 8px;
 }
 
 .empty-state {
@@ -2939,154 +2694,3 @@ input.is-invalid {
   line-height: 1.4;
 }
 
-.editor-impact p {
-  margin: 0;
-}
-
-.editor-actions {
-  display: flex;
-  gap: 8px;
-  padding: 4px 16px 0;
-}
-
-.resource-chart__plot {
-  position: relative;
-  display: flex;
-  align-items: end;
-  gap: 8px;
-  height: 220px;
-  overflow-x: auto;
-  border-top: 1px solid var(--border);
-  padding: 20px 16px 24px;
-}
-
-.resource-chart__column {
-  display: flex;
-  flex: 1 0 28px;
-  min-width: 24px;
-  height: 100%;
-  flex-direction: column;
-  align-items: center;
-  justify-content: end;
-  gap: 5px;
-}
-
-.resource-chart__bar {
-  width: 100%;
-  border-radius: 6px 6px 2px 2px;
-  background: var(--teal);
-}
-
-.resource-chart__bar.is-overloaded {
-  background: var(--danger);
-}
-
-.resource-chart__bar.is-idle {
-  background: #e2a23a;
-}
-
-.resource-chart__column small {
-  color: var(--muted);
-  font-size: 10px;
-}
-
-.resource-chart__limit {
-  position: absolute;
-  right: 12px;
-  left: 12px;
-  border-top: 2px dashed var(--ink);
-  color: var(--ink);
-  font-size: 11px;
-  font-weight: 800;
-  pointer-events: none;
-}
-
-.dependency-chart__list {
-  display: grid;
-  gap: 8px;
-  padding: 0 16px 16px;
-}
-
-.dependency-chart__row {
-  display: grid;
-  grid-template-columns: 68px 1fr 92px;
-  gap: 8px;
-  align-items: center;
-  font-size: 13px;
-}
-
-.dependency-chart__row b {
-  min-width: 34px;
-  max-width: 100%;
-  border-radius: 7px;
-  background: #dce9ff;
-  color: var(--primary);
-  padding: 6px 8px;
-  white-space: nowrap;
-}
-
-.dependency-chart__row small {
-  color: var(--muted);
-}
-
-.explain-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  padding: 16px;
-}
-
-.explain-grid p {
-  margin: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-soft);
-  color: var(--muted);
-  padding: 12px;
-  line-height: 1.45;
-}
-
-.ksg-error-panel {
-  padding-bottom: 14px;
-}
-
-.ksg-error-panel ul {
-  margin: 0;
-  padding: 0 16px 14px 34px;
-  color: var(--danger);
-  font-weight: 700;
-}
-
-@media (max-width: 1200px) {
-  .ksg-header,
-  .ksg-simulator-layout,
-  .ksg-chart-grid,
-  .explain-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .ksg-nav {
-    justify-content: start;
-  }
-}
-
-@media (max-width: 760px) {
-  .ksg-module {
-    padding: 16px 14px 22px;
-  }
-
-  .metrics-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .ksg-module .panel__header,
-  .ksg-module .table-actions,
-  .editor-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .gantt__shift {
-    grid-template-columns: 1fr;
-  }
-}
