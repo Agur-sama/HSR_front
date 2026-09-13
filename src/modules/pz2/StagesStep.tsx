@@ -235,6 +235,7 @@ export function StagesStep() {
                           key={work.id}
                           onDragStart={setDraggedId}
                           onMove={moveWork}
+                          stageColor={getPz2StageColor(stage.order)}
                           work={work}
                         />
                       ))}
@@ -289,11 +290,18 @@ interface WorkCardProps {
   work: Pz2WorkDraft;
   /** Карточка сейчас переносится: на прежнем месте от неё остаётся след. */
   isDragging: boolean;
+  /**
+   * Цвет этапа, которому принадлежит работа. У карточки в пуле его нет — она
+   * ничьей и остаётся серой. Полоска повторяет цвет квадратика этапа и его
+   * участка на карте: до этого все карточки были красными, и по цвету нельзя
+   * было понять, где чья.
+   */
+  stageColor?: string;
   onDragStart: (workId: string) => void;
   onMove: (workId: string, stageId: string | null) => void;
 }
 
-function WorkCard({ draft, work, isDragging, onDragStart, onMove }: WorkCardProps) {
+function WorkCard({ draft, work, isDragging, stageColor, onDragStart, onMove }: WorkCardProps) {
   const kind = getPz2WorkKind(work.kind);
   const conditions = pz2SoilConditions.filter((item) => work.conditions.includes(item.id));
 
@@ -301,6 +309,7 @@ function WorkCard({ draft, work, isDragging, onDragStart, onMove }: WorkCardProp
     <li
       className={`work-card${isDragging ? ' is-ghost' : ''}`}
       draggable
+      style={stageColor ? { borderLeftColor: stageColor } : undefined}
       onDragEnd={() => onDragStart('')}
       onDragStart={(event) => {
         event.dataTransfer.setData('text/plain', work.id);

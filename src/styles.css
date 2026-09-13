@@ -860,7 +860,9 @@ button:focus-visible {
   align-items: center;
   gap: 10px;
   border: 1px solid var(--border);
-  border-left: 4px solid var(--color-route-hsr);
+  /* Цвет полоски приходит с карточкой — это цвет её этапа. Здесь стоит вид
+     работы без этапа: она лежит в пуле и ничьей раскраски не имеет. */
+  border-left: 4px solid var(--border-strong);
   border-radius: 10px;
   padding: 8px 10px;
   background: #fff;
